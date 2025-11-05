@@ -239,4 +239,29 @@ export class ModelFetchService {
       throw error;
     }
   }
+
+  // Fetch Hugging Face models
+  static async fetchHuggingFaceModels(apiKey: string): Promise<any[]> {
+    try {
+      const response = await safeFetch('https://router.huggingface.co/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Hugging Face API error: ${response.statusText}`);
+      }
+
+      const data: ModelResponse = await response.json();
+      return data.data || [];
+    } catch (error) {
+      logger.models.error("Failed to fetch Hugging Face models", {
+        error: error instanceof Error ? error.message : error,
+        hasApiKey: !!apiKey
+      });
+      throw error;
+    }
+  }
 }

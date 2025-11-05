@@ -13,7 +13,7 @@ export interface Model {
   isSelected?: boolean; // For user model selection
 }
 
-export type CloudProviderType = 'openai' | 'anthropic' | 'google' | 'groq' | 'xai';
+export type CloudProviderType = 'openai' | 'anthropic' | 'google' | 'groq' | 'xai' | 'huggingface';
 export type ProviderType = 'openrouter' | 'vercel-gateway' | 'local' | CloudProviderType;
 
 export interface ProviderConfig {

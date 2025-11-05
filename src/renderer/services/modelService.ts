@@ -1,6 +1,6 @@
 import type { Model, ProviderConfig } from '../../types/models';
 import { getRendererLogger } from '@/services/logger';
-import { migrateCloudProvider, migrateCloudProvidersToDynamic } from './model/migrations';
+import { migrateCloudProvider, migrateCloudProvidersToDynamic, addHuggingFaceProvider } from './model/migrations';
 import { fetchOpenRouterModels } from './model/providers/openRouterProvider';
 import { fetchGatewayModels } from './model/providers/gatewayProvider';
 import { discoverLocalModels } from './model/providers/localProvider';
@@ -9,6 +9,7 @@ import { fetchGoogleModels } from './model/providers/googleProvider';
 import { fetchAnthropicModels } from './model/providers/anthropicProvider';
 import { fetchGroqModels } from './model/providers/groqProvider';
 import { fetchXAIModels } from './model/providers/xAIProvider';
+import { fetchHuggingFaceModels } from './model/providers/huggingfaceProvider';
 
 const logger = getRendererLogger();
 
@@ -48,6 +49,14 @@ class ModelServiceImpl {
       if (dynamicMigrationResult.migrated) {
         this.providers = dynamicMigrationResult.providers;
         logger.models.info('Migrated cloud providers to dynamic model source');
+        await this.saveProviders();
+      }
+
+      // Add Hugging Face provider for existing users
+      const huggingFaceMigrationResult = await addHuggingFaceProvider(this.providers);
+      if (huggingFaceMigrationResult.migrated) {
+        this.providers = huggingFaceMigrationResult.providers;
+        logger.models.info('Added Hugging Face provider');
         await this.saveProviders();
       }
 
@@ -142,6 +151,16 @@ class ModelServiceImpl {
         settings: {},
         modelSource: 'dynamic',
         baseUrl: 'https://api.x.ai/v1'
+      },
+      {
+        id: 'huggingface',
+        name: 'Hugging Face',
+        type: 'huggingface',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'dynamic',
+        baseUrl: 'https://router.huggingface.co/v1'
       }
     ];
 
@@ -297,6 +316,11 @@ class ModelServiceImpl {
         case 'xai':
           if (provider.apiKey) {
             models = await fetchXAIModels(provider.apiKey);
+          }
+          break;
+        case 'huggingface':
+          if (provider.apiKey) {
+            models = await fetchHuggingFaceModels(provider.apiKey);
           }
           break;
       }

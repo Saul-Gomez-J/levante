@@ -17,4 +17,6 @@ export const modelsApi = {
     ipcRenderer.invoke('levante/models/groq', apiKey),
   fetchXAI: (apiKey: string) =>
     ipcRenderer.invoke('levante/models/xai', apiKey),
+  fetchHuggingFace: (apiKey: string) =>
+    ipcRenderer.invoke('levante/models/huggingface', apiKey),
 };

@@ -93,6 +93,7 @@ const ModelPage = () => {
       case 'google':
       case 'groq':
       case 'xai':
+      case 'huggingface':
         return <CloudConfig provider={provider} />;
       default:
         return <div>Unknown provider type</div>;

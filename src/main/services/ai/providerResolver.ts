@@ -134,6 +134,9 @@ function configureProvider(provider: ProviderConfig, modelId: string) {
     case "xai":
       return configureXAI(provider, modelId);
 
+    case "huggingface":
+      return configureHuggingFace(provider, modelId);
+
     default:
       throw new Error(`Unknown provider type: ${provider.type}`);
   }
@@ -325,4 +328,28 @@ function configureXAI(provider: ProviderConfig, modelId: string) {
   });
 
   return xai(modelId);
+}
+
+/**
+ * Configure Hugging Face provider
+ */
+function configureHuggingFace(provider: ProviderConfig, modelId: string) {
+  if (!provider.apiKey) {
+    throw new Error(
+      `Hugging Face API key missing for provider ${provider.name}`
+    );
+  }
+
+  logger.aiSdk.debug("Creating Hugging Face provider", {
+    modelId,
+    baseURL: provider.baseUrl || "https://router.huggingface.co/v1"
+  });
+
+  const huggingface = createOpenAICompatible({
+    name: "huggingface",
+    apiKey: provider.apiKey,
+    baseURL: provider.baseUrl || "https://router.huggingface.co/v1",
+  });
+
+  return huggingface(modelId);
 }

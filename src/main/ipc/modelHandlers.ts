@@ -149,5 +149,23 @@ export function setupModelHandlers() {
     }
   });
 
+  // Fetch Hugging Face models
+  ipcMain.removeHandler('levante/models/huggingface');
+  ipcMain.handle('levante/models/huggingface', async (_, apiKey: string) => {
+    try {
+      const models = await ModelFetchService.fetchHuggingFaceModels(apiKey);
+      return {
+        success: true,
+        data: models
+      };
+    } catch (error) {
+      logger.ipc.error('Failed to fetch Hugging Face models', { error: error instanceof Error ? error.message : error });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  });
+
   logger.ipc.info('Model IPC handlers registered');
 }
