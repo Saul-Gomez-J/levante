@@ -271,6 +271,43 @@ class ModelServiceImpl {
     return provider?.models.filter(m => m.userDefined) || [];
   }
 
+  // Add user-defined model
+  async addUserModel(providerId: string, model: Omit<Model, 'isAvailable' | 'isSelected'>): Promise<void> {
+    const provider = this.providers.find(p => p.id === providerId);
+    if (!provider) throw new Error('Provider not found');
+
+    const newModel: Model = {
+      ...model,
+      isAvailable: true,
+      isSelected: true,
+      userDefined: true,
+    };
+
+    provider.models.push(newModel);
+
+    // Update selectedModelIds for dynamic providers
+    if (provider.modelSource === 'dynamic') {
+      provider.selectedModelIds = provider.models.filter(m => m.isSelected).map(m => m.id);
+    }
+
+    await this.saveProviders();
+  }
+
+  // Remove user-defined model
+  async removeUserModel(providerId: string, modelId: string): Promise<void> {
+    const provider = this.providers.find(p => p.id === providerId);
+    if (!provider) throw new Error('Provider not found');
+
+    provider.models = provider.models.filter(m => m.id !== modelId || !m.userDefined);
+
+    // Update selectedModelIds for dynamic providers
+    if (provider.modelSource === 'dynamic') {
+      provider.selectedModelIds = provider.models.filter(m => m.isSelected).map(m => m.id);
+    }
+
+    await this.saveProviders();
+  }
+
   // Sync provider models
   async syncProviderModels(providerId: string): Promise<Model[]> {
     const provider = this.providers.find(p => p.id === providerId);
@@ -348,9 +385,12 @@ class ModelServiceImpl {
         });
       }
 
-      // Update provider models and sync selected IDs
-      provider.models = models;
-      provider.selectedModelIds = models.filter(m => m.isSelected).map(m => m.id);
+      // Preserve user-defined models (inference models)
+      const userDefinedModels = provider.models.filter(m => m.userDefined);
+
+      // Update provider models: combine synced models with user-defined models
+      provider.models = [...models, ...userDefinedModels];
+      provider.selectedModelIds = provider.models.filter(m => m.isSelected).map(m => m.id);
       provider.lastModelSync = Date.now();
       await this.saveProviders();
 
@@ -379,7 +419,7 @@ class ModelServiceImpl {
           return {
             ...provider,
             selectedModelIds,
-            models: [], // Don't save full model list for dynamic providers
+            models: provider.models.filter(m => m.userDefined), // Save user-defined models!
           };
         }
         // For user-defined providers (cloud), save full model data

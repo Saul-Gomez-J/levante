@@ -4,6 +4,7 @@ import ChatPage from '@/pages/ChatPage'
 import SettingsPage from '@/pages/SettingsPage'
 import ModelPage from '@/pages/ModelPage'
 import StorePage from '@/pages/StorePage'
+import InferencePage from '@/pages/InferencePage'
 import { OnboardingWizard } from '@/pages/OnboardingWizard'
 import { MCPDeepLinkModal } from '@/components/mcp/deep-link/MCPDeepLinkModal'
 import { useChatStore, initializeChatStore } from '@/stores/chatStore'
@@ -295,6 +296,8 @@ function App() {
         return 'Model'
       case 'store':
         return 'Store'
+      case 'inference':
+        return 'Inference'
       default:
         return ''
     }
@@ -306,6 +309,7 @@ function App() {
       case 'settings': return <SettingsPage />
       case 'model': return <ModelPage />
       case 'store': return <StorePage />
+      case 'inference': return <InferencePage />
       default: return <ChatPage />
     }
   }

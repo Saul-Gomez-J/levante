@@ -167,5 +167,51 @@ export function setupModelHandlers() {
     }
   });
 
+  // Validate Hugging Face model (fetch model info from HF API)
+  ipcMain.removeHandler('levante/models/huggingface/validate');
+  ipcMain.handle('levante/models/huggingface/validate', async (_, modelId: string) => {
+    try {
+      const apiUrl = `https://huggingface.co/api/models/${modelId}`;
+
+      const response = await fetch(apiUrl);
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          return {
+            success: false,
+            error: 'Model not found on Hugging Face Hub'
+          };
+        }
+        return {
+          success: false,
+          error: `Failed to fetch model info (HTTP ${response.status})`
+        };
+      }
+
+      const data = await response.json();
+
+      return {
+        success: true,
+        data: {
+          id: data.id,
+          pipeline_tag: data.pipeline_tag,
+          modelId: data.modelId,
+          author: data.author,
+          downloads: data.downloads,
+          likes: data.likes
+        }
+      };
+    } catch (error) {
+      logger.ipc.error('Failed to validate Hugging Face model', {
+        modelId,
+        error: error instanceof Error ? error.message : error
+      });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to validate model'
+      };
+    }
+  });
+
   logger.ipc.info('Model IPC handlers registered');
 }

@@ -31,7 +31,8 @@
     "models": "Modelos",
     "settings": "Configuración",
     "mcp": "Tienda",
-    "active_mcps": "MCPs Activos"
+    "active_mcps": "MCPs Activos",
+    "inference": "Inferencia"
   },
   "status": {
     "loading": "Cargando...",

@@ -35,6 +35,7 @@ import type {
 import { appApi } from './api/app';
 import { chatApi } from './api/chat';
 import { modelsApi } from './api/models';
+import { inferenceApi } from './api/inference';
 import { databaseApi } from './api/database';
 import { preferencesApi } from './api/preferences';
 import { mcpApi } from './api/mcp';
@@ -89,6 +90,16 @@ export interface LevanteAPI {
     fetchAnthropic: (apiKey: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
     fetchGroq: (apiKey: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
     fetchXAI: (apiKey: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+    fetchHuggingFace: (apiKey: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+    validateHuggingFaceModel: (modelId: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+  };
+
+  // Inference functionality
+  inference: {
+    dispatch: (apiKey: string, call: any) => Promise<{ success: boolean; data?: any; error?: string }>;
+    textToImage: (apiKey: string, model: string, prompt: string, options?: any) => Promise<{ success: boolean; data?: any; error?: string }>;
+    imageToText: (apiKey: string, model: string, imageBuffer: ArrayBuffer, options?: any) => Promise<{ success: boolean; data?: any; error?: string }>;
+    asr: (apiKey: string, model: string, audioBuffer: ArrayBuffer, options?: any) => Promise<{ success: boolean; data?: any; error?: string }>;
   };
 
   // Database functionality
@@ -203,6 +214,9 @@ const api: LevanteAPI = {
 
   // Models API
   models: modelsApi,
+
+  // Inference API
+  inference: inferenceApi,
 
   // Database API
   db: databaseApi,

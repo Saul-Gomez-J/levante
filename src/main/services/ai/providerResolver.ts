@@ -340,6 +340,19 @@ function configureHuggingFace(provider: ProviderConfig, modelId: string) {
     );
   }
 
+  // Find model in provider's models array
+  const model = provider.models.find(m => m.id === modelId);
+
+  // Check if it's a user-defined Inference model (not chat)
+  if (model?.userDefined && model.taskType && model.taskType !== 'chat') {
+    // This is an Inference model - should NOT use Router
+    throw new Error(
+      `Model "${modelId}" is an Inference model (task: ${model.taskType}). ` +
+      `Use window.levante.inference API instead of chat.`
+    );
+  }
+
+  // Default: Router OpenAI-compatible API (existing path)
   logger.aiSdk.debug("Creating Hugging Face provider", {
     modelId,
     baseURL: provider.baseUrl || "https://router.huggingface.co/v1"

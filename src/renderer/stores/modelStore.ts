@@ -18,6 +18,8 @@ interface ModelState {
   syncProviderModels: (providerId: string) => Promise<void>;
   toggleModelSelection: (providerId: string, modelId: string, selected: boolean) => Promise<void>;
   setModelSelections: (providerId: string, selections: { [modelId: string]: boolean }) => Promise<void>;
+  addUserModel: (providerId: string, model: Omit<Model, 'isAvailable' | 'isSelected'>) => Promise<void>;
+  removeUserModel: (providerId: string, modelId: string) => Promise<void>;
   setError: (error: string | null) => void;
   setSuccess: (message: string | null) => void;
   clearMessages: () => void;
@@ -151,6 +153,49 @@ export const useModelStore = create<ModelState>((set, get) => ({
       setTimeout(() => set({ success: null }), 2000);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to update model selections';
+      set({ error: errorMessage });
+    }
+  },
+
+  // Add user-defined model
+  addUserModel: async (providerId: string, model: Omit<Model, 'isAvailable' | 'isSelected'>) => {
+    try {
+      set({ error: null });
+      await modelService.addUserModel(providerId, model);
+      const providers = modelService.getProviders();
+      const activeProvider = await modelService.getActiveProvider();
+      set({
+        providers,
+        activeProvider,
+        success: `Model "${model.name}" added successfully`
+      });
+
+      // Clear success message after 3 seconds
+      setTimeout(() => set({ success: null }), 3000);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to add model';
+      set({ error: errorMessage });
+      throw error;
+    }
+  },
+
+  // Remove user-defined model
+  removeUserModel: async (providerId: string, modelId: string) => {
+    try {
+      set({ error: null });
+      await modelService.removeUserModel(providerId, modelId);
+      const providers = modelService.getProviders();
+      const activeProvider = await modelService.getActiveProvider();
+      set({
+        providers,
+        activeProvider,
+        success: 'Model removed successfully'
+      });
+
+      // Clear success message after 3 seconds
+      setTimeout(() => set({ success: null }), 3000);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to remove model';
       set({ error: errorMessage });
     }
   },
