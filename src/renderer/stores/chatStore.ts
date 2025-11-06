@@ -331,6 +331,15 @@ export const useChatStore = create<ChatStore>()(
           // Extract attachments if present (from UIMessage extension)
           const attachments = (message as any).attachments || undefined;
 
+          // Debug: Log attachments being persisted
+          if (attachments) {
+            logger.core.info('💾 Persisting message WITH attachments', {
+              messageId: message.id,
+              attachmentCount: attachments?.length || 0,
+              attachments: attachments,
+            });
+          }
+
           const input: CreateMessageInput = {
             session_id: currentSession.id,
             role: message.role,
@@ -347,6 +356,8 @@ export const useChatStore = create<ChatStore>()(
               sessionId: currentSession.id,
               role: message.role,
               hasToolCalls: !!toolCallsData,
+              hasAttachments: !!attachments,
+              attachmentCount: attachments?.length || 0,
             });
 
             // Auto-generate title for first user message
@@ -408,6 +419,15 @@ export const useChatStore = create<ChatStore>()(
           const uiMessages: UIMessage[] = result.data.items.map((dbMsg: Message) => {
             const parts: any[] = [];
 
+            // Debug: Log raw message from DB
+            logger.core.info('🔍 Processing DB message', {
+              messageId: dbMsg.id,
+              role: dbMsg.role,
+              hasContent: !!dbMsg.content,
+              hasAttachments: !!dbMsg.attachments,
+              attachmentsRaw: dbMsg.attachments ? 'PRESENT' : 'NONE',
+            });
+
             // Add text part
             if (dbMsg.content) {
               parts.push({
@@ -445,20 +465,37 @@ export const useChatStore = create<ChatStore>()(
             if (dbMsg.attachments) {
               try {
                 attachments = JSON.parse(dbMsg.attachments);
+                logger.core.info('✅ Parsed attachments for message', {
+                  messageId: dbMsg.id,
+                  attachmentCount: attachments?.length || 0,
+                  attachments: attachments,
+                });
               } catch (err) {
-                logger.database.warn('Failed to parse attachments', {
+                logger.core.warn('❌ Failed to parse attachments', {
                   messageId: dbMsg.id,
                   error: err,
                 });
               }
             }
 
-            return {
+            const finalMessage = {
               id: dbMsg.id,
               role: dbMsg.role,
               parts,
               attachments, // Add attachments to UIMessage
             } as UIMessage;
+
+            // Debug: Log final message structure
+            if (attachments) {
+              logger.core.info('📦 Created UIMessage with attachments', {
+                messageId: finalMessage.id,
+                role: finalMessage.role,
+                attachmentCount: attachments?.length || 0,
+                hasAttachmentsProperty: !!(finalMessage as any).attachments,
+              });
+            }
+
+            return finalMessage;
           });
 
           logger.database.info('Historical messages loaded', {

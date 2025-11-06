@@ -40,6 +40,12 @@ export interface ChatStreamChunk {
     status: "success" | "error";
     timestamp: number;
   };
+  generatedAttachment?: {
+    type: 'image' | 'audio' | 'video';
+    mime: string;
+    dataUrl: string;
+    filename: string;
+  };
 }
 
 export class AIService {
@@ -497,18 +503,39 @@ export class AIService {
           break;
 
         case 'image':
-          // Return image as markdown
-          yield { delta: `![Generated Image](${result.dataUrl})` };
+          // Return image as attachment (to be saved by frontend)
+          yield {
+            generatedAttachment: {
+              type: 'image',
+              mime: result.mime,
+              dataUrl: result.dataUrl,
+              filename: `generated-image-${Date.now()}.${result.mime.split('/')[1] || 'png'}`
+            }
+          };
           break;
 
         case 'audio':
-          // Return audio as HTML audio tag
-          yield { delta: `<audio controls src="${result.dataUrl}"></audio>` };
+          // Return audio as attachment
+          yield {
+            generatedAttachment: {
+              type: 'audio',
+              mime: result.mime,
+              dataUrl: result.dataUrl,
+              filename: `generated-audio-${Date.now()}.${result.mime.split('/')[1] || 'wav'}`
+            }
+          };
           break;
 
         case 'video':
-          // Return video as HTML video tag
-          yield { delta: `<video controls src="${result.dataUrl}"></video>` };
+          // Return video as attachment
+          yield {
+            generatedAttachment: {
+              type: 'video',
+              mime: result.mime,
+              dataUrl: result.dataUrl,
+              filename: `generated-video-${Date.now()}.${result.mime.split('/')[1] || 'mp4'}`
+            }
+          };
           break;
       }
 

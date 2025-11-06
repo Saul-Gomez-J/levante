@@ -322,6 +322,21 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       });
     }
 
+    // Handle generated attachments (images, audio, video from inference models)
+    if (chunk.generatedAttachment) {
+      chunks.push({
+        type: 'data-part-available',
+        id: `generated-attachment-${Date.now()}`,
+        data: {
+          type: 'generated-attachment' as const,
+          attachmentType: chunk.generatedAttachment.type,
+          mime: chunk.generatedAttachment.mime,
+          dataUrl: chunk.generatedAttachment.dataUrl,
+          filename: chunk.generatedAttachment.filename,
+        },
+      });
+    }
+
     return chunks;
   }
 

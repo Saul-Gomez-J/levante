@@ -40,6 +40,7 @@ const TASK_TYPE_LABELS: Record<TaskType, string> = {
 
 export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInferenceModelDialogProps) => {
   const [modelId, setModelId] = useState('');
+  const [inferenceProvider, setInferenceProvider] = useState('');
   const [detectedTaskType, setDetectedTaskType] = useState<TaskType | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +111,11 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
       return;
     }
 
+    if (!inferenceProvider.trim()) {
+      setError('Inference Provider is required');
+      return;
+    }
+
     setIsValidating(true);
     setIsSubmitting(true);
 
@@ -128,7 +134,9 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
       const newModel = {
         id: modelId,
         name: displayName.trim() || modelId,
+        provider: 'huggingface',
         taskType,
+        inferenceProvider: inferenceProvider.trim(),
         contextLength: 0,
         capabilities: [],
         userDefined: true,
@@ -138,6 +146,7 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
 
       // Reset form and close
       setModelId('');
+      setInferenceProvider('');
       setDetectedTaskType(null);
       setDisplayName('');
       setError(null);
@@ -154,6 +163,7 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
   const handleClose = () => {
     if (!isSubmitting) {
       setModelId('');
+      setInferenceProvider('');
       setDetectedTaskType(null);
       setDisplayName('');
       setError(null);
@@ -167,7 +177,7 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
         <DialogHeader>
           <DialogTitle>Add Inference Model</DialogTitle>
           <DialogDescription>
-            Enter a Hugging Face model ID. We'll automatically detect if it's compatible with text-to-image, image-to-text, or speech recognition.
+            Enter a Hugging Face model ID. We'll automatically detect if it's compatible with text-generation, text-to-image, image-to-text, or speech recognition.
           </DialogDescription>
         </DialogHeader>
 
@@ -205,6 +215,22 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
           </div>
 
           <div className="space-y-2">
+            <Label htmlFor="inference-provider">
+              Inference Provider <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="inference-provider"
+              placeholder="e.g., featherless-ai, novita, fireworks-ai"
+              value={inferenceProvider}
+              onChange={(e) => setInferenceProvider(e.target.value)}
+              disabled={isSubmitting}
+            />
+            <p className="text-xs text-muted-foreground">
+              Provider slug for Hugging Face Inference API
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="display-name">Display Name (optional)</Label>
             <Input
               id="display-name"
@@ -229,7 +255,7 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
           </Button>
           <Button
             onClick={handleSubmit}
-            disabled={isSubmitting || !modelId.trim()}
+            disabled={isSubmitting || !modelId.trim() || !inferenceProvider.trim()}
           >
             {isValidating ? 'Validating...' : isSubmitting ? 'Adding...' : 'Add Model'}
           </Button>

@@ -15,6 +15,7 @@ export type InferenceTask =
 export interface InferenceCall<TInput = unknown, TOutput = unknown> {
   task: InferenceTask;
   model: string;           // Hugging Face model ID (e.g., "black-forest-labs/FLUX.1-dev")
+  provider?: string;       // Inference provider slug (e.g., "featherless-ai", "novita", "fireworks-ai")
   input: TInput;          // Shape depends on task
   options?: Record<string, unknown>;  // Task-specific parameters
 }

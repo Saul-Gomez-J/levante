@@ -196,7 +196,86 @@ const ChatPage = () => {
 
       // Persist the AI response
       if (currentSession) {
-        await persistMessage(message);
+        // Check for generated attachments in data parts
+        const generatedAttachments: Array<{
+          id: string;
+          type: 'image' | 'audio';
+          filename: string;
+          mimeType: string;
+          size: number;
+          storagePath: string;
+        }> = [];
+        if (message.parts) {
+          for (const part of message.parts) {
+            // Check if this is a data part with generated-attachment
+            if (part.type.startsWith('data-') && (part as any).data?.type === 'generated-attachment') {
+              const attachmentData = (part as any).data;
+              logger.core.info('Found generated attachment', {
+                type: attachmentData.attachmentType,
+                filename: attachmentData.filename,
+              });
+
+              // Convert dataURL to buffer and save
+              try {
+                const base64Data = attachmentData.dataUrl.split(',')[1];
+                const buffer = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+
+                const result = await window.levante.attachments.save(
+                  currentSession.id,
+                  message.id,
+                  buffer.buffer,
+                  attachmentData.filename,
+                  attachmentData.mime
+                );
+
+                if (result.success && result.data) {
+                  generatedAttachments.push(result.data);
+                  logger.core.info('Generated attachment saved', {
+                    attachmentId: result.data.id,
+                    filename: attachmentData.filename,
+                  });
+                }
+              } catch (error) {
+                logger.core.error('Failed to save generated attachment', {
+                  error: error instanceof Error ? error.message : error,
+                });
+              }
+            }
+          }
+        }
+
+        // Add generated attachments to message before persisting
+        const messageWithAttachments = {
+          ...message,
+          attachments: generatedAttachments.length > 0 ? generatedAttachments : undefined,
+        };
+
+        logger.core.info('🚀 About to persist message', {
+          messageId: message.id,
+          role: message.role,
+          hasAttachments: !!messageWithAttachments.attachments,
+          attachmentCount: (messageWithAttachments.attachments as any)?.length || 0,
+          attachments: messageWithAttachments.attachments,
+        });
+
+        await persistMessage(messageWithAttachments);
+
+        // Update the message in useChat state to include attachments
+        if (generatedAttachments.length > 0) {
+          logger.core.info('Updating message state with attachments', {
+            messageId: message.id,
+            attachmentCount: generatedAttachments.length,
+          });
+
+          // Find and update the message in the messages array
+          setMessages((prevMessages) =>
+            prevMessages.map((m) =>
+              m.id === message.id
+                ? { ...m, attachments: generatedAttachments } as any
+                : m
+            )
+          );
+        }
       }
 
       // Trigger mermaid processing
@@ -395,7 +474,14 @@ const ChatPage = () => {
         const messageId = `user-${Date.now()}`;
 
         // Process and save attachments if any
-        let savedAttachments = [];
+        let savedAttachments: Array<{
+          id: string;
+          type: 'image' | 'audio';
+          filename: string;
+          mimeType: string;
+          size: number;
+          storagePath: string;
+        }> = [];
         let attachmentDataForInference: any[] = [];
 
         if (filesToAttach.length > 0) {
@@ -442,11 +528,13 @@ const ChatPage = () => {
 
         // Send to AI with attachments in the body
         // The ElectronChatTransport will pass these to the IPC layer
-        sendMessageAI(messageText, {
+        await sendMessageAI({
+          text: messageText,
+          experimental_attachments: attachmentDataForInference.length > 0 ? attachmentDataForInference as any : undefined,
           body: {
             attachments: attachmentDataForInference.length > 0 ? attachmentDataForInference : undefined
           }
-        });
+        } as any);
 
         // Persist user message to database with saved attachment metadata
         const userMessage = {
@@ -768,6 +856,20 @@ const ChatPage = () => {
                         {(message as any).attachments && (message as any).attachments.length > 0 && (
                           <MessageAttachments attachments={(message as any).attachments} />
                         )}
+
+                        {/* Debug: Log message structure */}
+                        {(() => {
+                          if ((message as any).attachments?.length > 0) {
+                            logger.core.debug('Rendering message with attachments', {
+                              messageId: message.id,
+                              role: message.role,
+                              attachmentCount: (message as any).attachments.length,
+                              attachments: (message as any).attachments,
+                              partsCount: message.parts?.length || 0,
+                            });
+                          }
+                          return null;
+                        })()}
 
                         {message.parts?.map((part: any, i: number) => {
                           try {

@@ -29,6 +29,12 @@ export interface ChatStreamChunk {
     status: 'success' | 'error';
     timestamp: number;
   };
+  generatedAttachment?: {
+    type: 'image' | 'audio' | 'video';
+    mime: string;
+    dataUrl: string;
+    filename: string;
+  };
 }
 
 // MCP Types for preload

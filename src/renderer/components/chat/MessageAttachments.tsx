@@ -29,11 +29,30 @@ export function MessageAttachments({
     const loadAttachments = async () => {
       try {
         setLoading(true);
+        logger.core.debug('Loading attachments from disk', {
+          count: attachments.length,
+          attachments: attachments.map(a => ({
+            id: a.id,
+            type: a.type,
+            filename: a.filename,
+            hasDataUrl: !!a.dataUrl,
+          })),
+        });
+
         const result = await window.levante.attachments.loadMany(attachments);
 
         if (result.success && result.data) {
           setLoadedAttachments(result.data);
-          logger.core.info('Attachments loaded', { count: result.data.length });
+          logger.core.info('Attachments loaded successfully', {
+            count: result.data.length,
+            loadedAttachments: result.data.map(a => ({
+              id: a.id,
+              type: a.type,
+              filename: a.filename,
+              hasDataUrl: !!a.dataUrl,
+              dataUrlLength: a.dataUrl?.length || 0,
+            })),
+          });
         } else {
           logger.core.error('Failed to load attachments', { error: result.error });
         }
@@ -47,7 +66,11 @@ export function MessageAttachments({
     };
 
     if (attachments.length > 0) {
+      logger.core.debug('MessageAttachments: Starting to load', { count: attachments.length });
       loadAttachments();
+    } else {
+      logger.core.debug('MessageAttachments: No attachments to load');
+      setLoading(false);
     }
   }, [attachments]);
 

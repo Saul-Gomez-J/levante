@@ -12,6 +12,7 @@ export interface Model {
   userDefined: boolean;
   isSelected?: boolean; // For user model selection
   taskType?: 'chat' | 'text-generation' | 'text-to-image' | 'image-text-to-text' | 'image-to-image' | 'text-to-video' | 'text-to-speech'; // Inference task type (defaults to 'chat')
+  inferenceProvider?: string; // HuggingFace Inference API provider slug (e.g., 'featherless-ai', 'novita', 'fireworks-ai')
 }
 
 export type CloudProviderType = 'openai' | 'anthropic' | 'google' | 'groq' | 'xai' | 'huggingface';

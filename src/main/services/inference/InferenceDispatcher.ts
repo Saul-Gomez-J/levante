@@ -75,7 +75,7 @@ export class InferenceDispatcher {
     const input = call.input as TextGenerationInput;
     const options = call.options as TextGenerationOptions | undefined;
 
-    const text = await this.client.textGeneration(call.model, input, options);
+    const text = await this.client.textGeneration(call.model, input, options, call.provider);
 
     return {
       kind: 'text',
@@ -90,7 +90,7 @@ export class InferenceDispatcher {
     const input = call.input as TextToImageInput;
     const options = call.options as TextToImageOptions | undefined;
 
-    const blob = await this.client.textToImage(call.model, input, options);
+    const blob = await this.client.textToImage(call.model, input, options, call.provider);
 
     // Convert Blob to base64 dataURL
     const arrayBuffer = await blob.arrayBuffer();
@@ -112,7 +112,7 @@ export class InferenceDispatcher {
   private async handleImageTextToText(call: InferenceCall): Promise<InferenceResult> {
     const input = call.input as ImageTextToTextInput;
 
-    const text = await this.client.imageTextToText(call.model, input);
+    const text = await this.client.imageTextToText(call.model, input, call.provider);
 
     return {
       kind: 'text',
@@ -127,7 +127,7 @@ export class InferenceDispatcher {
     const input = call.input as ImageToImageInput;
     const options = call.options as ImageToImageOptions | undefined;
 
-    const blob = await this.client.imageToImage(call.model, input, options);
+    const blob = await this.client.imageToImage(call.model, input, options, call.provider);
 
     // Convert Blob to base64 dataURL
     const arrayBuffer = await blob.arrayBuffer();
@@ -150,7 +150,7 @@ export class InferenceDispatcher {
     const input = call.input as TextToVideoInput;
     const options = call.options as TextToVideoOptions | undefined;
 
-    const blob = await this.client.textToVideo(call.model, input, options);
+    const blob = await this.client.textToVideo(call.model, input, options, call.provider);
 
     // Convert Blob to base64 dataURL
     const arrayBuffer = await blob.arrayBuffer();
@@ -173,7 +173,7 @@ export class InferenceDispatcher {
     const input = call.input as TextToSpeechInput;
     const options = call.options as TextToSpeechOptions | undefined;
 
-    const blob = await this.client.textToSpeech(call.model, input, options);
+    const blob = await this.client.textToSpeech(call.model, input, options, call.provider);
 
     // Convert Blob to base64 dataURL
     const arrayBuffer = await blob.arrayBuffer();

@@ -221,17 +221,28 @@ export class ChatService {
 
   // Messages
   async createMessage(input: CreateMessageInput): Promise<DatabaseResult<Message>> {
-    this.logger.database.debug('Creating new message', {
+    console.log('🗄️ [MAIN] Creating new message in DB', {
       sessionId: input.session_id,
       role: input.role,
       contentLength: input.content.length,
       hasToolCalls: !!input.tool_calls,
-      hasAttachments: !!input.attachments
+      hasAttachments: !!input.attachments,
+      attachmentCount: input.attachments?.length || 0,
+      attachments: input.attachments
     });
 
     try {
       const id = this.generateId();
       const now = Date.now();
+
+      const attachmentsString = input.attachments ? JSON.stringify(input.attachments) : null;
+
+      console.log('💿 [MAIN] About to INSERT message', {
+        messageId: id,
+        hasAttachmentsString: !!attachmentsString,
+        attachmentsStringLength: attachmentsString?.length || 0,
+        attachmentsPreview: attachmentsString?.substring(0, 200)
+      });
 
       const message: Message = {
         id,
@@ -239,7 +250,7 @@ export class ChatService {
         role: input.role,
         content: input.content,
         tool_calls: input.tool_calls ? JSON.stringify(input.tool_calls) : null,
-        attachments: input.attachments ? JSON.stringify(input.attachments) : null,
+        attachments: attachmentsString,
         created_at: now
       };
 
@@ -256,6 +267,12 @@ export class ChatService {
           message.created_at as InValue
         ]
       );
+
+      console.log('✅ [MAIN] Message INSERTED into DB', {
+        messageId: id,
+        attachmentsInObject: !!message.attachments,
+        attachmentsString: message.attachments?.substring(0, 100)
+      });
 
       // Update session's updated_at timestamp
       await databaseService.execute(
@@ -301,7 +318,8 @@ export class ChatService {
         role: row[2] as 'user' | 'assistant' | 'system',
         content: row[3] as string,
         tool_calls: row[4] as string,
-        created_at: row[5] as number
+        created_at: row[5] as number,
+        attachments: row[6] as string
       }));
 
       const paginatedResult: PaginatedResult<Message> = {
@@ -350,7 +368,8 @@ export class ChatService {
         role: row[2] as 'user' | 'assistant' | 'system',
         content: row[3] as string,
         tool_calls: row[4] as string,
-        created_at: row[5] as number
+        created_at: row[5] as number,
+        attachments: row[6] as string
       }));
 
       this.logger.database.debug('Search completed', { found: messages.length, query: searchQuery });
