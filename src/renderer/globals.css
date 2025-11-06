@@ -149,7 +149,23 @@
   scrollbar-color: hsl(0 0% 26.7%) transparent;
 }
 
-/* Electron window dragging */
+/* Electron window dragging - Custom Title Bar */
+.title-bar {
+  -webkit-app-region: drag;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.title-bar button,
+.title-bar input,
+.title-bar select,
+.title-bar textarea,
+.title-bar a,
+.title-bar [role="button"] {
+  -webkit-app-region: no-drag;
+}
+
+/* Legacy support for app-header */
 .app-header {
   -webkit-app-region: drag;
 }
@@ -164,6 +180,14 @@
 
 
 @layer base {
+  /* Full height layout - prevents vh issues with titleBarOverlay on Windows */
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+  }
+
   * {
     @apply border-border;
   }

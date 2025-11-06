@@ -13,7 +13,7 @@ import { oauthCallbackServer } from "./services/oauthCallbackServer";
 import { createApplicationMenu } from "./menu";
 
 // Lifecycle modules
-import { initializeServices, registerIPCHandlers } from "./lifecycle/initialization";
+import { initializeServices, registerIPCHandlers, registerWindowControlHandlers } from "./lifecycle/initialization";
 import { createMainWindow } from "./lifecycle/window";
 import { registerAppEvents, setupDeepLinkHandling } from "./lifecycle/events";
 
@@ -53,6 +53,9 @@ app.whenReady().then(async () => {
 
   // Create main window
   mainWindow = createMainWindow();
+
+  // Register window control handlers (after window creation)
+  registerWindowControlHandlers(mainWindow);
 
   // Create application menu
   createApplicationMenu(mainWindow);

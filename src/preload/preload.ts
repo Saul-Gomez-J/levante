@@ -43,6 +43,7 @@ import { wizardApi } from './api/wizard';
 import { profileApi } from './api/profile';
 import { debugApi } from './api/debug';
 import { settingsApi } from './api/settings';
+import { windowApi } from './api/window';
 
 // Re-export types for backwards compatibility
 export type {
@@ -191,6 +192,15 @@ export interface LevanteAPI {
     openDirectory: () => Promise<{ success: boolean; data?: string; error?: string }>;
     getDirectoryInfo: () => Promise<{ success: boolean; data?: { baseDir: string; exists: boolean; files: string[]; totalFiles: number }; error?: string }>;
   };
+
+  // Window control functionality
+  window: {
+    minimize: () => Promise<{ success: boolean; error?: string }>;
+    maximize: () => Promise<{ success: boolean; error?: string }>;
+    close: () => Promise<{ success: boolean; error?: string }>;
+    isMaximized: () => Promise<{ success: boolean; data?: boolean; error?: string }>;
+    onMaximizeChanged: (callback: (isMaximized: boolean) => void) => () => void;
+  };
 }
 
 // Assemble the complete API from modules
@@ -227,6 +237,9 @@ const api: LevanteAPI = {
 
   // Profile API
   profile: profileApi,
+
+  // Window API
+  window: windowApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

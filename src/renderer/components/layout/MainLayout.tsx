@@ -17,6 +17,8 @@ import { MessageSquare, Settings, User, Bot, Store, Plus, PanelLeftClose, PanelL
 import { getRendererLogger } from '@/services/logger'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
+import { TitleBar } from './TitleBar'
+import { cn } from '@/lib/utils'
 // @ts-ignore - PNG import
 import logoIcon from '@/assets/icons/icon.png'
 
@@ -39,8 +41,8 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
   return (
     <>
       <Sidebar>
-        <SidebarHeader style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-          <div className="flex flex-col gap-4 p-2 pt-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <SidebarHeader className="pt-3">
+          <div className="flex flex-col gap-4 p-2 pt-0">
             {/* Controls row - only show when sidebar is open */}
             {open && (
               <div className="flex items-center gap-1 justify-end pr-2 -pt-6">
@@ -132,18 +134,15 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
           </div>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className='rounded-l-2xl h-screen flex flex-col'>
-        {/* Custom titlebar for macOS - draggable area with controls */}
-        <header
-          className="flex shrink-0 items-center h-12 px-2"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
-        >
+      <SidebarInset className={cn(
+        'flex flex-col h-full min-h-0',
+        platform !== 'win32' && 'rounded-l-2xl' // No rounded corners on Windows to avoid hit-test offset when maximized
+      )}>
+        {/* Custom Title Bar - draggable area with controls */}
+        <TitleBar title={title} showTitle={true}>
           {/* Only show controls when sidebar is closed */}
           {!open && (
-            <div
-              className="flex items-center gap-1 ml-16"
-              style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            >
+            <>
               <SidebarTrigger className="h-7 w-7" />
               <Button
                 variant="ghost"
@@ -155,17 +154,9 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
                 <Plus size={14} />
                 <span className="text-xs">{t('actions.new_chat')}</span>
               </Button>
-            </div>
+            </>
           )}
-
-          {/* Center title */}
-          <div className={`flex-1 text-center ${!open ? '' : 'ml-16'}`}>
-            <h1 className="text-sm font-medium text-muted-foreground">{title}</h1>
-          </div>
-
-          {/* Right side spacer to balance layout */}
-          {!open && <div className="w-32"></div>}
-        </header>
+        </TitleBar>
 
         <div className="flex-1 overflow-hidden px-0 py-2">
           {children}

@@ -23,6 +23,9 @@ export function createMainWindow(): BrowserWindow {
     themeSource: nativeTheme.themeSource,
     shouldUseDarkColors: nativeTheme.shouldUseDarkColors,
   });
+const isWin = process.platform === 'win32';
+  const isMac = process.platform === 'darwin';
+  const isLinux = process.platform === 'linux';
 
   // Create the browser window
   const mainWindow = new BrowserWindow({
@@ -31,14 +34,19 @@ export function createMainWindow(): BrowserWindow {
     minWidth: 800,
     minHeight: 600,
     show: false,
+    useContentSize: true, // Width/height refer to content, not frame - reduces rounding issues on maximize
     icon: join(__dirname, "../../resources/icons/icon.png"), // App icon
-    // macOS: hiddenInset (hide titlebar but keep traffic lights)
-    // Windows/Linux: default (keep native titlebar for now, can use frame: false for custom titlebar)
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+    // Frameless on Windows/Linux to avoid thick frame hit-test issues with DPI scaling
+    // See: https://github.com/electron/electron/issues/7347
+    frame: isMac, // Only macOS keeps frame (for traffic lights)
+    ...((isWin || isLinux) ? { thickFrame: false } : {}), // Disable thick frame on Windows/Linux
+    // Remove default title bar on all platforms
+    titleBarStyle: 'hidden',
+    // No titleBarOverlay - causes hit-test issues with DPI scaling
+    titleBarOverlay: undefined,
+    // Position traffic lights for macOS
+    trafficLightPosition: isMac ? { x: 12, y: 16 } : undefined,
     backgroundColor: "#ffffff", // White background for titlebar
-    trafficLightPosition:
-      process.platform === "darwin" ? { x: 10, y: 10 } : undefined, // Position traffic lights (macOS only)
-    // Note: For Windows/Linux without native titlebar, set frame: false and implement custom window controls
     webPreferences: {
       // Con Electron Forge + Vite, preload.js está en __dirname directamente
       preload: join(__dirname, "preload.js"),
@@ -85,6 +93,26 @@ export function createMainWindow(): BrowserWindow {
 
   // Force light theme for window (affects titlebar on macOS)
   nativeTheme.themeSource = "light";
+
+  // Listen for theme changes and update title bar overlay (Windows/Linux only)
+  if (process.platform !== "darwin") {
+    nativeTheme.on("updated", () => {
+      const isDark = nativeTheme.shouldUseDarkColors;
+      mainWindow.setTitleBarOverlay({
+        color: isDark ? "#0f0f0f" : "#ffffff",
+        symbolColor: isDark ? "#ffffff" : "#000000",
+        height: 48
+      });
+      logger.core.debug("Title bar overlay updated", { isDark });
+    });
+  }
+
+  // Lock zoom to prevent DPI-related hit-test issues on Windows
+  // This mitigates render/hit-test misalignment with fractional DPI scaling (125%, 150%)
+  mainWindow.webContents.setVisualZoomLevelLimits(1, 1).catch(() => {
+    logger.core.debug("Could not set visual zoom limits (older Electron version?)");
+  });
+  mainWindow.webContents.setZoomFactor(1);
 
   // Show window when ready to prevent visual flash
   mainWindow.on("ready-to-show", () => {

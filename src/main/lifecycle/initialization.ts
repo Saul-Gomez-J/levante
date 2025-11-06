@@ -25,6 +25,7 @@ import { registerDebugHandlers } from "../ipc/debugHandlers";
 import { setupChatHandlers } from "../ipc/chatHandlers";
 import { setupAppHandlers } from "../ipc/appHandlers";
 import { setupOAuthHandlers } from "../ipc/oauthHandlers";
+import { registerWindowHandlers } from "../ipc/windowHandlers";
 
 const logger = getLogger();
 
@@ -115,5 +116,18 @@ export function registerIPCHandlers(getMainWindow: () => BrowserWindow | null): 
   setupAppHandlers(getMainWindow);
   setupOAuthHandlers();
 
+  // Window control handlers (need to be registered after window creation)
+  // Will be called separately from main.ts after createMainWindow()
+
   logger.core.info("All IPC handlers registered successfully");
+}
+
+/**
+ * Register window control handlers
+ * Should be called after window creation
+ * @param mainWindow - The main browser window
+ */
+export function registerWindowControlHandlers(mainWindow: BrowserWindow): void {
+  registerWindowHandlers(mainWindow);
+  logger.core.info("Window control handlers registered successfully");
 }
