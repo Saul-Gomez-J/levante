@@ -160,7 +160,7 @@ export class OAuthCallbackServer {
         `);
 
         // Send error to renderer
-        if (this.mainWindow) {
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
           this.mainWindow.webContents.send('levante/oauth/callback', {
             success: false,
             error: errorDescription || error
@@ -289,7 +289,7 @@ export class OAuthCallbackServer {
       `);
 
       // Send code to renderer
-      if (this.mainWindow) {
+      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send('levante/oauth/callback', {
           success: true,
           provider: 'openrouter',
