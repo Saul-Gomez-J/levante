@@ -169,8 +169,17 @@ export function setupModelHandlers() {
 
   // Validate Hugging Face model (fetch model info from HF API)
   ipcMain.removeHandler('levante/models/huggingface/validate');
-  ipcMain.handle('levante/models/huggingface/validate', async (_, modelId: string) => {
+  ipcMain.handle('levante/models/huggingface/validate', async (_, modelId: string, inferenceProvider?: string) => {
     try {
+      const providerSlug = inferenceProvider?.trim();
+
+      if (!providerSlug) {
+        return {
+          success: false,
+          error: 'Inference provider is required'
+        };
+      }
+
       const apiUrl = `https://huggingface.co/api/models/${modelId}`;
 
       const response = await fetch(apiUrl);
@@ -189,6 +198,7 @@ export function setupModelHandlers() {
       }
 
       const data = await response.json();
+      const pipelineTag: string | undefined = data.pipeline_tag;
 
       // Validate that model has inference capability
       // The "inference" field must be "warm" for the model to be usable for inference
@@ -203,11 +213,57 @@ export function setupModelHandlers() {
         };
       }
 
+      if (!pipelineTag) {
+        logger.ipc.warn('Model validation failed: missing pipeline tag', { modelId });
+        return {
+          success: false,
+          error: 'No se pudo determinar la tarea del modelo'
+        };
+      }
+
+      const modelNameFragment = modelId.includes('/') ? modelId.split('/').pop() || modelId : modelId;
+      const searchUrl = new URL('https://huggingface.co/api/models');
+      searchUrl.searchParams.set('inference_provider', providerSlug);
+      searchUrl.searchParams.set('pipeline_tag', pipelineTag);
+      searchUrl.searchParams.set('search', modelNameFragment);
+      searchUrl.searchParams.set('limit', '20');
+
+      const searchResponse = await fetch(searchUrl.toString());
+
+      if (!searchResponse.ok) {
+        logger.ipc.warn('Hugging Face provider search failed', {
+          modelId,
+          providerSlug,
+          pipelineTag,
+          status: searchResponse.status
+        });
+        return {
+          success: false,
+          error: `No se pudo verificar el provider (HTTP ${searchResponse.status})`
+        };
+      }
+
+      const searchPayload = await searchResponse.json();
+      const searchResults: Array<{ id?: string }> = Array.isArray(searchPayload) ? searchPayload : [];
+      const isListedForProvider = searchResults.some(model => model?.id === modelId);
+
+      if (!isListedForProvider) {
+        logger.ipc.warn('Model not listed for inference provider', {
+          modelId,
+          providerSlug,
+          pipelineTag
+        });
+        return {
+          success: false,
+          error: 'Este modelo no está disponible en el router de Hugging Face con ese provider'
+        };
+      }
+
       return {
         success: true,
         data: {
           id: data.id,
-          pipeline_tag: data.pipeline_tag,
+          pipeline_tag: pipelineTag,
           modelId: data.modelId,
           author: data.author,
           downloads: data.downloads,
