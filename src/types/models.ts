@@ -11,7 +11,7 @@ export interface Model {
   isAvailable: boolean;
   userDefined: boolean;
   isSelected?: boolean; // For user model selection
-  taskType?: 'chat' | 'text-generation' | 'text-to-image' | 'image-text-to-text' | 'image-to-image' | 'text-to-video' | 'text-to-speech'; // Inference task type (defaults to 'chat')
+  taskType?: 'chat' | 'conversational' | 'text-generation' | 'text2text-generation' | 'text-to-image' | 'image-text-to-text' | 'image-to-image' | 'text-to-video' | 'text-to-speech' | 'visual-question-answering' | 'document-question-answering' | 'table-question-answering'; // Inference task type (defaults to 'chat')
   inferenceProvider?: string; // HuggingFace Inference API provider slug (e.g., 'featherless-ai', 'novita', 'fireworks-ai')
 }
 

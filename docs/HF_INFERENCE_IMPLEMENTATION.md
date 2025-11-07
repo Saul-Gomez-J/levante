@@ -381,9 +381,9 @@ Response: { pipeline_tag: "text-to-image", ... }
 
 #### 13-15. Inference Integration in UI
 
-**Status**: ✅ COMPLETE (Option A - Separate UI)
+**Status**: ✅ COMPLETE (Dedicated components available; standalone page removed)
 
-**Implementation**: Opted for **Option A: Separate Inference UI** as recommended. Created a dedicated Inference page with specialized panels for each task type.
+**Implementation**: Originally shipped with a separate Inference page. The page has since been removed in favor of keeping inference workflows embedded directly inside chat or future contextual surfaces, while preserving all reusable panels and hooks.
 
 **Files Created**:
 
@@ -416,24 +416,9 @@ Response: { pipeline_tag: "text-to-image", ... }
    - Transcription display and copy
    - Lines: Full implementation
 
-5. **`src/renderer/pages/InferencePage.tsx`**
-   - Main inference page with tabbed interface
-   - Three tabs: Text-to-Image, Image-to-Text, Speech-to-Text
-   - Responsive layout with proper navigation
-   - Lines: Full implementation
+**Navigation Update**:
 
-**Navigation Integration**:
-
-- **`src/renderer/App.tsx`** (Modified)
-  - Added InferencePage import
-  - Added 'inference' case to routing
-  - Added page title for inference
-  - Lines: 7, 299-300, 312
-
-- **`src/renderer/components/layout/MainLayout.tsx`** (Modified)
-  - Added Sparkles icon import
-  - Added Inference navigation button in sidebar
-  - Lines: 16, 90-98
+- Standalone `InferencePage` and sidebar entry were removed (see `src/renderer/App.tsx` and `src/renderer/components/layout/MainLayout.tsx`). The inference panels remain available for integration inside other experiences (e.g., chat slash commands, inline drawers, etc.).
 
 **Translations Added**:
 
@@ -442,7 +427,7 @@ Response: { pipeline_tag: "text-to-image", ... }
 
 **Key Features**:
 
-✅ Separate UI optimized for each inference task type
+✅ Modular UI optimized for each inference task type
 ✅ Model selection filtered by task type
 ✅ File upload with preview for image/audio tasks
 ✅ Advanced options for text-to-image

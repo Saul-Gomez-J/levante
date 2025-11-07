@@ -5,12 +5,17 @@
 
 export type InferenceTask =
   | 'chat'                           // LLM chat completions (Router)
-  | 'text-generation'                // Text generation (GPT, LLAMA)
+  | 'conversational'                 // HF conversational pipeline (chatCompletion API)
+  | 'text-generation'                // Text generation / chat-compatible models
+  | 'text2text-generation'           // Instruction-tuned seq2seq (T5, etc.)
   | 'text-to-image'                  // Generate images from text (FLUX, Stable Diffusion)
   | 'image-text-to-text'             // Multimodal models (LLaVA, vision models)
   | 'image-to-image'                 // Image transformation (ControlNet, img2img)
   | 'text-to-video'                  // Generate videos from text (new)
-  | 'text-to-speech';                // Generate audio from text (TTS models)
+  | 'text-to-speech'                 // Generate audio from text (TTS models)
+  | 'visual-question-answering'      // VQA style models
+  | 'document-question-answering'    // Document QA models
+  | 'table-question-answering';      // Table QA models
 
 export interface InferenceCall<TInput = unknown, TOutput = unknown> {
   task: InferenceTask;
@@ -28,6 +33,25 @@ export type InferenceResult =
   | { kind: 'image'; mime: string; dataUrl: string }
   | { kind: 'video'; mime: string; dataUrl: string }
   | { kind: 'audio'; mime: string; dataUrl: string };
+
+/**
+ * Chat / conversational message types
+ */
+export type ChatMessageContentPart =
+  | { type: 'text'; text: string }
+  | { type: 'input_text'; text: string }
+  | { type: 'image'; image_url: { url: string } }
+  | { type: 'input_image'; image_url: { url: string } };
+
+export interface HFChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool' | 'function';
+  content: string | ChatMessageContentPart[];
+  name?: string;
+}
+
+export interface ConversationalInput {
+  messages: HFChatMessage[];
+}
 
 /**
  * Text-to-Image specific types
@@ -50,6 +74,8 @@ export interface TextToImageOptions {
 export interface ImageTextToTextInput {
   image: Buffer | Blob;
   text?: string;  // Optional text prompt/question about the image
+  mimeType?: string; // Optional override if Blob is missing type
+  preferChatMode?: boolean;
 }
 
 /**
@@ -106,6 +132,21 @@ export interface TextToSpeechOptions {
   voice?: string;
   speed?: number;
   language?: string;
+}
+
+export interface VisualQuestionAnsweringInput {
+  image: Buffer | Blob;
+  question: string;
+}
+
+export interface DocumentQuestionAnsweringInput {
+  image: Buffer | Blob;
+  question: string;
+}
+
+export interface TableQuestionAnsweringInput {
+  table: Record<string, unknown> | Record<string, unknown>[] | string;
+  query: string;
 }
 
 /**

@@ -20,7 +20,18 @@ interface AddInferenceModelDialogProps {
   onClose: () => void;
 }
 
-type TaskType = 'text-generation' | 'text-to-image' | 'image-text-to-text' | 'image-to-image' | 'text-to-video' | 'text-to-speech';
+type TaskType =
+  | 'text-generation'
+  | 'text2text-generation'
+  | 'conversational'
+  | 'text-to-image'
+  | 'image-text-to-text'
+  | 'image-to-image'
+  | 'text-to-video'
+  | 'text-to-speech'
+  | 'visual-question-answering'
+  | 'document-question-answering'
+  | 'table-question-answering';
 
 interface HuggingFaceModelInfo {
   id: string;
@@ -30,12 +41,17 @@ interface HuggingFaceModelInfo {
 }
 
 const TASK_TYPE_LABELS: Record<TaskType, string> = {
-  'text-generation': 'Text Generation',
+  'text-generation': 'Text Generation (Chat preferred)',
+  'text2text-generation': 'Text2Text Generation',
+  'conversational': 'Conversational Chat',
   'text-to-image': 'Text-to-Image',
   'image-text-to-text': 'Image-Text-to-Text (Multimodal)',
   'image-to-image': 'Image-to-Image',
   'text-to-video': 'Text-to-Video',
   'text-to-speech': 'Text-to-Speech',
+  'visual-question-answering': 'Visual Question Answering',
+  'document-question-answering': 'Document Question Answering',
+  'table-question-answering': 'Table Question Answering',
 };
 
 export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInferenceModelDialogProps) => {
@@ -72,12 +88,17 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
       // Check if pipeline_tag is one of our supported types
       const pipelineTag = data.pipeline_tag;
       const supportedTasks: TaskType[] = [
+        'conversational',
         'text-generation',
+        'text2text-generation',
         'text-to-image',
         'image-text-to-text',
         'image-to-image',
         'text-to-video',
-        'text-to-speech'
+        'text-to-speech',
+        'visual-question-answering',
+        'document-question-answering',
+        'table-question-answering'
       ];
 
       if (pipelineTag && supportedTasks.includes(pipelineTag as TaskType)) {
@@ -86,7 +107,7 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
 
       throw new Error(
         `Model task type "${pipelineTag || 'unknown'}" is not supported. ` +
-        'Supported types: text-generation, text-to-image, image-text-to-text, image-to-image, text-to-video, text-to-speech'
+        'Supported types: conversational, text-generation, text2text-generation, text-to-image, image-text-to-text, image-to-image, text-to-video, text-to-speech, visual/document/table QA'
       );
     } catch (err) {
       if (err instanceof Error) {

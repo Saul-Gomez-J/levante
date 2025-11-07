@@ -2,8 +2,7 @@ import { HFInferenceClient } from './HFInferenceClient';
 import type {
   InferenceCall,
   InferenceResult,
-  TextGenerationInput,
-  TextGenerationOptions,
+  ConversationalInput,
   TextToImageInput,
   TextToImageOptions,
   ImageTextToTextInput,
@@ -12,7 +11,12 @@ import type {
   TextToVideoInput,
   TextToVideoOptions,
   TextToSpeechInput,
-  TextToSpeechOptions
+  TextToSpeechOptions,
+  VisualQuestionAnsweringInput,
+  DocumentQuestionAnsweringInput,
+  TableQuestionAnsweringInput,
+  HFChatMessage,
+  TextGenerationInput
 } from '../../../types/inference';
 import { getLogger } from '../logging';
 
@@ -42,8 +46,10 @@ export class InferenceDispatcher {
     });
 
     switch (call.task) {
+      case 'conversational':
       case 'text-generation':
-        return this.handleTextGeneration(call);
+      case 'text2text-generation':
+        return this.handleConversational(call);
 
       case 'text-to-image':
         return this.handleTextToImage(call);
@@ -60,6 +66,15 @@ export class InferenceDispatcher {
       case 'text-to-speech':
         return this.handleTextToSpeech(call);
 
+      case 'visual-question-answering':
+        return this.handleVisualQuestionAnswering(call);
+
+      case 'document-question-answering':
+        return this.handleDocumentQuestionAnswering(call);
+
+      case 'table-question-answering':
+        return this.handleTableQuestionAnswering(call);
+
       case 'chat':
         throw new Error('Chat task should use Router API, not Inference API');
 
@@ -69,13 +84,26 @@ export class InferenceDispatcher {
   }
 
   /**
-   * Handle text-generation task
+   * Handle conversational/text-generation tasks using chatCompletion first
    */
-  private async handleTextGeneration(call: InferenceCall): Promise<InferenceResult> {
-    const input = call.input as TextGenerationInput;
-    const options = call.options as TextGenerationOptions | undefined;
+  private async handleConversational(call: InferenceCall): Promise<InferenceResult> {
+    const input = call.input as ConversationalInput | TextGenerationInput;
 
-    const text = await this.client.textGeneration(call.model, input, options, call.provider);
+    const messages: HFChatMessage[] =
+      'messages' in input && Array.isArray((input as ConversationalInput).messages) && (input as ConversationalInput).messages.length > 0
+        ? (input as ConversationalInput).messages
+        : [
+            {
+              role: 'user',
+              content: (input as TextGenerationInput).prompt || ''
+            }
+          ];
+
+    const text = await this.client.conversationalCompletion(
+      call.model,
+      { messages },
+      call.provider
+    );
 
     return {
       kind: 'text',
@@ -186,6 +214,48 @@ export class InferenceDispatcher {
       kind: 'audio',
       mime,
       dataUrl
+    };
+  }
+
+  /**
+   * Handle visual question answering
+   */
+  private async handleVisualQuestionAnswering(call: InferenceCall): Promise<InferenceResult> {
+    const input = call.input as VisualQuestionAnsweringInput;
+
+    const text = await this.client.visualQuestionAnswering(call.model, input, call.provider);
+
+    return {
+      kind: 'text',
+      text
+    };
+  }
+
+  /**
+   * Handle document question answering
+   */
+  private async handleDocumentQuestionAnswering(call: InferenceCall): Promise<InferenceResult> {
+    const input = call.input as DocumentQuestionAnsweringInput;
+
+    const text = await this.client.documentQuestionAnswering(call.model, input, call.provider);
+
+    return {
+      kind: 'text',
+      text
+    };
+  }
+
+  /**
+   * Handle table question answering
+   */
+  private async handleTableQuestionAnswering(call: InferenceCall): Promise<InferenceResult> {
+    const input = call.input as TableQuestionAnsweringInput;
+
+    const text = await this.client.tableQuestionAnswering(call.model, input, call.provider);
+
+    return {
+      kind: 'text',
+      text
     };
   }
 }

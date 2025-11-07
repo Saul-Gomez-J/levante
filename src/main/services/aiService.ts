@@ -12,7 +12,7 @@ import { buildSystemPrompt } from "./ai/systemPromptBuilder";
 import { isToolUseNotSupportedError } from "./ai/toolErrorDetector";
 import { calculateMaxSteps } from "./ai/stepsCalculator";
 import { InferenceDispatcher } from "./inference/InferenceDispatcher";
-import type { InferenceTask } from "../../types/inference";
+import type { InferenceTask, HFChatMessage } from "../../types/inference";
 
 export interface ChatRequest {
   messages: UIMessage[];
@@ -63,6 +63,96 @@ export class AIService {
 
     const response = await fetch(dataURL);
     return await response.blob();
+  }
+
+  /**
+   * Convert UI messages to HF chat messages for inference chatCompletion calls
+   */
+  private buildHFChatMessages(messages: UIMessage[]): HFChatMessage[] {
+    return messages.map((message) => {
+      const textSegments: string[] = [];
+      const parts = (message as any).parts;
+
+      if (Array.isArray(parts) && parts.length > 0) {
+        parts.forEach((part: any) => {
+          if (part?.type === 'text' && typeof part.text === 'string') {
+            textSegments.push(part.text);
+          }
+        });
+      } else if (typeof (message as any).content === 'string') {
+        textSegments.push((message as any).content);
+      } else if (Array.isArray((message as any).content)) {
+        textSegments.push(
+          (message as any).content
+            .map((part: any) => part?.text || '')
+            .filter(Boolean)
+            .join('\n')
+        );
+      } else if (typeof (message as any).text === 'string') {
+        textSegments.push((message as any).text);
+      }
+
+      return {
+        role: (message.role as HFChatMessage['role']) || 'user',
+        content: textSegments.filter(Boolean).join('\n')
+      };
+    });
+  }
+
+  /**
+   * Parse a JSON block embedded in markdown fences
+   */
+  private extractJsonBlock(text: string): { json: string; remainder: string } | null {
+    const match = text.match(/```(?:json|table)?\s*([\s\S]*?)```/i);
+    if (!match) {
+      return null;
+    }
+
+    const remainder = text.replace(match[0], '').trim();
+    return { json: match[1], remainder };
+  }
+
+  /**
+   * Parse table-question-answering payloads from user text
+   */
+  private parseTableQuestionInput(text: string): { table: any; query: string } | null {
+    const jsonBlock = this.extractJsonBlock(text);
+    const candidates: string[] = [];
+
+    if (jsonBlock) {
+      candidates.push(jsonBlock.json);
+    }
+
+    if (text.trim()) {
+      candidates.push(text.trim());
+    }
+
+    for (const candidate of candidates) {
+      try {
+        const parsed = JSON.parse(candidate);
+        if (parsed && typeof parsed === 'object') {
+          const table = (parsed as any).table ?? parsed;
+          const fallbackQuery =
+            ((jsonBlock?.remainder || '').trim()) ||
+            text.trim();
+
+          const query =
+            (parsed as any).query ??
+            (parsed as any).question ??
+            (parsed as any).prompt ??
+            fallbackQuery;
+
+          return {
+            table,
+            query
+          };
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -396,6 +486,9 @@ export class AIService {
 
       // Extract attachments if present (for image-based tasks)
       const attachments = (lastUserMessage as any).attachments || [];
+      const chatMessages = this.buildHFChatMessages(messages);
+      const modelConfig = hfProvider.models?.find((m: any) => m.id === model);
+      const providerSlug = modelConfig?.inferenceProvider?.trim();
 
       this.logger.aiSdk.info("Executing inference task", {
         model,
@@ -407,6 +500,12 @@ export class AIService {
       // Prepare input based on task type
       let inferenceInput: any;
       switch (taskType) {
+        case 'conversational':
+        case 'text-generation':
+        case 'text2text-generation':
+          inferenceInput = { messages: chatMessages };
+          break;
+
         case 'text-to-image':
           inferenceInput = { prompt: inputText };
           break;
@@ -417,10 +516,6 @@ export class AIService {
 
         case 'text-to-video':
           inferenceInput = { text: inputText };
-          break;
-
-        case 'text-generation':
-          inferenceInput = { prompt: inputText };
           break;
 
         case 'image-to-image':
@@ -477,9 +572,54 @@ export class AIService {
 
           inferenceInput = {
             image: imageBlobVLM,
-            text: inputText || undefined // Optional text/question about image
+            text: inputText || undefined, // Optional text/question about image
+            mimeType: imageBlobVLM.type || undefined,
+            preferChatMode: true
           };
           break;
+
+        case 'visual-question-answering':
+        case 'document-question-answering': {
+          if (attachments.length === 0) {
+            yield {
+              error: "This model requires an image attachment. Please attach an image.",
+              done: true
+            };
+            return;
+          }
+
+          const qaAttachment = attachments.find((a: any) => a.type === 'image');
+          if (!qaAttachment) {
+            yield {
+              error: "No image found in attachments. Please provide an image for the question.",
+              done: true
+            };
+            return;
+          }
+
+          const qaBlob = await this.dataURLToBlob(qaAttachment.data);
+
+          inferenceInput = {
+            image: qaBlob,
+            question: inputText || 'Describe the image'
+          };
+          break;
+        }
+
+        case 'table-question-answering': {
+          const parsedTable = this.parseTableQuestionInput(inputText);
+
+          if (!parsedTable) {
+            yield {
+              error: "Table QA models require a JSON payload that includes the table data. Provide a valid JSON object (optionally inside ```json fences) with either `{ table, query }` or `{ headers, rows }`.",
+              done: true
+            };
+            return;
+          }
+
+          inferenceInput = parsedTable;
+          break;
+        }
 
         default:
           yield {
@@ -493,7 +633,8 @@ export class AIService {
       const result = await dispatcher.dispatch({
         task: taskType,
         model,
-        input: inferenceInput
+        input: inferenceInput,
+        provider: providerSlug
       });
 
       // Convert result to chat format

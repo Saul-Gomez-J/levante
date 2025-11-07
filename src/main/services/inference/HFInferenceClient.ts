@@ -2,6 +2,7 @@ import { HfInference } from '@huggingface/inference';
 import type {
   TextGenerationInput,
   TextGenerationOptions,
+  ConversationalInput,
   TextToImageInput,
   TextToImageOptions,
   ImageTextToTextInput,
@@ -10,7 +11,11 @@ import type {
   TextToVideoInput,
   TextToVideoOptions,
   TextToSpeechInput,
-  TextToSpeechOptions
+  TextToSpeechOptions,
+  VisualQuestionAnsweringInput,
+  DocumentQuestionAnsweringInput,
+  TableQuestionAnsweringInput,
+  HFChatMessage
 } from '../../../types/inference';
 import { getLogger } from '../logging';
 
@@ -28,6 +33,98 @@ export class HFInferenceClient {
     logger.aiSdk.debug('HFInferenceClient initialized');
   }
 
+  private extractChatContent(response: any): string {
+    const choice = response?.choices?.[0];
+    const message = choice?.message;
+    const content = message?.content;
+
+    if (!content) {
+      throw new Error('Chat completion returned no message content');
+    }
+
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    if (Array.isArray(content)) {
+      return content
+        .map((part: any) => {
+          if (typeof part === 'string') return part;
+          if (typeof part?.text === 'string') return part.text;
+          if (typeof part?.content === 'string') return part.content;
+          if (Array.isArray(part?.content)) {
+            return part.content.map((nested: any) => nested?.text || '').join('');
+          }
+          return '';
+        })
+        .join('');
+    }
+
+    if (typeof content === 'object' && content !== null) {
+      if (typeof (content as any).text === 'string') {
+        return (content as any).text;
+      }
+      if (Array.isArray((content as any).content)) {
+        return (content as any).content.map((c: any) => c?.text || '').join('');
+      }
+    }
+
+    throw new Error('Unable to parse chat completion response');
+  }
+
+  private messagesToPrompt(messages: HFChatMessage[]): string {
+    return messages
+      .map((msg) => {
+        const role = msg.role.toUpperCase();
+        if (typeof msg.content === 'string') {
+          return `${role}: ${msg.content}`;
+        }
+
+        if (Array.isArray(msg.content)) {
+          const text = msg.content
+            .map((part) => {
+              if ('text' in part && typeof part.text === 'string') {
+                return part.text;
+              }
+              if (part.type?.includes('image')) {
+                return '[image]';
+              }
+              return '';
+            })
+            .join(' ');
+          return `${role}: ${text}`;
+        }
+
+        return `${role}:`;
+      })
+      .join('\n');
+  }
+
+  private isTaskRoutingError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error);
+    return (
+      message.includes('not supported for task') ||
+      message.includes('Supported task:') ||
+      message.includes('Unsupported task for model') ||
+      message.includes('does not support chat completion')
+    );
+  }
+
+  private async dataToDataUrl(
+    data: Buffer | Blob,
+    mimeType?: string,
+    fallback: string = 'application/octet-stream'
+  ): Promise<string> {
+    if (data instanceof Blob) {
+      const buffer = Buffer.from(await data.arrayBuffer());
+      const mime = data.type || mimeType || fallback;
+      return `data:${mime};base64,${buffer.toString('base64')}`;
+    }
+
+    const mime = mimeType || fallback;
+    return `data:${mime};base64,${Buffer.from(data).toString('base64')}`;
+  }
+
   /**
    * Text Generation: Generate text continuations
    * @param model - HF model ID (e.g., "meta-llama/Llama-2-7b-hf")
@@ -43,25 +140,24 @@ export class HFInferenceClient {
     provider?: string
   ): Promise<string> {
     try {
-      // For text-generation, provider is appended to model: "{model}:{provider}"
-      const modelWithProvider = provider ? `${model}:${provider}` : model;
-
       logger.aiSdk.debug('Text generation inference', {
-        model: modelWithProvider,
+        model,
         prompt: input.prompt.substring(0, 50),
         provider
       });
 
       const result = await this.client.textGeneration({
-        model: modelWithProvider,
+        model,
         inputs: input.prompt,
-        parameters: options
+        parameters: options,
+        // @ts-ignore - provider field not yet in types
+        provider
       });
 
       const generatedText = typeof result === 'string' ? result : result.generated_text;
 
       logger.aiSdk.info('Text generation completed', {
-        model: modelWithProvider,
+        model,
         textLength: generatedText.length
       });
 
@@ -92,6 +188,68 @@ export class HFInferenceClient {
         provider,
         error: errorMessage
       });
+      throw error;
+    }
+  }
+
+  /**
+   * Conversational chat completion with automatic fallback to text-generation when needed.
+   */
+  async conversationalCompletion(
+    model: string,
+    input: ConversationalInput,
+    provider?: string
+  ): Promise<string> {
+    if (!input.messages || input.messages.length === 0) {
+      throw new Error('Conversational completion requires at least one message');
+    }
+
+    try {
+      logger.aiSdk.debug('Conversational chat inference', {
+        model,
+        provider,
+        messageCount: input.messages.length
+      });
+
+      const response = await this.client.chatCompletion({
+        model,
+        messages: input.messages,
+        // @ts-ignore provider param may not be typed yet
+        provider
+      });
+
+      const content = this.extractChatContent(response);
+
+      logger.aiSdk.info('Conversational chat completed', {
+        model,
+        provider,
+        length: content.length
+      });
+
+      return content;
+    } catch (error) {
+      logger.aiSdk.warn('Chat completion failed, checking for fallback', {
+        model,
+        provider,
+        error: error instanceof Error ? error.message : error
+      });
+
+      if (this.isTaskRoutingError(error)) {
+        const fallbackPrompt = this.messagesToPrompt(input.messages);
+
+        logger.aiSdk.info('Falling back to textGeneration for conversational model', {
+          model,
+          provider
+        });
+
+        return this.textGeneration(
+          model,
+          { prompt: fallbackPrompt },
+          undefined,
+          provider
+        );
+      }
+
       throw error;
     }
   }
@@ -154,15 +312,62 @@ export class HFInferenceClient {
     input: ImageTextToTextInput,
     provider?: string
   ): Promise<string> {
+    const preferChat = input.preferChatMode !== false;
+
+    if (preferChat) {
+      try {
+        const imageUrl = await this.dataToDataUrl(
+          input.image,
+          input.mimeType,
+          'image/png'
+        );
+
+        logger.aiSdk.debug('Image-text-to-text via chatCompletion', {
+          model,
+          provider,
+          hasText: !!input.text
+        });
+
+        const response = await this.client.chatCompletion({
+          model,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                ...(input.text ? [{ type: 'text', text: input.text }] : []),
+                { type: 'image', image_url: { url: imageUrl } }
+              ]
+            }
+          ],
+          // @ts-ignore provider field pending types
+          provider
+        });
+
+        const content = this.extractChatContent(response);
+
+        logger.aiSdk.info('Image-text-to-text completed via chatCompletion', {
+          model,
+          provider,
+          textLength: content.length
+        });
+
+        return content;
+      } catch (error) {
+        logger.aiSdk.warn('Multimodal chat failed, falling back to imageToText', {
+          model,
+          provider,
+          error: error instanceof Error ? error.message : error
+        });
+      }
+    }
+
     try {
-      logger.aiSdk.debug('Image-text-to-text inference', {
+      logger.aiSdk.debug('Image-text-to-text via imageToText', {
         model,
-        hasText: !!input.text,
-        provider
+        provider,
+        hasText: !!input.text
       });
 
-      // For multimodal models, use imageToText with the image
-      // The text prompt will be part of the API call if supported by the model
       const result = await this.client.imageToText({
         model,
         data: input.image,
@@ -171,7 +376,7 @@ export class HFInferenceClient {
         provider
       });
 
-      logger.aiSdk.info('Image-text-to-text completed', {
+      logger.aiSdk.info('Image-text-to-text completed via imageToText', {
         model,
         provider,
         textLength: result.generated_text.length
@@ -180,6 +385,156 @@ export class HFInferenceClient {
       return result.generated_text;
     } catch (error) {
       logger.aiSdk.error('Image-text-to-text failed', {
+        model,
+        provider,
+        error: error instanceof Error ? error.message : error
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Visual Question Answering
+   */
+  async visualQuestionAnswering(
+    model: string,
+    input: VisualQuestionAnsweringInput,
+    provider?: string
+  ): Promise<string> {
+    try {
+      logger.aiSdk.debug('Visual QA inference', {
+        model,
+        provider,
+        questionLength: input.question.length
+      });
+
+      const result = await this.client.visualQuestionAnswering({
+        model,
+        inputs: {
+          question: input.question,
+          image: input.image
+        },
+        // @ts-ignore provider typing
+        provider
+      });
+
+      const answer = Array.isArray(result)
+        ? result[0]?.answer || result[0]?.generated_text || ''
+        : (result as any)?.answer || (result as any)?.generated_text || '';
+
+      if (!answer) {
+        throw new Error('Visual QA returned empty answer');
+      }
+
+      logger.aiSdk.info('Visual QA completed', {
+        model,
+        provider,
+        answerLength: answer.length
+      });
+
+      return answer;
+    } catch (error) {
+      logger.aiSdk.error('Visual QA failed', {
+        model,
+        provider,
+        error: error instanceof Error ? error.message : error
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Document Question Answering
+   */
+  async documentQuestionAnswering(
+    model: string,
+    input: DocumentQuestionAnsweringInput,
+    provider?: string
+  ): Promise<string> {
+    try {
+      logger.aiSdk.debug('Document QA inference', {
+        model,
+        provider,
+        questionLength: input.question.length
+      });
+
+      const result = await this.client.documentQuestionAnswering({
+        model,
+        inputs: {
+          question: input.question,
+          image: input.image
+        },
+        // @ts-ignore provider typing
+        provider
+      });
+
+      const answer = Array.isArray(result)
+        ? result[0]?.answer || ''
+        : (result as any)?.answer || '';
+
+      if (!answer) {
+        throw new Error('Document QA returned empty answer');
+      }
+
+      logger.aiSdk.info('Document QA completed', {
+        model,
+        provider,
+        answerLength: answer.length
+      });
+
+      return answer;
+    } catch (error) {
+      logger.aiSdk.error('Document QA failed', {
+        model,
+        provider,
+        error: error instanceof Error ? error.message : error
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Table Question Answering
+   */
+  async tableQuestionAnswering(
+    model: string,
+    input: TableQuestionAnsweringInput,
+    provider?: string
+  ): Promise<string> {
+    try {
+      logger.aiSdk.debug('Table QA inference', {
+        model,
+        provider
+      });
+
+      const result = await this.client.tableQuestionAnswering({
+        model,
+        inputs: {
+          table: input.table,
+          query: input.query
+        },
+        // @ts-ignore provider field
+        provider
+      });
+
+      const answer =
+        (result as any)?.answer ??
+        (result as any)?.answerText ??
+        (typeof result === 'string' ? result : '');
+
+      if (!answer) {
+        throw new Error('Table QA returned empty answer');
+      }
+
+      logger.aiSdk.info('Table QA completed', {
+        model,
+        provider,
+        answerLength: answer.length
+      });
+
+      return answer;
+    } catch (error) {
+      logger.aiSdk.error('Table QA failed', {
         model,
         provider,
         error: error instanceof Error ? error.message : error

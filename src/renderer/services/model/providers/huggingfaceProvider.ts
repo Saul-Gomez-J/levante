@@ -49,6 +49,10 @@ function inferTaskType(model: any): 'chat' | 'text-generation' | 'text-to-image'
       // The Router API filters for chat-compatible models
       return 'chat';
 
+    case 'conversational':
+    case 'text2text-generation':
+      return 'chat';
+
     case 'image-text-to-text':
       // Multimodal vision models
       return 'image-text-to-text';
