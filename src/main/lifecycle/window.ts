@@ -83,9 +83,6 @@ export function createMainWindow(): BrowserWindow {
     mainWindow.loadFile(filePath);
   }
 
-  // Force light theme for window (affects titlebar on macOS)
-  nativeTheme.themeSource = "light";
-
   // Show window when ready to prevent visual flash
   mainWindow.on("ready-to-show", () => {
     mainWindow.show();
