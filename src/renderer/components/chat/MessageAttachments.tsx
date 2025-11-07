@@ -110,13 +110,21 @@ function AttachmentItem({ attachment }: AttachmentItemProps) {
 
   if (isImage && attachment.dataUrl) {
     return (
-      <div className="rounded-lg border bg-card overflow-hidden max-w-md">
-        <img
-          src={attachment.dataUrl}
-          alt={attachment.filename}
-          className="w-full h-auto object-contain"
-          loading="lazy"
-        />
+      <div className="rounded-lg border bg-card overflow-hidden max-w-xs sm:max-w-sm">
+        <a
+          href={attachment.dataUrl}
+          target="_blank"
+          rel="noreferrer"
+          download={attachment.filename}
+          className="block group cursor-zoom-in"
+        >
+          <img
+            src={attachment.dataUrl}
+            alt={attachment.filename}
+            className="w-full h-auto object-cover max-h-64 transition group-hover:brightness-110"
+            loading="lazy"
+          />
+        </a>
         <div className="p-2 border-t bg-muted/50">
           <p className="text-xs text-muted-foreground truncate">
             {attachment.filename}

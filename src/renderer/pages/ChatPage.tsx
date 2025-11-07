@@ -53,6 +53,7 @@ import { modelService } from '@/services/modelService';
 import type { Model } from '../../types/models';
 import { getRendererLogger } from '@/services/logger';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
@@ -71,6 +72,7 @@ const ChatPage = () => {
   const [userName, setUserName] = useState<string>(t('welcome.default_user_name'));
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [pendingFirstMessage, setPendingFirstMessage] = useState<string | null>(null);
+  const [pendingFirstAttachments, setPendingFirstAttachments] = useState<File[] | null>(null);
   const [pendingMessageAfterStop, setPendingMessageAfterStop] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
@@ -139,6 +141,34 @@ const ChatPage = () => {
       default:
         return 'image/*';
     }
+  };
+
+  const attachFilesToLatestUserMessage = (attachments: Array<{
+    id: string;
+    type: 'image' | 'audio';
+    filename: string;
+    mimeType: string;
+    size: number;
+    storagePath: string;
+  }>) => {
+    if (!attachments || attachments.length === 0) {
+      return;
+    }
+
+    setMessages((prev) => {
+      const lastUserIndex = [...prev].map((m) => m.role).lastIndexOf('user');
+      if (lastUserIndex === -1) {
+        return prev;
+      }
+
+      const updated = [...prev];
+      updated[lastUserIndex] = {
+        ...(updated[lastUserIndex] as any),
+        attachments
+      };
+
+      return updated;
+    });
   };
 
   // Get attachment button title based on model task type
@@ -465,6 +495,7 @@ const ChatPage = () => {
 
           // Store message to send after re-render (when useChat has the correct ID)
           setPendingFirstMessage(messageText);
+          setPendingFirstAttachments(filesToAttach.length > 0 ? filesToAttach : null);
 
           // Don't send now - wait for component to re-render with new session ID
           return;
@@ -528,13 +559,17 @@ const ChatPage = () => {
 
         // Send to AI with attachments in the body
         // The ElectronChatTransport will pass these to the IPC layer
-        await sendMessageAI({
-          text: messageText,
-          experimental_attachments: attachmentDataForInference.length > 0 ? attachmentDataForInference as any : undefined,
-          body: {
-            attachments: attachmentDataForInference.length > 0 ? attachmentDataForInference : undefined
+        await sendMessageAI(
+          {
+            text: messageText,
+            experimental_attachments: attachmentDataForInference.length > 0 ? attachmentDataForInference as any : undefined
+          } as any,
+          {
+            body: {
+              attachments: attachmentDataForInference.length > 0 ? attachmentDataForInference : undefined
+            }
           }
-        } as any);
+        );
 
         // Persist user message to database with saved attachment metadata
         const userMessage = {
@@ -544,6 +579,10 @@ const ChatPage = () => {
           attachments: savedAttachments.length > 0 ? savedAttachments : undefined,
         };
         await persistMessage(userMessage);
+
+        if (savedAttachments.length > 0) {
+          attachFilesToLatestUserMessage(savedAttachments);
+        }
       } catch (error) {
         logger.core.error('Error in handleSubmit', {
           error: error instanceof Error ? error.message : error,
@@ -556,30 +595,115 @@ const ChatPage = () => {
 
   // Handle pending first message after session creation
   useEffect(() => {
-    if (pendingFirstMessage && currentSession) {
-      logger.core.info('Sending pending first message', {
-        sessionId: currentSession.id,
-        messageLength: pendingFirstMessage.length,
-      });
-
-      const messageText = pendingFirstMessage;
-      setPendingFirstMessage(null);
-
-      // Send the message (now useChat has the correct session ID)
-      sendMessageAI({ text: messageText });
-
-      // Persist user message to database (no attachments in this flow for now)
-      const userMessage = {
-        id: `user-${Date.now()}`,
-        role: 'user' as const,
-        parts: [{ type: 'text' as const, text: messageText }],
-        attachments: undefined,
-      };
-      persistMessage(userMessage).catch((err) => {
-        logger.database.error('Failed to persist pending message', { error: err });
-      });
+    if (pendingFirstMessage === null || !currentSession) {
+      return;
     }
-  }, [pendingFirstMessage, currentSession, sendMessageAI, persistMessage]);
+
+    const messageText = pendingFirstMessage;
+    const attachmentFiles = pendingFirstAttachments || [];
+    setPendingFirstMessage(null);
+    setPendingFirstAttachments(null);
+
+    logger.core.info('Sending pending first message', {
+      sessionId: currentSession.id,
+      messageLength: messageText.length,
+      attachmentCount: attachmentFiles.length,
+    });
+
+    const sendPendingMessage = async () => {
+      try {
+        const messageId = `user-${Date.now()}`;
+        let attachmentDataForInference: Array<{
+          type: 'image' | 'audio';
+          data: string;
+          mime: string;
+          filename: string;
+        }> = [];
+        let savedAttachments: Array<{
+          id: string;
+          type: 'image' | 'audio';
+          filename: string;
+          mimeType: string;
+          size: number;
+          storagePath: string;
+        }> = [];
+
+        if (attachmentFiles.length > 0) {
+          logger.core.info('Processing pending attachments', {
+            count: attachmentFiles.length,
+            sessionId: currentSession.id,
+          });
+
+          for (const file of attachmentFiles) {
+            const arrayBuffer = await file.arrayBuffer();
+            const base64 = btoa(
+              new Uint8Array(arrayBuffer).reduce(
+                (data, byte) => data + String.fromCharCode(byte),
+                ''
+              )
+            );
+            const dataUrl = `data:${file.type};base64,${base64}`;
+
+            attachmentDataForInference.push({
+              type: file.type.startsWith('image/') ? 'image' : 'audio',
+              data: dataUrl,
+              mime: file.type,
+              filename: file.name
+            });
+          }
+
+          savedAttachments = await processAttachments(
+            attachmentFiles,
+            currentSession.id,
+            messageId
+          );
+        }
+
+        await sendMessageAI(
+          {
+            text: messageText,
+            experimental_attachments: attachmentDataForInference.length > 0 ? attachmentDataForInference as any : undefined
+          } as any,
+          {
+            body: {
+              attachments: attachmentDataForInference.length > 0 ? attachmentDataForInference : undefined
+            }
+          }
+        );
+
+        const userMessage = {
+          id: messageId,
+          role: 'user' as const,
+          parts: [{ type: 'text' as const, text: messageText }],
+          attachments: savedAttachments.length > 0 ? savedAttachments : undefined,
+        };
+
+        await persistMessage(userMessage);
+
+        if (savedAttachments.length > 0) {
+          attachFilesToLatestUserMessage(savedAttachments);
+        }
+      } catch (error) {
+        logger.core.error('Failed to send pending first message', {
+          error: error instanceof Error ? error.message : error,
+          sessionId: currentSession.id,
+        });
+
+        setInput(messageText);
+        if (attachmentFiles.length > 0) {
+          setAttachedFiles(attachmentFiles);
+        }
+      }
+    };
+
+    void sendPendingMessage();
+  }, [
+    pendingFirstMessage,
+    pendingFirstAttachments,
+    currentSession,
+    sendMessageAI,
+    persistMessage
+  ]);
 
   // Handle pending prompt from deep link
   useEffect(() => {
@@ -633,6 +757,7 @@ const ChatPage = () => {
 
   // File validation constants
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+  const MIN_IMAGE_DIMENSION = 256; // px for inference image tasks
   const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
   const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp3', 'audio/flac', 'audio/m4a'];
 
@@ -659,13 +784,14 @@ const ChatPage = () => {
   };
 
   // Handle file selection with validation
-  const handleFilesSelected = (files: File[]) => {
+  const handleFilesSelected = async (files: File[]) => {
     const validFiles: File[] = [];
     const errors: string[] = [];
     const allowedTypes = getAllowedMimeTypes();
     const typeDescription = getFileTypeDescription();
+    const requiresMinDimensions = modelTaskType === 'image-to-image';
 
-    files.forEach((file) => {
+    for (const file of files) {
       // Check file size
       if (file.size > MAX_FILE_SIZE) {
         errors.push(`${file.name}: File size exceeds 10MB limit`);
@@ -674,7 +800,7 @@ const ChatPage = () => {
           size: file.size,
           maxSize: MAX_FILE_SIZE,
         });
-        return;
+        continue;
       }
 
       // Check MIME type
@@ -686,11 +812,36 @@ const ChatPage = () => {
           modelTaskType,
           allowedTypes,
         });
-        return;
+        continue;
+      }
+
+      if (requiresMinDimensions) {
+        try {
+          const dimensions = await getImageDimensions(file);
+          if (!dimensions || dimensions.width < MIN_IMAGE_DIMENSION || dimensions.height < MIN_IMAGE_DIMENSION) {
+            errors.push(
+              `${file.name}: Image must be at least ${MIN_IMAGE_DIMENSION}x${MIN_IMAGE_DIMENSION}px (got ${dimensions?.width || 0}x${dimensions?.height || 0})`
+            );
+            logger.core.warn('Image dimensions too small for inference model', {
+              filename: file.name,
+              width: dimensions?.width,
+              height: dimensions?.height,
+              min: MIN_IMAGE_DIMENSION
+            });
+            continue;
+          }
+        } catch (error) {
+          errors.push(`${file.name}: Unable to read image dimensions`);
+          logger.core.error('Failed to read image dimensions', {
+            filename: file.name,
+            error: error instanceof Error ? error.message : error,
+          });
+          continue;
+        }
       }
 
       validFiles.push(file);
-    });
+    }
 
     // Add valid files
     if (validFiles.length > 0) {
@@ -704,8 +855,9 @@ const ChatPage = () => {
     // Log errors if any
     if (errors.length > 0) {
       logger.core.error('File validation errors', { errors, modelTaskType });
-      // TODO: Show errors to user via toast/alert
-      // For now, just log them
+      toast.error('Some files were rejected', {
+        description: errors.join('\n'),
+      });
     }
   };
 
@@ -755,6 +907,26 @@ const ChatPage = () => {
     }
 
     return attachmentResults;
+  };
+
+  const getImageDimensions = (file: File): Promise<{ width: number; height: number } | null> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          resolve({ width: img.width, height: img.height });
+        };
+        img.onerror = () => reject(new Error('Failed to load image data'));
+        if (typeof event.target?.result === 'string') {
+          img.src = event.target.result;
+        } else {
+          reject(new Error('Invalid image data'));
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read image file'));
+      reader.readAsDataURL(file);
+    });
   };
 
   // Check if chat is empty
