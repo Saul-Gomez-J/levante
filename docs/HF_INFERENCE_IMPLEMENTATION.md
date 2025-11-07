@@ -731,12 +731,13 @@ UI should always check `success` before accessing `data`.
 
 **How it works**:
 1. User enters model ID (e.g., `black-forest-labs/FLUX.1-dev`)
-2. On submit, renderer calls `window.levante.models.validateHuggingFaceModel(modelId)`
-3. IPC handler in main process fetches model info: `GET https://huggingface.co/api/models/{model-id}`
+2. On submit, renderer calls `window.levante.models.validateHuggingFaceModel(modelId, inferenceProvider)`
+3. IPC handler fetches model info: `GET https://huggingface.co/api/models/{model-id}`
 4. Extracts `pipeline_tag` from response JSON
-5. Validates it's a supported type (text-to-image, image-to-text, automatic-speech-recognition)
-6. Shows success alert with detected task type
-7. Adds model with correct configuration
+5. Verifies the model exists for the chosen inference provider/task using `https://huggingface.co/api/models?inference_provider=...&pipeline_tag=...&search=...`
+6. Validates the detected task type (text-to-image, image-to-text, automatic-speech-recognition, etc.)
+7. Shows success alert with detected task type
+8. Adds model with correct configuration
 
 **Error Handling**:
 - HTTP 404 → "Model not found on Hugging Face Hub"
@@ -783,13 +784,13 @@ https://generativelanguage.googleapis.com".
 
 2. **Preload Bridge** (`src/preload/api/models.ts`):
    ```typescript
-   validateHuggingFaceModel: (modelId: string) =>
-     ipcRenderer.invoke('levante/models/huggingface/validate', modelId)
+   validateHuggingFaceModel: (modelId: string, inferenceProvider: string) =>
+     ipcRenderer.invoke('levante/models/huggingface/validate', modelId, inferenceProvider)
    ```
 
 3. **Renderer Usage** (`AddInferenceModelDialog.tsx`):
    ```typescript
-   const response = await window.levante.models.validateHuggingFaceModel(modelId);
+   const response = await window.levante.models.validateHuggingFaceModel(modelId, inferenceProvider);
    ```
 
 **Why not add huggingface.co to CSP?**:

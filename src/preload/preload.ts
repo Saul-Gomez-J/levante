@@ -93,7 +93,7 @@ export interface LevanteAPI {
     fetchGroq: (apiKey: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
     fetchXAI: (apiKey: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
     fetchHuggingFace: (apiKey: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
-    validateHuggingFaceModel: (modelId: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+    validateHuggingFaceModel: (modelId: string, inferenceProvider: string) => Promise<{ success: boolean; data?: any; error?: string }>;
   };
 
   // Inference functionality

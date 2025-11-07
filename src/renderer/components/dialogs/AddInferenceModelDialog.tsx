@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useModelStore } from '@/stores/modelStore';
+import { toast } from 'sonner';
 
 interface AddInferenceModelDialogProps {
   providerId: string;
@@ -63,7 +64,8 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isValidating, setIsValidating] = useState(false);
 
-  const { addUserModel } = useModelStore();
+  const addUserModel = useModelStore(state => state.addUserModel);
+  const providers = useModelStore(state => state.providers);
 
   const validateModelId = (id: string): boolean => {
     // Validate HF format: owner/model-name
@@ -75,9 +77,9 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
    * Fetch model info from Hugging Face API to detect task type
    * Uses IPC to avoid CSP restrictions
    */
-  const detectModelTaskType = async (modelIdToCheck: string): Promise<TaskType | null> => {
+  const detectModelTaskType = async (modelIdToCheck: string, providerSlug: string): Promise<TaskType | null> => {
     try {
-      const response = await window.levante.models.validateHuggingFaceModel(modelIdToCheck);
+      const response = await window.levante.models.validateHuggingFaceModel(modelIdToCheck, providerSlug);
 
       if (!response.success) {
         throw new Error(response.error || 'Failed to validate model');
@@ -141,8 +143,27 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
     setIsSubmitting(true);
 
     try {
+      const trimmedModelId = modelId.trim();
+      const trimmedInferenceProvider = inferenceProvider.trim();
+      const provider = providers.find(p => p.id === providerId);
+
+      if (!provider) {
+        throw new Error('Provider not found');
+      }
+
+      const existsInRouter = provider.models.some(
+        model => model.id === trimmedModelId && !model.userDefined
+      );
+
+      if (existsInRouter) {
+        toast.info('Este modelo está en el router de HuggingFace');
+        setIsValidating(false);
+        setIsSubmitting(false);
+        return;
+      }
+
       // Detect task type from HF API
-      const taskType = await detectModelTaskType(modelId);
+      const taskType = await detectModelTaskType(trimmedModelId, trimmedInferenceProvider);
 
       if (!taskType) {
         throw new Error('Could not determine model task type');
@@ -153,11 +174,11 @@ export const AddInferenceModelDialog = ({ providerId, open, onClose }: AddInfere
 
       // Create model object
       const newModel = {
-        id: modelId,
-        name: displayName.trim() || modelId,
+        id: trimmedModelId,
+        name: displayName.trim() || trimmedModelId,
         provider: 'huggingface',
         taskType,
-        inferenceProvider: inferenceProvider.trim(),
+        inferenceProvider: trimmedInferenceProvider,
         contextLength: 0,
         capabilities: [],
         userDefined: true,
