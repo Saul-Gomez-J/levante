@@ -157,7 +157,7 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
           {!open && <div className="w-32"></div>}
         </header>
 
-        <div className="flex-1 overflow-hidden px-0 py-2">
+        <div className="flex-1 flex flex-col px-0 py-2 min-h-0">
           {children}
         </div>
       </SidebarInset>
