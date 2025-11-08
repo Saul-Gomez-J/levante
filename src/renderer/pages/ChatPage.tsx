@@ -331,19 +331,22 @@ const ChatPage = () => {
       const messageText = pendingMessageAfterStop;
       setPendingMessageAfterStop(null);
 
-      // Send the message
-      sendMessageAI({ text: messageText });
-
-      // Persist user message to database (no attachments in this flow)
+      // Persist user message to database BEFORE sending to AI (to ensure correct order)
       const userMessage = {
         id: `user-${Date.now()}`,
         role: 'user' as const,
         parts: [{ type: 'text' as const, text: messageText }],
         attachments: undefined,
       };
-      persistMessage(userMessage).catch((err) => {
-        logger.database.error('Failed to persist message after stop', { error: err });
-      });
+
+      persistMessage(userMessage)
+        .then(() => {
+          // Send the message after persisting
+          sendMessageAI({ text: messageText });
+        })
+        .catch((err) => {
+          logger.database.error('Failed to persist message after stop', { error: err });
+        });
     }
   }, [pendingMessageAfterStop, status, sendMessageAI, persistMessage]);
 
@@ -569,6 +572,15 @@ const ChatPage = () => {
           }))
         });
 
+        // Persist user message to database BEFORE sending to AI (to ensure correct order)
+        const userMessage = {
+          id: messageId,
+          role: 'user' as const,
+          parts: [{ type: 'text' as const, text: messageText }],
+          attachments: savedAttachments.length > 0 ? savedAttachments : undefined,
+        };
+        await persistMessage(userMessage);
+
         // Send to AI with attachments in the body
         // The ElectronChatTransport will pass these to the IPC layer
         await sendMessageAI(
@@ -582,15 +594,6 @@ const ChatPage = () => {
             }
           }
         );
-
-        // Persist user message to database with saved attachment metadata
-        const userMessage = {
-          id: messageId,
-          role: 'user' as const,
-          parts: [{ type: 'text' as const, text: messageText }],
-          attachments: savedAttachments.length > 0 ? savedAttachments : undefined,
-        };
-        await persistMessage(userMessage);
 
         if (savedAttachments.length > 0) {
           attachFilesToLatestUserMessage(savedAttachments);
@@ -671,6 +674,16 @@ const ChatPage = () => {
           );
         }
 
+        // Persist user message to database BEFORE sending to AI (to ensure correct order)
+        const userMessage = {
+          id: messageId,
+          role: 'user' as const,
+          parts: [{ type: 'text' as const, text: messageText }],
+          attachments: savedAttachments.length > 0 ? savedAttachments : undefined,
+        };
+
+        await persistMessage(userMessage);
+
         await sendMessageAI(
           {
             text: messageText,
@@ -682,15 +695,6 @@ const ChatPage = () => {
             }
           }
         );
-
-        const userMessage = {
-          id: messageId,
-          role: 'user' as const,
-          parts: [{ type: 'text' as const, text: messageText }],
-          attachments: savedAttachments.length > 0 ? savedAttachments : undefined,
-        };
-
-        await persistMessage(userMessage);
 
         if (savedAttachments.length > 0) {
           attachFilesToLatestUserMessage(savedAttachments);
