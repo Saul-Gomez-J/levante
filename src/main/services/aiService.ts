@@ -3,6 +3,7 @@ import {
   generateText,
   convertToModelMessages,
   UIMessage,
+  FileUIPart,
   stepCountIs,
 } from "ai";
 import { getLogger } from "./logging";
@@ -49,6 +50,17 @@ export interface ChatStreamChunk {
     filename: string;
   };
 }
+
+type RendererAttachmentPayload = {
+  type?: string;
+  data?: string;
+  mime?: string;
+  filename?: string;
+};
+
+type AttachmentAwareUIMessage = UIMessage & {
+  attachments?: RendererAttachmentPayload[];
+};
 
 export class AIService {
   private logger = getLogger();
@@ -99,6 +111,96 @@ export class AIService {
         content: textSegments.filter(Boolean).join('\n')
       };
     });
+  }
+
+  /**
+   * Attach renderer-provided files to UI message parts so convertToModelMessages forwards them.
+   */
+  private includeAttachmentsInMessageParts(messages: UIMessage[]): UIMessage[] {
+    return messages.map((message) => {
+      if (message.role !== 'user') {
+        return message;
+      }
+
+      const attachments = (message as AttachmentAwareUIMessage).attachments;
+      if (!attachments?.length) {
+        return message;
+      }
+
+      const fileParts = attachments
+        .map((attachment) => this.convertAttachmentToFilePart(attachment))
+        .filter((part): part is FileUIPart => Boolean(part));
+
+      if (fileParts.length === 0) {
+        return message;
+      }
+
+      const existingParts = Array.isArray(message.parts) ? [...message.parts] : [];
+      return {
+        ...message,
+        parts: [...existingParts, ...fileParts],
+      };
+    });
+  }
+
+  /**
+   * Convert renderer attachment payloads into AI SDK file parts (currently images only).
+   */
+  private convertAttachmentToFilePart(attachment: RendererAttachmentPayload | undefined): FileUIPart | null {
+    if (!attachment || !attachment.data) {
+      this.logger.aiSdk.debug("Skipping attachment without data payload", {
+        attachmentType: attachment?.type,
+        filename: attachment?.filename,
+      });
+      return null;
+    }
+
+    const mediaType =
+      attachment.mime ||
+      this.inferMimeTypeFromFilename(attachment.filename) ||
+      "application/octet-stream";
+
+    if (!mediaType.startsWith("image/")) {
+      this.logger.aiSdk.debug("Attachment media type not yet supported for chat providers", {
+        mediaType,
+        filename: attachment.filename,
+      });
+      return null;
+    }
+
+    const url = attachment.data.startsWith("data:")
+      ? attachment.data
+      : `data:${mediaType};base64,${attachment.data}`;
+
+    return {
+      type: "file",
+      mediaType,
+      filename: attachment.filename,
+      url,
+    };
+  }
+
+  private inferMimeTypeFromFilename(filename?: string): string | undefined {
+    if (!filename || !filename.includes(".")) {
+      return undefined;
+    }
+
+    const extension = filename.split(".").pop()?.toLowerCase();
+    switch (extension) {
+      case "jpg":
+      case "jpeg":
+        return "image/jpeg";
+      case "png":
+        return "image/png";
+      case "gif":
+        return "image/gif";
+      case "webp":
+        return "image/webp";
+      case "bmp":
+        return "image/bmp";
+      default:
+        return undefined;
+    }
   }
 
   /**
@@ -335,9 +437,11 @@ export class AIService {
         });
       }
 
+      const messagesWithFileParts = this.includeAttachmentsInMessageParts(messages);
+
       const result = streamText({
         model: modelProvider,
-        messages: convertToModelMessages(messages),
+        messages: convertToModelMessages(messagesWithFileParts),
         tools,
         system: await buildSystemPrompt(
           webSearch,
@@ -805,9 +909,11 @@ export class AIService {
         tools = await getMCPTools();
       }
 
+      const messagesWithFileParts = this.includeAttachmentsInMessageParts(messages);
+
       const result = await generateText({
         model: modelProvider,
-        messages: convertToModelMessages(messages),
+        messages: convertToModelMessages(messagesWithFileParts),
         tools,
         system: await buildSystemPrompt(
           webSearch,
