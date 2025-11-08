@@ -13,6 +13,8 @@ import { isToolUseNotSupportedError } from "./ai/toolErrorDetector";
 import { calculateMaxSteps } from "./ai/stepsCalculator";
 import { InferenceDispatcher } from "./inference/InferenceDispatcher";
 import type { InferenceTask, HFChatMessage } from "../../types/inference";
+import { classifyModel, getSessionType } from "../../utils/modelClassification";
+import type { ModelCategory, ModelCapabilities } from "../../types/modelCategories";
 
 export interface ChatRequest {
   messages: UIMessage[];
@@ -156,24 +158,59 @@ export class AIService {
   }
 
   /**
-   * Get model taskType from provider configuration
+   * Get model information with classification (Phase 3: Model Classification)
+   * Replaces getModelTaskType() with richer model metadata
+   *
+   * Note: Returns undefined if model not found (like original getModelTaskType)
+   * Actual model validation happens in getModelProvider()
    */
-  private async getModelTaskType(modelId: string): Promise<InferenceTask | undefined> {
+  private async getModelInfo(modelId: string): Promise<{
+    category: ModelCategory;
+    capabilities: ModelCapabilities;
+    taskType?: string;
+  } | undefined> {
     try {
       const { preferencesService } = await import("./preferencesService");
       const providers = (preferencesService.get("providers") as any[]) || [];
 
       for (const provider of providers) {
-        // Check if model exists in this provider
+        // Find model in provider (should have minimal data + classification saved)
         const model = provider.models?.find((m: any) => m.id === modelId);
+
         if (model) {
-          return model.taskType;
+          // Use cached classification (saved from renderer)
+          if (model.category && model.computedCapabilities) {
+            this.logger.aiSdk.debug("Using saved model classification", {
+              modelId,
+              category: model.category,
+              capabilities: model.computedCapabilities
+            });
+
+            return {
+              category: model.category,
+              capabilities: model.computedCapabilities,
+              taskType: model.taskType
+            };
+          }
+
+          // Fallback: classify on-the-fly (shouldn't happen with Phase 2 sync)
+          this.logger.aiSdk.warn("Model not classified, classifying on-the-fly", { modelId });
+          const classification = classifyModel(model);
+
+          return {
+            category: classification.category,
+            capabilities: classification.capabilities,
+            taskType: model.taskType
+          };
         }
       }
 
+      // Model not found - return undefined (like original getModelTaskType)
+      // getModelProvider will handle the error
+      this.logger.aiSdk.debug("Model not found in preferences", { modelId });
       return undefined;
     } catch (error) {
-      this.logger.aiSdk.warn("Failed to get model taskType", {
+      this.logger.aiSdk.warn("Failed to get model info", {
         modelId,
         error: error instanceof Error ? error.message : error
       });
@@ -187,18 +224,53 @@ export class AIService {
     const { messages, model, webSearch, enableMCP = false } = request;
 
     try {
-      // Check if this is an inference model
-      const taskType = await this.getModelTaskType(model);
+      // Get model classification (Phase 3: Model Classification)
+      const modelInfo = await this.getModelInfo(model);
 
-      // Route to inference handler if it's a non-chat model
-      if (taskType && !['chat', 'image-text-to-text'].includes(taskType)) {
-        this.logger.aiSdk.info("Routing to inference handler", {
+      // If model info available, use it for routing and validation
+      if (modelInfo) {
+        this.logger.aiSdk.info("Chat request received", {
           model,
-          taskType
+          category: modelInfo.category,
+          capabilities: {
+            tools: modelInfo.capabilities.supportsTools,
+            vision: modelInfo.capabilities.supportsVision,
+            streaming: modelInfo.capabilities.supportsStreaming,
+            multiTurn: modelInfo.capabilities.supportsMultiTurn
+          }
         });
 
-        yield* this.handleInferenceModel(request, taskType as InferenceTask);
-        return;
+        // Route based on category (cleaner than taskType checking)
+        const isInferenceModel = getSessionType(modelInfo.category) === 'inference';
+
+        if (isInferenceModel) {
+          this.logger.aiSdk.info("Routing to inference handler", {
+            model,
+            category: modelInfo.category,
+            taskType: modelInfo.taskType
+          });
+
+          yield* this.handleInferenceModel(request, modelInfo.taskType as InferenceTask);
+          return;
+        }
+
+        // Validate capabilities BEFORE execution (proactive validation)
+        if (enableMCP && !modelInfo.capabilities.supportsTools) {
+          this.logger.aiSdk.warn("Model does not support tools, disabling MCP", {
+            model,
+            category: modelInfo.category,
+            supportsTools: modelInfo.capabilities.supportsTools
+          });
+
+          yield {
+            delta: `⚠️ **Tool Use Not Supported**\n\nThe model "${model}" (${modelInfo.category}) doesn't support tool/function calling, which is required for MCP integration.\n\n**Recommendation:** Choose a different model that supports tools, or disable MCP for this conversation.\n\nContinuing with regular chat (MCP disabled)...\n\n`
+          };
+
+          request.enableMCP = false;
+        }
+      } else {
+        // No model info available - proceed with default behavior
+        this.logger.aiSdk.debug("No model classification available, using default behavior", { model });
       }
 
       // Get the appropriate model provider
@@ -702,6 +774,28 @@ export class AIService {
     const { messages, model, webSearch, enableMCP = false } = request;
 
     try {
+      // Get model classification (Phase 3: Model Classification)
+      const modelInfo = await this.getModelInfo(model);
+
+      if (modelInfo) {
+        this.logger.aiSdk.info("Single message request", {
+          model,
+          category: modelInfo.category,
+          capabilities: modelInfo.capabilities
+        });
+
+        // Validate capabilities BEFORE execution
+        if (enableMCP && !modelInfo.capabilities.supportsTools) {
+          this.logger.aiSdk.warn(`Model '${model}' does not support tools. Disabling MCP...`, {
+            category: modelInfo.category,
+            supportsTools: modelInfo.capabilities.supportsTools
+          });
+          request.enableMCP = false;
+        }
+      } else {
+        this.logger.aiSdk.debug("No model classification available for single message", { model });
+      }
+
       // Get the appropriate model provider
       const modelProvider = await getModelProvider(model);
 
