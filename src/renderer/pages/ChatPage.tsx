@@ -1186,6 +1186,7 @@ ChatPageWithProvider.getSidebarContent = (
   onSessionSelect: (sessionId: string) => void,
   onNewChat: () => void,
   onDeleteChat: (sessionId: string) => void,
+  onRenameChat: (sessionId: string, newTitle: string) => void,
   loading: boolean = false
 ) => {
   return (
@@ -1195,6 +1196,7 @@ ChatPageWithProvider.getSidebarContent = (
       onSessionSelect={onSessionSelect}
       onNewChat={onNewChat}
       onDeleteChat={onDeleteChat}
+      onRenameChat={onRenameChat}
       loading={loading}
     />
   );
