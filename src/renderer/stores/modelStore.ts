@@ -57,14 +57,10 @@ export const useModelStore = create<ModelState>((set, get) => ({
       await modelService.setActiveProvider(providerId);
       const providers = modelService.getProviders();
       const activeProvider = await modelService.getActiveProvider();
-      set({ 
-        providers, 
-        activeProvider,
-        success: `Switched to ${activeProvider?.name}`
+      set({
+        providers,
+        activeProvider
       });
-      
-      // Clear success message after 3 seconds
-      setTimeout(() => set({ success: null }), 3000);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to switch provider';
       set({ error: errorMessage });
