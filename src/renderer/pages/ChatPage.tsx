@@ -75,6 +75,7 @@ const ChatPage = () => {
   const [pendingFirstAttachments, setPendingFirstAttachments] = useState<File[] | null>(null);
   const [pendingMessageAfterStop, setPendingMessageAfterStop] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Chat store
   const currentSession = useChatStore((state) => state.currentSession);
@@ -883,6 +884,45 @@ const ChatPage = () => {
     logger.core.info('File removed', { index });
   };
 
+  // Drag & Drop handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!enableFileAttachment || status === 'streaming') return;
+
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Only set isDragging to false if we're leaving the main container
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (!enableFileAttachment || status === 'streaming') return;
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      await handleFilesSelected(files);
+    }
+  };
+
   // Process and save attachments
   const processAttachments = async (
     files: File[],
@@ -958,7 +998,26 @@ const ChatPage = () => {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div
+      className={cn(
+        "flex flex-col h-full relative",
+        isDragging && enableFileAttachment && "ring-2 ring-primary ring-inset"
+      )}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragging && enableFileAttachment && (
+        <div className="absolute inset-0 z-50 bg-primary/10 backdrop-blur-sm flex items-center justify-center pointer-events-none">
+          <div className="text-center">
+            <p className="text-lg font-semibold text-primary">Drop images here</p>
+            <p className="text-sm text-muted-foreground mt-1">to attach them to your message</p>
+          </div>
+        </div>
+      )}
+
       {/* Show error if any */}
       {chatError && (
         <div className="p-4 bg-red-100 border border-red-400 text-red-800">
