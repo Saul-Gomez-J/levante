@@ -79,11 +79,12 @@ export class ChatService {
         return { data: null, success: true };
       }
 
+      const sessionType = row[3] as string;
       const session: ChatSession = {
         id: row[0] as string,
         title: row[1] as string,
         model: row[2] as string,
-        session_type: (row[3] as string) || 'chat', // Add session_type with fallback
+        session_type: (sessionType === 'chat' || sessionType === 'inference') ? sessionType : 'chat',
         folder_id: row[4] as string,
         created_at: row[5] as number,
         updated_at: row[6] as number
@@ -128,15 +129,18 @@ export class ChatService {
       // Get sessions
       const result = await databaseService.execute(sql, params);
 
-      const sessions: ChatSession[] = result.rows.map(row => ({
-        id: row[0] as string,
-        title: row[1] as string,
-        model: row[2] as string,
-        session_type: (row[3] as string) || 'chat', // Add session_type with fallback
-        folder_id: row[4] as string,
-        created_at: row[5] as number,
-        updated_at: row[6] as number
-      }));
+      const sessions: ChatSession[] = result.rows.map(row => {
+        const sessionType = row[3] as string;
+        return {
+          id: row[0] as string,
+          title: row[1] as string,
+          model: row[2] as string,
+          session_type: (sessionType === 'chat' || sessionType === 'inference') ? sessionType : 'chat',
+          folder_id: row[4] as string,
+          created_at: row[5] as number,
+          updated_at: row[6] as number
+        };
+      });
 
       const paginatedResult: PaginatedResult<ChatSession> = {
         items: sessions,

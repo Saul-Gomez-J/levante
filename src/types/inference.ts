@@ -10,9 +10,11 @@ export type InferenceTask =
   | 'text2text-generation'           // Instruction-tuned seq2seq (T5, etc.)
   | 'text-to-image'                  // Generate images from text (FLUX, Stable Diffusion)
   | 'image-text-to-text'             // Multimodal models (LLaVA, vision models)
+  | 'image-to-text'                  // Image captioning / OCR models
   | 'image-to-image'                 // Image transformation (ControlNet, img2img)
-  | 'text-to-video'                  // Generate videos from text (new)
+  | 'text-to-video'                  // Generate videos from text
   | 'text-to-speech'                 // Generate audio from text (TTS models)
+  | 'automatic-speech-recognition'   // Speech-to-text (Whisper, etc.)
   | 'visual-question-answering'      // VQA style models
   | 'document-question-answering'    // Document QA models
   | 'table-question-answering';      // Table QA models
@@ -147,14 +149,4 @@ export interface DocumentQuestionAnsweringInput {
 export interface TableQuestionAnsweringInput {
   table: Record<string, unknown> | Record<string, unknown>[] | string;
   query: string;
-}
-
-/**
- * Attachment types for multimodal chat
- */
-export interface MessageAttachment {
-  type: 'image' | 'audio';
-  data: string;  // base64 or dataURL
-  mime: string;  // MIME type (e.g., "image/png", "audio/wav")
-  filename?: string;
 }

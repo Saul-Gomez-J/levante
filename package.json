@@ -37,7 +37,7 @@
     "@ai-sdk/react": "^2.0.89",
     "@ai-sdk/ui-utils": "^1.2.11",
     "@hookform/resolvers": "^5.2.2",
-    "@huggingface/inference": "^4.13.0",
+    "@huggingface/inference": "^4.13.3",
     "@libsql/client": "^0.15.12",
     "@modelcontextprotocol/sdk": "^1.17.5",
     "@openrouter/ai-sdk-provider": "^1.1.2",

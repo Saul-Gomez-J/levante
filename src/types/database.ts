@@ -7,6 +7,20 @@
  */
 export type SessionType = 'chat' | 'inference';
 
+/**
+ * Message attachment metadata
+ * Stored attachments include id, path, size along with type and mime info
+ */
+export interface MessageAttachment {
+  id: string;                      // Unique attachment ID
+  type: 'image' | 'audio' | 'video'; // Type of attachment
+  filename: string;                // Original filename
+  mimeType: string;                // MIME type (e.g., "image/jpeg")
+  size: number;                    // File size in bytes
+  path: string;                    // Relative path from attachments base directory
+  dataUrl?: string;                // Optional base64 data URL (loaded on demand)
+}
+
 export interface ChatSession {
   id: string;
   title?: string;
