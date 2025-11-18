@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { ImageViewer } from '@/components/ui/image-viewer';
+import { ImageViewer } from '@/components/ImageViewer';
 import type { Experimental_GeneratedImage } from 'ai';
 
 export type ImageProps = Experimental_GeneratedImage & {

@@ -8,7 +8,7 @@
 import { useState, useEffect } from 'react';
 import { ImageIcon, MicIcon, Loader2Icon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { ImageViewer } from '@/components/ui/image-viewer';
+import { ImageViewer } from '@/components/ImageViewer';
 import type { MessageAttachment } from '../../../types/database';
 import { getRendererLogger } from '@/services/logger';
 

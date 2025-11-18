@@ -106,11 +106,10 @@ export function ImageViewer({ src, alt, className, children }: ImageViewerProps)
         </div>
       </DialogTrigger>
       <DialogContent
-        className="max-w-[95vw] max-h-[95vh] w-full h-full p-0 border-none bg-transparent shadow-none overflow-hidden flex flex-col items-center justify-center focus:outline-none"
+        className="max-w-[95vw] max-h-[95vh] w-full h-full p-0 border-none bg-transparent shadow-none overflow-hidden flex flex-col items-center justify-center focus:outline-none [&>button]:hidden"
         onKeyDown={(e) => {
           // Prevent closing on escape if dragging? No, escape should always close.
         }}
-        hideClose={true}
       >
         <DialogTitle className="sr-only">Image Viewer</DialogTitle>
 
