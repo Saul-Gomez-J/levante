@@ -5,6 +5,7 @@ import type {
   UIMessageChunk,
 } from 'ai';
 import type { ChatRequest, ChatStreamChunk } from '../../preload/types';
+import { logger } from '@/services/logger';
 
 /**
  * Custom ChatTransport implementation for Electron IPC integration with AI SDK v5.
@@ -53,7 +54,7 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
     const enableMCP = (bodyObj.enableMCP as boolean) ?? this.defaultOptions.enableMCP ?? false;
     const attachments = bodyObj.attachments; // Extract attachments directly from body
 
-    console.log('[ElectronChatTransport] Body received:', {
+    logger.aiSdk.debug('Transport body received', {
       hasBody: !!body,
       hasAttachments: !!attachments,
       attachmentsCount: attachments?.length || 0,
@@ -70,7 +71,7 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
     if (attachments && attachments.length > 0) {
       // Find the last user message and add attachments
       const lastUserMessageIndex = messages.map(m => m.role).lastIndexOf('user');
-      console.log('[ElectronChatTransport] Injecting attachments:', {
+      logger.aiSdk.debug('Transport injecting attachments', {
         lastUserMessageIndex,
         attachmentsCount: attachments.length,
         messagesBefore: messages.length
@@ -83,14 +84,14 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
           attachments
         } as any;
 
-        console.log('[ElectronChatTransport] Attachments injected:', {
+        logger.aiSdk.debug('Transport attachments injected', {
           messageId: messagesWithAttachments[lastUserMessageIndex].id,
           hasAttachments: !!(messagesWithAttachments[lastUserMessageIndex] as any).attachments,
           attachmentsCount: (messagesWithAttachments[lastUserMessageIndex] as any).attachments?.length
         });
       }
     } else {
-      console.log('[ElectronChatTransport] No attachments to inject');
+      logger.aiSdk.debug('Transport no attachments to inject');
     }
 
     // Create Electron IPC request
@@ -154,6 +155,16 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
               // Convert Electron chunk to AI SDK UIMessageChunk format
               const uiChunks = this.convertChunkToUIMessageChunks(chunk);
 
+              // Debug: Log when chunks are being enqueued
+              if (uiChunks.length > 0) {
+                logger.aiSdk.debug('Transport enqueuing chunks', {
+                  chunkCount: uiChunks.length,
+                  types: uiChunks.map(c => c.type),
+                  hasDelta: uiChunks.some(c => c.type === 'text-delta'),
+                  deltaText: uiChunks.find(c => c.type === 'text-delta')?.['delta']
+                });
+              }
+
               // Enqueue all generated chunks
               for (const uiChunk of uiChunks) {
                 controller.enqueue(uiChunk);
@@ -161,10 +172,14 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
 
               // Close stream when done
               if (chunk.done) {
+                logger.aiSdk.debug('Transport stream done, closing');
                 controller.close();
                 this.currentController = null;
               }
             } catch (error) {
+              logger.aiSdk.error('Transport error processing chunk', {
+                error: error instanceof Error ? error.message : error
+              });
               controller.error(error);
               this.currentController = null;
             }

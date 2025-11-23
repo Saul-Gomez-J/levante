@@ -102,6 +102,7 @@ export interface LevanteAPI {
     textToImage: (apiKey: string, model: string, prompt: string, options?: any) => Promise<{ success: boolean; data?: any; error?: string }>;
     imageToText: (apiKey: string, model: string, imageBuffer: ArrayBuffer, options?: any) => Promise<{ success: boolean; data?: any; error?: string }>;
     asr: (apiKey: string, model: string, audioBuffer: ArrayBuffer, options?: any) => Promise<{ success: boolean; data?: any; error?: string }>;
+    saveImage: (dataUrl: string, defaultFilename: string) => Promise<{ success: boolean; data?: string; error?: string }>;
   };
 
   // Database functionality

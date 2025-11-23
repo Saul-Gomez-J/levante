@@ -225,14 +225,13 @@ export class ChatService {
 
   // Messages
   async createMessage(input: CreateMessageInput): Promise<DatabaseResult<Message>> {
-    console.log('🗄️ [MAIN] Creating new message in DB', {
+    this.logger.database.debug('Creating message', {
       sessionId: input.session_id,
       role: input.role,
       contentLength: input.content.length,
       hasToolCalls: !!input.tool_calls,
       hasAttachments: !!input.attachments,
-      attachmentCount: input.attachments?.length || 0,
-      attachments: input.attachments
+      attachmentCount: input.attachments?.length || 0
     });
 
     try {
@@ -241,11 +240,10 @@ export class ChatService {
 
       const attachmentsString = input.attachments ? JSON.stringify(input.attachments) : null;
 
-      console.log('💿 [MAIN] About to INSERT message', {
+      this.logger.database.debug('Inserting message into database', {
         messageId: id,
-        hasAttachmentsString: !!attachmentsString,
-        attachmentsStringLength: attachmentsString?.length || 0,
-        attachmentsPreview: attachmentsString?.substring(0, 200)
+        hasAttachments: !!attachmentsString,
+        attachmentsLength: attachmentsString?.length || 0
       });
 
       const message: Message = {
@@ -272,10 +270,10 @@ export class ChatService {
         ]
       );
 
-      console.log('✅ [MAIN] Message INSERTED into DB', {
+      this.logger.database.info('Message created successfully', {
         messageId: id,
-        attachmentsInObject: !!message.attachments,
-        attachmentsString: message.attachments?.substring(0, 100)
+        sessionId: input.session_id,
+        role: input.role
       });
 
       // Update session's updated_at timestamp

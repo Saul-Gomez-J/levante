@@ -68,15 +68,15 @@ export function TextToImagePanel() {
     await textToImage(selectedModel, prompt, options);
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!result || result.kind !== 'image') return;
 
-    const link = document.createElement('a');
-    link.href = result.dataUrl;
-    link.download = `generated-${Date.now()}.png`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const defaultFilename = `generated-${Date.now()}.png`;
+    const response = await window.levante.inference.saveImage(result.dataUrl, defaultFilename);
+
+    if (!response.success && response.error !== 'Save cancelled by user') {
+      console.error('Failed to save image:', response.error);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

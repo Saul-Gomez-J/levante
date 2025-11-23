@@ -154,7 +154,7 @@ const ChatPage = () => {
 
   const attachFilesToLatestUserMessage = (attachments: Array<{
     id: string;
-    type: 'image' | 'audio';
+    type: 'image' | 'audio' | 'video';
     filename: string;
     mimeType: string;
     size: number;
@@ -242,7 +242,7 @@ const ChatPage = () => {
         // Check for generated attachments in data parts
         const generatedAttachments: Array<{
           id: string;
-          type: 'image' | 'audio';
+          type: 'image' | 'audio' | 'video';
           filename: string;
           mimeType: string;
           size: number;
@@ -272,7 +272,10 @@ const ChatPage = () => {
                 );
 
                 if (result.success && result.data) {
-                  generatedAttachments.push(result.data);
+                  generatedAttachments.push({
+                    ...result.data,
+                    storagePath: result.data.path
+                  });
                   logger.core.info('Generated attachment saved', {
                     attachmentId: result.data.id,
                     filename: attachmentData.filename,
@@ -523,7 +526,7 @@ const ChatPage = () => {
         // Process and save attachments if any
         let savedAttachments: Array<{
           id: string;
-          type: 'image' | 'audio';
+          type: 'image' | 'audio' | 'video';
           filename: string;
           mimeType: string;
           size: number;
@@ -546,7 +549,7 @@ const ChatPage = () => {
             const dataUrl = `data:${file.type};base64,${base64}`;
 
             attachmentDataForInference.push({
-              type: file.type.startsWith('image/') ? 'image' : 'audio',
+              type: file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'video',
               data: dataUrl,
               mime: file.type,
               filename: file.name
@@ -554,11 +557,17 @@ const ChatPage = () => {
           }
 
           // Save attachments to disk
-          savedAttachments = await processAttachments(
+          const processedAttachments = await processAttachments(
             filesToAttach,
             currentSession.id,
             messageId
           );
+
+          // Add storagePath (which comes from 'path' in DB result)
+          savedAttachments = processedAttachments.map(att => ({
+            ...att,
+            storagePath: att.path
+          }));
         }
 
         // Send the message with attachments passed in the body
@@ -630,14 +639,14 @@ const ChatPage = () => {
       try {
         const messageId = `user-${Date.now()}`;
         let attachmentDataForInference: Array<{
-          type: 'image' | 'audio';
+          type: 'image' | 'audio' | 'video';
           data: string;
           mime: string;
           filename: string;
         }> = [];
         let savedAttachments: Array<{
           id: string;
-          type: 'image' | 'audio';
+          type: 'image' | 'audio' | 'video';
           filename: string;
           mimeType: string;
           size: number;
@@ -661,18 +670,24 @@ const ChatPage = () => {
             const dataUrl = `data:${file.type};base64,${base64}`;
 
             attachmentDataForInference.push({
-              type: file.type.startsWith('image/') ? 'image' : 'audio',
+              type: file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'video',
               data: dataUrl,
               mime: file.type,
               filename: file.name
             });
           }
 
-          savedAttachments = await processAttachments(
+          const processedAttachments = await processAttachments(
             attachmentFiles,
             currentSession.id,
             messageId
           );
+
+          // Add storagePath (which comes from 'path' in DB result)
+          savedAttachments = processedAttachments.map(att => ({
+            ...att,
+            storagePath: att.path
+          }));
         }
 
         // Persist user message to database BEFORE sending to AI (to ensure correct order)
@@ -1060,77 +1075,77 @@ const ChatPage = () => {
           <Conversation className="flex-1">
             <ConversationContent className="max-w-3xl mx-auto p-0 pl-4 pr-2 py-4">
               {messages.map((message) => (
-                  <div key={message.id}>
-                    {/* Sources (web search results) */}
-                    {message.role === 'assistant' && message.parts && (
-                      <Sources>
-                        {message.parts
-                          .filter((part: any) => part?.value?.type === 'source-url')
-                          .map((part: any, i: number) => (
-                            <>
-                              <SourcesTrigger
-                                key={`trigger-${message.id}-${i}`}
-                                count={
-                                  message.parts.filter((p: any) => p.value?.type === 'source-url')
-                                    .length
-                                }
-                              />
-                              <SourcesContent key={`content-${message.id}-${i}`}>
-                                <Source href={part.value.url} title={part.value.title || part.value.url} />
-                              </SourcesContent>
-                            </>
-                          ))}
-                      </Sources>
-                    )}
+                <div key={message.id}>
+                  {/* Sources (web search results) */}
+                  {message.role === 'assistant' && message.parts && (
+                    <Sources>
+                      {message.parts
+                        .filter((part: any) => part?.value?.type === 'source-url')
+                        .map((part: any, i: number) => (
+                          <>
+                            <SourcesTrigger
+                              key={`trigger-${message.id}-${i}`}
+                              count={
+                                message.parts.filter((p: any) => p.value?.type === 'source-url')
+                                  .length
+                              }
+                            />
+                            <SourcesContent key={`content-${message.id}-${i}`}>
+                              <Source href={part.value.url} title={part.value.title || part.value.url} />
+                            </SourcesContent>
+                          </>
+                        ))}
+                    </Sources>
+                  )}
 
-                    {/* Message */}
-                    <Message
+                  {/* Message */}
+                  <Message
+                    from={message.role}
+                    key={message.id}
+                    className={cn(
+                      'p-0',
+                      message.role === 'user' ? 'is-user my-6' : 'is-assistant'
+                    )}
+                  >
+                    <MessageContent
                       from={message.role}
-                      key={message.id}
                       className={cn(
-                        'p-0',
-                        message.role === 'user' ? 'is-user my-6' : 'is-assistant'
+                        '',
+                        message.role === 'user' ? 'p-2 mb-0 dark:text-white' : 'px-2 py-0'
                       )}
                     >
-                      <MessageContent
-                        from={message.role}
-                        className={cn(
-                          '',
-                          message.role === 'user' ? 'p-2 mb-0 dark:text-white' : 'px-2 py-0'
-                        )}
-                      >
-                        {/* Render attachments if present */}
-                        {(message as any).attachments && (message as any).attachments.length > 0 && (
-                          <MessageAttachments attachments={(message as any).attachments} />
-                        )}
+                      {/* Render attachments if present */}
+                      {(message as any).attachments && (message as any).attachments.length > 0 && (
+                        <MessageAttachments attachments={(message as any).attachments} />
+                      )}
 
-                        {/* Debug: Log message structure */}
-                        {(() => {
-                          if ((message as any).attachments?.length > 0) {
-                            logger.core.debug('Rendering message with attachments', {
-                              messageId: message.id,
-                              role: message.role,
-                              attachmentCount: (message as any).attachments.length,
-                              attachments: (message as any).attachments,
-                              partsCount: message.parts?.length || 0,
-                            });
+                      {/* Debug: Log message structure */}
+                      {(() => {
+                        if ((message as any).attachments?.length > 0) {
+                          logger.core.debug('Rendering message with attachments', {
+                            messageId: message.id,
+                            role: message.role,
+                            attachmentCount: (message as any).attachments.length,
+                            attachments: (message as any).attachments,
+                            partsCount: message.parts?.length || 0,
+                          });
+                        }
+                        return null;
+                      })()}
+
+                      {message.parts?.map((part: any, i: number) => {
+                        try {
+                          // Text content
+                          if (part?.type === 'text' && part?.text) {
+                            return (
+                              <Response key={`${message.id}-${i}`}>
+                                {part.text}
+                              </Response>
+                            );
                           }
-                          return null;
-                        })()}
 
-                        {message.parts?.map((part: any, i: number) => {
-                          try {
-                            // Text content
-                            if (part?.type === 'text' && part?.text) {
-                              return (
-                                <Response key={`${message.id}-${i}`}>
-                                  {part.text}
-                                </Response>
-                              );
-                            }
-
-                            // Reasoning (data part)
-                            if (part?.value?.type === 'reasoning') {
+                          // Reasoning (data part)
+                          if (part?.value?.type === 'reasoning') {
                             return (
                               <Reasoning
                                 key={`${message.id}-${i}`}
@@ -1173,19 +1188,19 @@ const ChatPage = () => {
                             }
                           }
 
-                            return null;
-                          } catch (error) {
-                            console.error('[ChatPage] Error rendering part:', error, {
-                              messageId: message.id,
-                              partIndex: i,
-                              part,
-                            });
-                            return null;
-                          }
-                        })}
-                      </MessageContent>
-                    </Message>
-                  </div>
+                          return null;
+                        } catch (error) {
+                          console.error('[ChatPage] Error rendering part:', error, {
+                            messageId: message.id,
+                            partIndex: i,
+                            part,
+                          });
+                          return null;
+                        }
+                      })}
+                    </MessageContent>
+                  </Message>
+                </div>
               ))}
 
               {/* Streaming indicator */}

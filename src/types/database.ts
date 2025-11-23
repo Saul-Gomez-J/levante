@@ -5,20 +5,20 @@
  * - 'chat': Normal conversational chat with LLMs
  * - 'inference': Hugging Face inference tasks (text-to-image, image-to-image, etc.)
  */
-export type SessionType = 'chat' | 'inference';
+export type SessionType = "chat" | "inference";
 
 /**
  * Message attachment metadata
  * Stored attachments include id, path, size along with type and mime info
  */
 export interface MessageAttachment {
-  id: string;                      // Unique attachment ID
-  type: 'image' | 'audio' | 'video'; // Type of attachment
-  filename: string;                // Original filename
-  mimeType: string;                // MIME type (e.g., "image/jpeg")
-  size: number;                    // File size in bytes
-  path: string;                    // Relative path from attachments base directory
-  dataUrl?: string;                // Optional base64 data URL (loaded on demand)
+  id: string; // Unique attachment ID
+  type: "image" | "audio" | "video"; // Type of attachment
+  filename: string; // Original filename
+  mimeType: string; // MIME type (e.g., "image/jpeg")
+  size: number; // File size in bytes
+  path: string; // Relative path from attachments base directory
+  dataUrl?: string; // Optional base64 data URL (loaded on demand)
 }
 
 export interface ChatSession {
@@ -34,7 +34,7 @@ export interface ChatSession {
 export interface Message {
   id: string;
   session_id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: "user" | "assistant" | "system";
   content: string;
   tool_calls?: string | null; // JSON string or null
   attachments?: string | null; // JSON string of MessageAttachment[] or null
@@ -84,7 +84,7 @@ export interface MCPTool {
 export interface Setting {
   key: string;
   value: string;
-  type: 'string' | 'number' | 'boolean' | 'json';
+  type: "string" | "number" | "boolean" | "json";
   updated_at: number;
 }
 
@@ -98,7 +98,7 @@ export interface CreateChatSessionInput {
 
 export interface CreateMessageInput {
   session_id: string;
-  role: 'user' | 'assistant' | 'system';
+  role: "user" | "assistant" | "system";
   content: string;
   tool_calls?: object[] | null; // Will be JSON stringified or null
   attachments?: MessageAttachment[] | null; // File attachments (images, audio)
