@@ -31,5 +31,6 @@
     "context7",
     "sequential-thinking",
     "time"
-  ]
+  ],
+  "enableAllProjectMcpServers": true
 }

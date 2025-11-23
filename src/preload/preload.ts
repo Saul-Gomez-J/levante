@@ -8,7 +8,8 @@ import {
   DatabaseResult,
   PaginatedResult,
   ChatSession,
-  Message
+  Message,
+  MessageAttachment
 } from '../types/database';
 import { UIPreferences, PreferenceKey } from '../types/preferences';
 import type {
@@ -35,6 +36,7 @@ import type {
 import { appApi } from './api/app';
 import { chatApi } from './api/chat';
 import { modelsApi } from './api/models';
+import { inferenceApi } from './api/inference';
 import { databaseApi } from './api/database';
 import { preferencesApi } from './api/preferences';
 import { mcpApi } from './api/mcp';
@@ -43,6 +45,7 @@ import { wizardApi } from './api/wizard';
 import { profileApi } from './api/profile';
 import { debugApi } from './api/debug';
 import { settingsApi } from './api/settings';
+import { attachmentsApi } from './api/attachments';
 
 // Re-export types for backwards compatibility
 export type {
@@ -89,6 +92,17 @@ export interface LevanteAPI {
     fetchAnthropic: (apiKey: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
     fetchGroq: (apiKey: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
     fetchXAI: (apiKey: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+    fetchHuggingFace: (apiKey: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
+    validateHuggingFaceModel: (modelId: string, inferenceProvider: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+  };
+
+  // Inference functionality
+  inference: {
+    dispatch: (apiKey: string, call: any) => Promise<{ success: boolean; data?: any; error?: string }>;
+    textToImage: (apiKey: string, model: string, prompt: string, options?: any) => Promise<{ success: boolean; data?: any; error?: string }>;
+    imageToText: (apiKey: string, model: string, imageBuffer: ArrayBuffer, options?: any) => Promise<{ success: boolean; data?: any; error?: string }>;
+    asr: (apiKey: string, model: string, audioBuffer: ArrayBuffer, options?: any) => Promise<{ success: boolean; data?: any; error?: string }>;
+    saveImage: (dataUrl: string, defaultFilename: string) => Promise<{ success: boolean; data?: string; error?: string }>;
   };
 
   // Database functionality
@@ -191,6 +205,16 @@ export interface LevanteAPI {
     openDirectory: () => Promise<{ success: boolean; data?: string; error?: string }>;
     getDirectoryInfo: () => Promise<{ success: boolean; data?: { baseDir: string; exists: boolean; files: string[]; totalFiles: number }; error?: string }>;
   };
+
+  // Attachments functionality
+  attachments: {
+    save: (sessionId: string, messageId: string, buffer: ArrayBuffer, filename: string, mimeType: string) => Promise<{ success: boolean; data?: MessageAttachment; error?: string }>;
+    load: (attachment: MessageAttachment) => Promise<{ success: boolean; data?: MessageAttachment; error?: string }>;
+    loadMany: (attachments: MessageAttachment[]) => Promise<{ success: boolean; data?: MessageAttachment[]; error?: string }>;
+    deleteSession: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
+    deleteMessage: (sessionId: string, messageId: string) => Promise<{ success: boolean; error?: string }>;
+    stats: () => Promise<{ success: boolean; data?: { totalSize: number; fileCount: number }; error?: string }>;
+  };
 }
 
 // Assemble the complete API from modules
@@ -203,6 +227,9 @@ const api: LevanteAPI = {
 
   // Models API
   models: modelsApi,
+
+  // Inference API
+  inference: inferenceApi,
 
   // Database API
   db: databaseApi,
@@ -227,6 +254,9 @@ const api: LevanteAPI = {
 
   // Profile API
   profile: profileApi,
+
+  // Attachments API
+  attachments: attachmentsApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

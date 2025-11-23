@@ -1,3 +1,6 @@
+import type { ModelCategory, ModelCapabilities } from './modelCategories';
+import type { InferenceTask } from './inference';
+
 export interface Model {
   id: string;
   name: string;
@@ -7,13 +10,23 @@ export interface Model {
     input: number;
     output: number;
   };
+  description?: string;
+  tags?: string[];
+  inputModalities?: string[];
+  outputModalities?: string[];
   capabilities: string[];
   isAvailable: boolean;
   userDefined: boolean;
   isSelected?: boolean; // For user model selection
+  taskType?: InferenceTask; // Inference task type (defaults to 'chat')
+  inferenceProvider?: string; // HuggingFace Inference API provider slug (e.g., 'featherless-ai', 'novita', 'fireworks-ai')
+
+  // Classification fields (computed and cached during model sync)
+  category?: ModelCategory; // Computed category based on taskType, capabilities, and model ID
+  computedCapabilities?: ModelCapabilities; // Computed capabilities based on category and metadata
 }
 
-export type CloudProviderType = 'openai' | 'anthropic' | 'google' | 'groq' | 'xai';
+export type CloudProviderType = 'openai' | 'anthropic' | 'google' | 'groq' | 'xai' | 'huggingface';
 export type ProviderType = 'openrouter' | 'vercel-gateway' | 'local' | CloudProviderType;
 
 export interface ProviderConfig {

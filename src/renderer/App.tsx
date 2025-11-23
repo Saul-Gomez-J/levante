@@ -174,6 +174,7 @@ function App() {
   const startNewChat = useChatStore((state) => state.startNewChat)
   const loadSession = useChatStore((state) => state.loadSession)
   const deleteSession = useChatStore((state) => state.deleteSession)
+  const updateSessionTitle = useChatStore((state) => state.updateSessionTitle)
   const setPendingPrompt = useChatStore((state) => state.setPendingPrompt)
 
   // Handle deep links
@@ -332,6 +333,7 @@ function App() {
         handleLoadSession, // Navigate to chat when loading session
         handleNewChat, // Navigate to chat when starting new chat
         deleteSession,
+        updateSessionTitle, // Rename chat session
         false // loading state
       );
     }

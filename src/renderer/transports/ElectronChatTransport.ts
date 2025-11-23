@@ -5,6 +5,7 @@ import type {
   UIMessageChunk,
 } from 'ai';
 import type { ChatRequest, ChatStreamChunk } from '../../preload/types';
+import { logger } from '@/services/logger';
 
 /**
  * Custom ChatTransport implementation for Electron IPC integration with AI SDK v5.
@@ -51,10 +52,51 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
     const model = (bodyObj.model as string) || this.defaultOptions.model || 'openai/gpt-4o';
     const webSearch = (bodyObj.webSearch as boolean) ?? this.defaultOptions.webSearch ?? false;
     const enableMCP = (bodyObj.enableMCP as boolean) ?? this.defaultOptions.enableMCP ?? false;
+    const attachments = bodyObj.attachments; // Extract attachments directly from body
+
+    logger.aiSdk.debug('Transport body received', {
+      hasBody: !!body,
+      hasAttachments: !!attachments,
+      attachmentsCount: attachments?.length || 0,
+      bodyKeys: Object.keys(bodyObj),
+      attachmentsPreview: attachments?.map((a: any) => ({
+        type: a.type,
+        filename: a.filename,
+        hasData: !!a.data
+      }))
+    });
+
+    // If attachments are provided, inject them into the last user message
+    let messagesWithAttachments = messages;
+    if (attachments && attachments.length > 0) {
+      // Find the last user message and add attachments
+      const lastUserMessageIndex = messages.map(m => m.role).lastIndexOf('user');
+      logger.aiSdk.debug('Transport injecting attachments', {
+        lastUserMessageIndex,
+        attachmentsCount: attachments.length,
+        messagesBefore: messages.length
+      });
+
+      if (lastUserMessageIndex !== -1) {
+        messagesWithAttachments = [...messages];
+        messagesWithAttachments[lastUserMessageIndex] = {
+          ...messagesWithAttachments[lastUserMessageIndex],
+          attachments
+        } as any;
+
+        logger.aiSdk.debug('Transport attachments injected', {
+          messageId: messagesWithAttachments[lastUserMessageIndex].id,
+          hasAttachments: !!(messagesWithAttachments[lastUserMessageIndex] as any).attachments,
+          attachmentsCount: (messagesWithAttachments[lastUserMessageIndex] as any).attachments?.length
+        });
+      }
+    } else {
+      logger.aiSdk.debug('Transport no attachments to inject');
+    }
 
     // Create Electron IPC request
     const request: ChatRequest = {
-      messages,
+      messages: messagesWithAttachments,
       model,
       webSearch,
       enableMCP,
@@ -113,6 +155,16 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
               // Convert Electron chunk to AI SDK UIMessageChunk format
               const uiChunks = this.convertChunkToUIMessageChunks(chunk);
 
+              // Debug: Log when chunks are being enqueued
+              if (uiChunks.length > 0) {
+                logger.aiSdk.debug('Transport enqueuing chunks', {
+                  chunkCount: uiChunks.length,
+                  types: uiChunks.map(c => c.type),
+                  hasDelta: uiChunks.some(c => c.type === 'text-delta'),
+                  deltaText: uiChunks.find(c => c.type === 'text-delta')?.['delta']
+                });
+              }
+
               // Enqueue all generated chunks
               for (const uiChunk of uiChunks) {
                 controller.enqueue(uiChunk);
@@ -120,10 +172,14 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
 
               // Close stream when done
               if (chunk.done) {
+                logger.aiSdk.debug('Transport stream done, closing');
                 controller.close();
                 this.currentController = null;
               }
             } catch (error) {
+              logger.aiSdk.error('Transport error processing chunk', {
+                error: error instanceof Error ? error.message : error
+              });
               controller.error(error);
               this.currentController = null;
             }
@@ -277,6 +333,21 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
         data: {
           type: 'reasoning' as const,
           text: chunk.reasoning,
+        },
+      });
+    }
+
+    // Handle generated attachments (images, audio, video from inference models)
+    if (chunk.generatedAttachment) {
+      chunks.push({
+        type: 'data-part-available',
+        id: `generated-attachment-${Date.now()}`,
+        data: {
+          type: 'generated-attachment' as const,
+          attachmentType: chunk.generatedAttachment.type,
+          mime: chunk.generatedAttachment.mime,
+          dataUrl: chunk.generatedAttachment.dataUrl,
+          filename: chunk.generatedAttachment.filename,
         },
       });
     }
