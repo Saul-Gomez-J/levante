@@ -1162,30 +1162,44 @@ const ChatPage = () => {
 
                           // Tool calls (MCP)
                           if (part?.type?.startsWith('tool-')) {
-                            // Only show if output is available or there's an error
-                            if (part.state === 'output-available' || part.state === 'output-error') {
-                              const toolCall = {
-                                id: part.toolCallId,
-                                name: part.toolName,
-                                arguments: part.input || {},
-                                result: part.state === 'output-available' ? {
-                                  success: true,
-                                  content: JSON.stringify(part.output),
-                                } : {
-                                  success: false,
-                                  error: part.errorText,
-                                },
-                                status: part.state === 'output-available' ? 'success' as const : 'error' as const,
-                              };
+                            // Extract tool name from type if toolName field is not available
+                            // During streaming, AI SDK v5 doesn't include toolName field
+                            // Format: "tool-{toolName}" -> extract toolName
+                            const toolName = part.toolName || part.type.replace(/^tool-/, '');
 
-                              return (
-                                <ToolCall
-                                  key={`${message.id}-${i}`}
-                                  toolCall={toolCall}
-                                  className="w-full"
-                                />
-                              );
+                            // Map part states to ToolCall status
+                            let status: 'pending' | 'running' | 'success' | 'error' = 'pending';
+                            if (part.state === 'input-start') {
+                              status = 'pending';
+                            } else if (part.state === 'input-available') {
+                              status = 'running';
+                            } else if (part.state === 'output-available') {
+                              status = 'success';
+                            } else if (part.state === 'output-error') {
+                              status = 'error';
                             }
+
+                            const toolCall = {
+                              id: part.toolCallId,
+                              name: toolName,
+                              arguments: part.input || {},
+                              result: part.state === 'output-available' ? {
+                                success: true,
+                                content: JSON.stringify(part.output),
+                              } : part.state === 'output-error' ? {
+                                success: false,
+                                error: part.errorText,
+                              } : undefined,
+                              status,
+                            };
+
+                            return (
+                              <ToolCall
+                                key={`${message.id}-${i}`}
+                                toolCall={toolCall}
+                                className="w-full"
+                              />
+                            );
                           }
 
                           return null;
