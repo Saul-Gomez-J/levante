@@ -182,10 +182,28 @@ export const Mermaid = ({ chart, className }: MermaidProps) => {
         fontFamily: 'inherit',
       });
 
+      // Clean up any previous mermaid-generated elements with this ID
+      const existingElement = document.getElementById(`d${mermaidId}`);
+      if (existingElement) {
+        existingElement.remove();
+      }
+
       mermaid.render(mermaidId, chart).then((result) => {
+        // Clean up the temporary div that mermaid creates
+        const tempDiv = document.getElementById(`d${mermaidId}`);
+        if (tempDiv) {
+          tempDiv.remove();
+        }
+
         setSvgContent(result.svg);
         setIsLoading(false);
       }).catch((error) => {
+        // Clean up any error SVG that mermaid might have created
+        const errorElement = document.getElementById(`d${mermaidId}`);
+        if (errorElement) {
+          errorElement.remove();
+        }
+
         console.error('Mermaid rendering error:', error);
         setError(error.message || 'Failed to render diagram');
         setIsLoading(false);
