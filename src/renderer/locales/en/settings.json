@@ -4,7 +4,8 @@
     "personalization": "Personalization",
     "appearance": "Appearance",
     "security": "Security",
-    "ai_configuration": "AI Configuration"
+    "ai_configuration": "AI Configuration",
+    "mcp_configuration": "MCP Configuration"
   },
   "language": {
     "label": "Language",
@@ -140,5 +141,56 @@
     "used_by": "Used by",
     "servers_count": "server",
     "servers_count_plural": "servers"
+  },
+  "mcp_config": {
+    "sdk": {
+      "label": "MCP SDK",
+      "description": "mcp-use: Modern framework with Code Mode support for 40-60% token reduction. Official SDK: Direct protocol implementation.",
+      "options": {
+        "mcp-use": "mcp-use (Recommended)",
+        "official-sdk": "Official SDK"
+      }
+    },
+    "code_mode": {
+      "label": "Code Mode",
+      "description": "Allow AI to write JavaScript to orchestrate multiple MCP tools efficiently"
+    },
+    "executor": {
+      "label": "Executor",
+      "vm_description": "Local VM executor with basic isolation. Suitable for most use cases.",
+      "e2b_description": "Cloud-based E2B sandbox with full isolation. Requires API key.",
+      "options": {
+        "vm": "VM (Local)",
+        "e2b": "E2B (Cloud Sandbox)"
+      }
+    },
+    "advanced_options": "Advanced Options",
+    "vm_timeout": {
+      "label": "VM Timeout (ms)",
+      "description": "Maximum execution time (default: 30000ms)"
+    },
+    "vm_memory": {
+      "label": "VM Memory Limit (MB)",
+      "description": "Memory limit in MB (default: 128MB)"
+    },
+    "e2b_api_key": {
+      "label": "E2B API Key",
+      "placeholder": "Enter E2B API key",
+      "description": "Required for E2B executor. Get your API key from",
+      "link_text": "e2b.dev"
+    },
+    "save_button": "Save Configuration",
+    "saving": "Saving...",
+    "saved": "Saved successfully",
+    "info_box": {
+      "title": "About Code Mode",
+      "points": {
+        "orchestration": "Code Mode allows the AI to write JavaScript code to orchestrate multiple MCP tool calls efficiently",
+        "token_reduction": "This can reduce token usage by 40-60% for complex multi-tool workflows",
+        "vm_executor": "VM executor runs code locally with basic sandboxing (recommended for most users)",
+        "e2b_executor": "E2B executor provides full cloud-based isolation with better security (requires paid API key)",
+        "apply_note": "Changes apply to new MCP server connections"
+      }
+    }
   }
 }

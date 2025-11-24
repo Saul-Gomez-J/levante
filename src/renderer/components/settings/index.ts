@@ -5,3 +5,4 @@ export { SecuritySection } from './SecuritySection';
 export { AIConfigSection } from './AIConfigSection';
 export { DeveloperModeSection } from './DeveloperModeSection';
 export { RuntimesSection } from './RuntimesSection';
+export { MCPSection } from './MCPSection';

@@ -4,7 +4,8 @@
     "personalization": "Personalización",
     "appearance": "Apariencia",
     "security": "Seguridad",
-    "ai_configuration": "Configuración de IA"
+    "ai_configuration": "Configuración de IA",
+    "mcp_configuration": "Configuración de MCP"
   },
   "language": {
     "label": "Idioma",
@@ -140,5 +141,56 @@
     "used_by": "Usado por",
     "servers_count": "servidor",
     "servers_count_plural": "servidores"
+  },
+  "mcp_config": {
+    "sdk": {
+      "label": "SDK de MCP",
+      "description": "mcp-use: Framework moderno con soporte para Modo Código para reducción de 40-60% de tokens. SDK Oficial: Implementación directa del protocolo.",
+      "options": {
+        "mcp-use": "mcp-use (Recomendado)",
+        "official-sdk": "SDK Oficial"
+      }
+    },
+    "code_mode": {
+      "label": "Modo Código",
+      "description": "Permitir que la IA escriba JavaScript para orquestar múltiples herramientas MCP de forma eficiente"
+    },
+    "executor": {
+      "label": "Ejecutor",
+      "vm_description": "Ejecutor VM local con aislamiento básico. Adecuado para la mayoría de casos.",
+      "e2b_description": "Sandbox E2B basado en la nube con aislamiento completo. Requiere clave API.",
+      "options": {
+        "vm": "VM (Local)",
+        "e2b": "E2B (Sandbox en la Nube)"
+      }
+    },
+    "advanced_options": "Opciones Avanzadas",
+    "vm_timeout": {
+      "label": "Tiempo de Espera VM (ms)",
+      "description": "Tiempo máximo de ejecución (predeterminado: 30000ms)"
+    },
+    "vm_memory": {
+      "label": "Límite de Memoria VM (MB)",
+      "description": "Límite de memoria en MB (predeterminado: 128MB)"
+    },
+    "e2b_api_key": {
+      "label": "Clave API de E2B",
+      "placeholder": "Ingresa la clave API de E2B",
+      "description": "Requerido para el ejecutor E2B. Obtén tu clave API en",
+      "link_text": "e2b.dev"
+    },
+    "save_button": "Guardar Configuración",
+    "saving": "Guardando...",
+    "saved": "Guardado exitosamente",
+    "info_box": {
+      "title": "Acerca del Modo Código",
+      "points": {
+        "orchestration": "El Modo Código permite que la IA escriba código JavaScript para orquestar múltiples llamadas a herramientas MCP de forma eficiente",
+        "token_reduction": "Esto puede reducir el uso de tokens en un 40-60% para flujos de trabajo complejos con múltiples herramientas",
+        "vm_executor": "El ejecutor VM ejecuta código localmente con sandboxing básico (recomendado para la mayoría de usuarios)",
+        "e2b_executor": "El ejecutor E2B proporciona aislamiento completo basado en la nube con mejor seguridad (requiere clave API de pago)",
+        "apply_note": "Los cambios se aplican a nuevas conexiones de servidores MCP"
+      }
+    }
   }
 }
