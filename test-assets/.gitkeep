@@ -1,0 +1,8 @@
+# This directory stores test images for HuggingFace inference testing
+
+Place your test images here:
+- test-image.jpg (input image for tests)
+
+Output images will be generated:
+- output-image.png (from SDK test)
+- output-image-direct.png (from direct API test)

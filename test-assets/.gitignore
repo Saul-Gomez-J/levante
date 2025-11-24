@@ -1,0 +1,9 @@
+# Ignore all test images
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+
+# Keep the .gitkeep file
+!.gitkeep

@@ -292,6 +292,14 @@ export const CloudConfig = ({ provider }: { provider: ProviderConfig }) => {
           apiKeyHelpText: 'Get your API key from xAI Console',
           showProjectId: false
         };
+      case 'huggingface':
+        return {
+          apiKeyLabel: 'Hugging Face API Key',
+          apiKeyPlaceholder: 'hf_...',
+          apiKeyHelpLink: 'https://huggingface.co/settings/tokens',
+          apiKeyHelpText: 'Get your API key from Hugging Face Settings',
+          showProjectId: false
+        };
       default:
         return {
           apiKeyLabel: 'API Key',

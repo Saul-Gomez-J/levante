@@ -3,12 +3,9 @@ import { validateLocalEndpoint, validatePublicUrl, logBlockedUrl, safeFetch } fr
 
 interface ModelResponse {
   object: string;
-  data: Array<{
-    id: string;
-    object: string;
-    created: number;
-    owned_by: string;
-  }>;
+  data: Array<Record<string, any>>;
+  has_more?: boolean;
+  next_offset?: string | null;
 }
 
 const logger = getLogger();
@@ -235,6 +232,60 @@ export class ModelFetchService {
     } catch (error) {
       logger.models.error("Failed to fetch xAI models", {
         error: error instanceof Error ? error.message : error
+      });
+      throw error;
+    }
+  }
+
+  // Fetch Hugging Face models
+  static async fetchHuggingFaceModels(apiKey: string): Promise<any[]> {
+    try {
+      const allModels: any[] = [];
+      let nextOffset: string | null | undefined = undefined;
+      let page = 0;
+
+      do {
+        const url = new URL('https://router.huggingface.co/v1/models');
+        if (nextOffset) {
+          url.searchParams.set('after', nextOffset);
+        }
+
+        const response = await safeFetch(url.toString(), {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Hugging Face API error: ${response.statusText}`);
+        }
+
+        const data: ModelResponse = await response.json();
+        const models = data.data || [];
+        allModels.push(...models);
+
+        logger.models.debug('Fetched Hugging Face models page', {
+          page,
+          fetched: models.length,
+          total: allModels.length,
+          hasMore: data.has_more,
+          nextOffset: data.next_offset
+        });
+
+        if (data.has_more && data.next_offset) {
+          nextOffset = data.next_offset;
+          page += 1;
+        } else {
+          nextOffset = null;
+        }
+      } while (nextOffset);
+
+      return allModels;
+    } catch (error) {
+      logger.models.error("Failed to fetch Hugging Face models", {
+        error: error instanceof Error ? error.message : error,
+        hasApiKey: !!apiKey
       });
       throw error;
     }

@@ -20,44 +20,49 @@ export class ChatService {
   // Chat Sessions
   async createSession(input: CreateChatSessionInput): Promise<DatabaseResult<ChatSession>> {
     this.logger.database.debug('Creating new chat session', { input });
-    
+
     try {
       const id = this.generateId();
       const now = Date.now();
-      
+
       const session: ChatSession = {
         id,
         title: input.title,
         model: input.model,
+        session_type: input.session_type || 'chat', // Default to 'chat' if not specified
         folder_id: input.folder_id ?? null, // Convert undefined to null for SQLite
         created_at: now,
         updated_at: now
       };
 
       await databaseService.execute(
-        `INSERT INTO chat_sessions (id, title, model, folder_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO chat_sessions (id, title, model, session_type, folder_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           session.id as InValue,
           session.title as InValue,
           session.model as InValue,
+          session.session_type as InValue, // Add session_type
           (session.folder_id ?? null) as InValue, // Ensure null instead of undefined
           session.created_at as InValue,
           session.updated_at as InValue
         ]
       );
 
-      this.logger.database.info('Chat session created successfully', { sessionId: id });
+      this.logger.database.info('Chat session created successfully', {
+        sessionId: id,
+        sessionType: session.session_type
+      });
       return { data: session, success: true };
     } catch (error) {
-      this.logger.database.error('Failed to create chat session', { 
-        error: error instanceof Error ? error.message : error, 
-        input 
+      this.logger.database.error('Failed to create chat session', {
+        error: error instanceof Error ? error.message : error,
+        input
       });
-      return { 
-        data: {} as ChatSession, 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        data: {} as ChatSession,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -74,24 +79,26 @@ export class ChatService {
         return { data: null, success: true };
       }
 
+      const sessionType = row[3] as string;
       const session: ChatSession = {
         id: row[0] as string,
         title: row[1] as string,
         model: row[2] as string,
-        folder_id: row[3] as string,
-        created_at: row[4] as number,
-        updated_at: row[5] as number
+        session_type: (sessionType === 'chat' || sessionType === 'inference') ? sessionType : 'chat',
+        folder_id: row[4] as string,
+        created_at: row[5] as number,
+        updated_at: row[6] as number
       };
 
       return { data: session, success: true };
     } catch (error) {
-      this.logger.database.error('Failed to get chat session', { 
-        error: error instanceof Error ? error.message : error 
+      this.logger.database.error('Failed to get chat session', {
+        error: error instanceof Error ? error.message : error
       });
-      return { 
-        data: null, 
-        success: false, 
-        error: error instanceof Error ? error.message : 'Unknown error' 
+      return {
+        data: null,
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
       };
     }
   }
@@ -121,15 +128,19 @@ export class ChatService {
 
       // Get sessions
       const result = await databaseService.execute(sql, params);
-      
-      const sessions: ChatSession[] = result.rows.map(row => ({
-        id: row[0] as string,
-        title: row[1] as string,
-        model: row[2] as string,
-        folder_id: row[3] as string,
-        created_at: row[4] as number,
-        updated_at: row[5] as number
-      }));
+
+      const sessions: ChatSession[] = result.rows.map(row => {
+        const sessionType = row[3] as string;
+        return {
+          id: row[0] as string,
+          title: row[1] as string,
+          model: row[2] as string,
+          session_type: (sessionType === 'chat' || sessionType === 'inference') ? sessionType : 'chat',
+          folder_id: row[4] as string,
+          created_at: row[5] as number,
+          updated_at: row[6] as number
+        };
+      });
 
       const paginatedResult: PaginatedResult<ChatSession> = {
         items: sessions,
@@ -214,38 +225,56 @@ export class ChatService {
 
   // Messages
   async createMessage(input: CreateMessageInput): Promise<DatabaseResult<Message>> {
-    this.logger.database.debug('Creating new message', { 
-      sessionId: input.session_id, 
-      role: input.role, 
+    this.logger.database.debug('Creating message', {
+      sessionId: input.session_id,
+      role: input.role,
       contentLength: input.content.length,
-      hasToolCalls: !!input.tool_calls
+      hasToolCalls: !!input.tool_calls,
+      hasAttachments: !!input.attachments,
+      attachmentCount: input.attachments?.length || 0
     });
-    
+
     try {
       const id = this.generateId();
       const now = Date.now();
-      
+
+      const attachmentsString = input.attachments ? JSON.stringify(input.attachments) : null;
+
+      this.logger.database.debug('Inserting message into database', {
+        messageId: id,
+        hasAttachments: !!attachmentsString,
+        attachmentsLength: attachmentsString?.length || 0
+      });
+
       const message: Message = {
         id,
         session_id: input.session_id,
         role: input.role,
         content: input.content,
         tool_calls: input.tool_calls ? JSON.stringify(input.tool_calls) : null,
+        attachments: attachmentsString,
         created_at: now
       };
 
       await databaseService.execute(
-        `INSERT INTO messages (id, session_id, role, content, tool_calls, created_at) 
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO messages (id, session_id, role, content, tool_calls, attachments, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           message.id as InValue,
           message.session_id as InValue,
           message.role as InValue,
           message.content as InValue,
           message.tool_calls as InValue,
+          message.attachments as InValue,
           message.created_at as InValue
         ]
       );
+
+      this.logger.database.info('Message created successfully', {
+        messageId: id,
+        sessionId: input.session_id,
+        role: input.role
+      });
 
       // Update session's updated_at timestamp
       await databaseService.execute(
@@ -291,7 +320,8 @@ export class ChatService {
         role: row[2] as 'user' | 'assistant' | 'system',
         content: row[3] as string,
         tool_calls: row[4] as string,
-        created_at: row[5] as number
+        created_at: row[5] as number,
+        attachments: row[6] as string
       }));
 
       const paginatedResult: PaginatedResult<Message> = {
@@ -340,7 +370,8 @@ export class ChatService {
         role: row[2] as 'user' | 'assistant' | 'system',
         content: row[3] as string,
         tool_calls: row[4] as string,
-        created_at: row[5] as number
+        created_at: row[5] as number,
+        attachments: row[6] as string
       }));
 
       this.logger.database.debug('Search completed', { found: messages.length, query: searchQuery });

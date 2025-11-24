@@ -18,12 +18,13 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, CheckCircle, XCircle, RefreshCw, Search } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, RefreshCw, Search, Plus } from 'lucide-react';
 import { useModelStore } from '@/stores/modelStore';
 import type { ProviderConfig } from '../../types/models';
 import { useTranslation } from 'react-i18next';
 import { OpenRouterConfig, GatewayConfig, LocalConfig, CloudConfig } from './ModelPage/ProviderConfigs';
 import { ModelList } from './ModelPage/ModelList';
+import { AddInferenceModelDialog } from '@/components/dialogs/AddInferenceModelDialog';
 
 const ModelPage = () => {
   const { t } = useTranslation('models');
@@ -43,6 +44,7 @@ const ModelPage = () => {
   } = useModelStore();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAddDialog, setShowAddDialog] = useState(false);
 
   useEffect(() => {
     initialize();
@@ -93,6 +95,7 @@ const ModelPage = () => {
       case 'google':
       case 'groq':
       case 'xai':
+      case 'huggingface':
         return <CloudConfig provider={provider} />;
       default:
         return <div>Unknown provider type</div>;
@@ -237,6 +240,17 @@ const ModelPage = () => {
                       </Button>
                     </>
                   )}
+                  {activeProvider.type === 'huggingface' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAddDialog(true)}
+                      disabled={syncing}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Inference Model
+                    </Button>
+                  )}
                   {activeProvider.modelSource === 'dynamic' && (
                     <Button
                       variant="outline"
@@ -314,6 +328,15 @@ const ModelPage = () => {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Add Inference Model Dialog */}
+        {activeProvider && (
+          <AddInferenceModelDialog
+            providerId={activeProvider.id}
+            open={showAddDialog}
+            onClose={() => setShowAddDialog(false)}
+          />
         )}
       </div>
     </div>
