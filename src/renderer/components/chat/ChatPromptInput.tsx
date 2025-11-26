@@ -1,6 +1,5 @@
 import {
   PromptInput,
-  PromptInputButton,
   PromptInputSubmit,
   PromptInputTextarea,
   PromptInputToolbar,
@@ -8,10 +7,12 @@ import {
 } from '@/components/ai-elements/prompt-input';
 import { ModelSearchableSelect } from '@/components/ai-elements/model-searchable-select';
 import { ToolsMenu } from '@/components/chat/ToolsMenu';
-import { AttachmentButton, FilePreview } from '@/components/chat/FileAttachmentComponents';
+import { ContextPreview } from '@/components/chat/ContextPreview';
+import { AddContextMenu } from '@/components/chat/AddContextMenu';
 import { useTranslation } from 'react-i18next';
 import type { Model } from '../../../types/models';
 import type { ChatStatus } from 'ai';
+import type { SelectedResource, SelectedPrompt, MCPResource, MCPPrompt } from '@/hooks/useMCPResources';
 
 interface ChatPromptInputProps {
   input: string;
@@ -31,8 +32,15 @@ interface ChatPromptInputProps {
   onFilesSelected?: (files: File[]) => void;
   onFileRemove?: (index: number) => void;
   enableFileAttachment?: boolean;
-  fileAccept?: string; // MIME types accepted
-  fileAttachmentTitle?: string; // Tooltip for attachment button
+  fileAccept?: string;
+  // MCP Resources props
+  selectedResources?: SelectedResource[];
+  onResourceSelected?: (serverId: string, serverName: string, resource: MCPResource) => void;
+  onResourceRemove?: (serverId: string, uri: string) => void;
+  // MCP Prompts props
+  selectedPrompts?: SelectedPrompt[];
+  onPromptSelected?: (serverId: string, serverName: string, prompt: MCPPrompt, args?: Record<string, any>) => void;
+  onPromptRemove?: (serverId: string, name: string) => void;
 }
 
 export function ChatPromptInput({
@@ -53,17 +61,50 @@ export function ChatPromptInput({
   onFileRemove,
   enableFileAttachment = false,
   fileAccept = 'image/*,audio/*',
-  fileAttachmentTitle = 'Attach files',
+  selectedResources = [],
+  onResourceSelected,
+  onResourceRemove,
+  selectedPrompts = [],
+  onPromptSelected,
+  onPromptRemove,
 }: ChatPromptInputProps) {
   const { t } = useTranslation('chat');
 
+  // Check if we have any context to show
+  const hasContext = attachedFiles.length > 0 || selectedResources.length > 0 || selectedPrompts.length > 0;
+
+  // Handle file remove with null check
+  const handleFileRemove = (index: number) => {
+    if (onFileRemove) {
+      onFileRemove(index);
+    }
+  };
+
+  // Handle resource remove with null check
+  const handleResourceRemove = (serverId: string, uri: string) => {
+    if (onResourceRemove) {
+      onResourceRemove(serverId, uri);
+    }
+  };
+
+  // Handle prompt remove with null check
+  const handlePromptRemove = (serverId: string, name: string) => {
+    if (onPromptRemove) {
+      onPromptRemove(serverId, name);
+    }
+  };
+
   return (
     <PromptInput onSubmit={onSubmit} className="max-w-3xl mx-auto w-full p-2">
-      {/* File Preview Area */}
-      {enableFileAttachment && attachedFiles.length > 0 && onFileRemove && (
-        <FilePreview
+      {/* Context Preview Area (files + MCP resources + MCP prompts) */}
+      {hasContext && (
+        <ContextPreview
+          resources={selectedResources}
+          prompts={selectedPrompts}
           files={attachedFiles}
-          onRemove={onFileRemove}
+          onRemoveResource={handleResourceRemove}
+          onRemovePrompt={handlePromptRemove}
+          onRemoveFile={handleFileRemove}
           className="border-b"
         />
       )}
@@ -86,13 +127,14 @@ export function ChatPromptInput({
             onWebSearchChange={onWebSearchChange}
             onMCPChange={onMCPChange}
           />
-          {/* Attachment Button */}
-          {enableFileAttachment && onFilesSelected && (
-            <AttachmentButton
+          {/* Add Context Menu (MCP resources + prompts + file upload) */}
+          {onFilesSelected && (
+            <AddContextMenu
               onFilesSelected={onFilesSelected}
+              onResourceSelected={onResourceSelected}
+              onPromptSelected={onPromptSelected}
               disabled={status === 'streaming'}
-              accept={fileAccept}
-              title={fileAttachmentTitle}
+              fileAccept={fileAccept}
             />
           )}
         </PromptInputTools>
@@ -105,7 +147,7 @@ export function ChatPromptInput({
             placeholder={availableModels.length === 0 ? t('model_selector.no_models') : t('model_selector.label')}
           />
           <PromptInputSubmit
-            disabled={status !== 'streaming' && !input && attachedFiles.length === 0}
+            disabled={status !== 'streaming' && !input && attachedFiles.length === 0 && selectedResources.length === 0 && selectedPrompts.length === 0}
             status={status}
           />
         </div>

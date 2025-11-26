@@ -8,6 +8,8 @@ import { getLogger } from "../../services/logging";
 import { registerConnectionHandlers } from "./connection.js";
 import { registerConfigurationHandlers } from "./configuration.js";
 import { registerToolHandlers } from "./tools.js";
+import { registerResourceHandlers } from "./resources.js";
+import { registerPromptHandlers } from "./prompts.js";
 import { registerHealthHandlers } from "./health.js";
 import { registerExtractionHandlers } from "./extraction.js";
 import { registerRegistryHandlers } from "./registry.js";
@@ -33,6 +35,8 @@ export function registerMCPHandlers() {
     registerConnectionHandlers(mcpService, configManager);
     registerConfigurationHandlers(mcpService, configManager);
     registerToolHandlers(mcpService);
+    registerResourceHandlers(mcpService);
+    registerPromptHandlers(mcpService);
     registerHealthHandlers();
     registerExtractionHandlers(mcpService);
     registerRegistryHandlers(mcpService, configManager);

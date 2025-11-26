@@ -118,5 +118,19 @@ export const mcpApi = {
 
     getAllEntries: () =>
       ipcRenderer.invoke('levante/mcp/providers/get-all-entries')
-  }
+  },
+
+  // Resource methods
+  listResources: (serverId: string) =>
+    ipcRenderer.invoke('levante/mcp/list-resources', serverId),
+
+  readResource: (serverId: string, uri: string) =>
+    ipcRenderer.invoke('levante/mcp/read-resource', serverId, uri),
+
+  // Prompt methods
+  listPrompts: (serverId: string) =>
+    ipcRenderer.invoke('levante/mcp/list-prompts', serverId),
+
+  getPrompt: (serverId: string, name: string, args?: Record<string, any>) =>
+    ipcRenderer.invoke('levante/mcp/get-prompt', serverId, name, args),
 };

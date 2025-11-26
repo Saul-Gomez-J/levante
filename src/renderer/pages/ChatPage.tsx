@@ -54,6 +54,8 @@ import type { Model } from '../../types/models';
 import { getRendererLogger } from '@/services/logger';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useMCPResources } from '@/hooks/useMCPResources';
+import type { SelectedResource, SelectedPrompt, MCPResource, MCPPrompt } from '@/hooks/useMCPResources';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
@@ -76,6 +78,18 @@ const ChatPage = () => {
   const [pendingMessageAfterStop, setPendingMessageAfterStop] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+
+  // MCP Resources hook
+  const {
+    selectedResources,
+    selectResource,
+    removeResource,
+    selectedPrompts,
+    selectPrompt,
+    removePrompt,
+    clearResources,
+    getContextString,
+  } = useMCPResources();
 
   // Chat store
   const currentSession = useChatStore((state) => state.currentSession);
@@ -367,8 +381,9 @@ const ChatPage = () => {
     // Update ref
     previousSessionIdRef.current = currentSessionId;
 
-    // Clear attachments when changing sessions
+    // Clear attachments and MCP resources when changing sessions
     setAttachedFiles([]);
+    clearResources();
 
     // If we just created this session, skip loading historical messages
     // (the messages are already in useChat state from sendMessageAI)
@@ -471,13 +486,19 @@ const ChatPage = () => {
     }
 
     // Otherwise, send a new message
-    if (input.trim() || attachedFiles.length > 0) {
-      const messageText = input;
+    if (input.trim() || attachedFiles.length > 0 || selectedResources.length > 0 || selectedPrompts.length > 0) {
+      // Build message text with MCP resource context if any
+      const resourceContext = getContextString();
+      const messageText = resourceContext
+        ? `${resourceContext}\n\n${input}`
+        : input;
       const filesToAttach = [...attachedFiles];
+      const resourcesToInclude = [...selectedResources];
 
       try {
         setInput('');
         setAttachedFiles([]); // Clear attachments immediately
+        clearResources(); // Clear MCP resources immediately
 
         // If no session exists, create one and save message for later
         if (!currentSession) {
@@ -1064,7 +1085,12 @@ const ChatPage = () => {
                 onFileRemove={handleFileRemove}
                 enableFileAttachment={enableFileAttachment}
                 fileAccept={getFileAccept()}
-                fileAttachmentTitle={getAttachmentTitle()}
+                selectedResources={selectedResources}
+                onResourceSelected={selectResource}
+                onResourceRemove={removeResource}
+                selectedPrompts={selectedPrompts}
+                onPromptSelected={selectPrompt}
+                onPromptRemove={removePrompt}
               />
             </div>
           </div>
@@ -1249,7 +1275,12 @@ const ChatPage = () => {
               onFileRemove={handleFileRemove}
               enableFileAttachment={enableFileAttachment}
               fileAccept={getFileAccept()}
-              fileAttachmentTitle={getAttachmentTitle()}
+              selectedResources={selectedResources}
+              onResourceSelected={selectResource}
+              onResourceRemove={removeResource}
+              selectedPrompts={selectedPrompts}
+              onPromptSelected={selectPrompt}
+              onPromptRemove={removePrompt}
             />
           </div>
         </>

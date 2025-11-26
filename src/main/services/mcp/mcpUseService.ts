@@ -6,6 +6,10 @@ import type {
   ToolCall,
   ToolResult,
   CodeModeConfig,
+  MCPResource,
+  MCPResourceContent,
+  MCPPrompt,
+  MCPPromptResult,
 } from "../../types/mcp.js";
 import type { MCPPreferences } from "../../../types/preferences.js";
 import { getLogger } from "../logging";
@@ -346,6 +350,192 @@ export class MCPUseService implements IMCPService {
     recommendations: string[];
   }> {
     return await diagnoseSystem();
+  }
+
+  // ==========================================
+  // MCP Resources methods
+  // ==========================================
+
+  /**
+   * List all resources available from a connected MCP server.
+   * Uses mcp-use session.listResources() API.
+   */
+  async listResources(serverId: string): Promise<MCPResource[]> {
+    const session = this.sessions.get(serverId);
+    if (!session) {
+      throw new Error(
+        `Session ${serverId} not found. Make sure to connect first.`
+      );
+    }
+
+    try {
+      // mcp-use TypeScript API: session.connector.listResources()
+      const response = await session.connector.listResources();
+      const resources = response?.resources || [];
+
+      this.logger.mcp.debug("Listed resources from server (mcp-use)", {
+        serverId,
+        resourceCount: resources?.length || 0,
+      });
+
+      // Map to our MCPResource type
+      return (resources || []).map((r: any) => ({
+        name: r.name,
+        uri: r.uri,
+        description: r.description,
+        mimeType: r.mimeType,
+        annotations: r.annotations,
+      }));
+    } catch (error) {
+      this.logger.mcp.error("Failed to list resources from server (mcp-use)", {
+        serverId,
+        error: error instanceof Error ? error.message : error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Read the content of a specific resource from an MCP server.
+   * Uses mcp-use session.readResource(uri) API.
+   */
+  async readResource(serverId: string, uri: string): Promise<MCPResourceContent> {
+    const session = this.sessions.get(serverId);
+    if (!session) {
+      throw new Error(
+        `Session ${serverId} not found. Make sure to connect first.`
+      );
+    }
+
+    try {
+      // mcp-use TypeScript API: session.connector.readResource(uri)
+      const result = await session.connector.readResource(uri);
+
+      this.logger.mcp.debug("Read resource from server (mcp-use)", {
+        serverId,
+        uri,
+        contentsCount: result?.contents?.length || 0,
+      });
+
+      return {
+        uri,
+        contents: (result?.contents || []).map((c: any) => ({
+          uri: c.uri,
+          mimeType: c.mimeType,
+          text: c.text,
+          blob: c.blob,
+        })),
+      };
+    } catch (error) {
+      this.logger.mcp.error("Failed to read resource from server (mcp-use)", {
+        serverId,
+        uri,
+        error: error instanceof Error ? error.message : error,
+      });
+      throw error;
+    }
+  }
+
+  // ==========================================
+  // MCP Prompts methods
+  // ==========================================
+
+  /**
+   * List all prompts available from a connected MCP server.
+   * Uses mcp-use session.listPrompts() API.
+   */
+  async listPrompts(serverId: string): Promise<MCPPrompt[]> {
+    const session = this.sessions.get(serverId);
+    if (!session) {
+      throw new Error(
+        `Session ${serverId} not found. Make sure to connect first.`
+      );
+    }
+
+    try {
+      // mcp-use TypeScript API: session.connector.listPrompts()
+      const response = await session.connector.listPrompts();
+
+      const prompts = response?.prompts || [];
+
+      this.logger.mcp.debug("Listed prompts from server (mcp-use)", {
+        serverId,
+        promptCount: prompts?.length || 0,
+      });
+
+      // Map to our MCPPrompt type
+      return prompts.map((p: any) => ({
+        name: p.name,
+        description: p.description,
+        arguments: p.arguments?.map((arg: any) => ({
+          name: arg.name,
+          description: arg.description,
+          required: arg.required,
+        })),
+      }));
+    } catch (error) {
+      this.logger.mcp.error("Failed to list prompts from server (mcp-use)", {
+        serverId,
+        error: error instanceof Error ? error.message : error,
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get a prompt from an MCP server with optional arguments.
+   * Uses mcp-use session.getPrompt(name, args) API.
+   */
+  async getPrompt(serverId: string, name: string, args?: Record<string, any>): Promise<MCPPromptResult> {
+    const session = this.sessions.get(serverId);
+    if (!session) {
+      throw new Error(
+        `Session ${serverId} not found. Make sure to connect first.`
+      );
+    }
+
+    try {
+      // Convert args to string values if present (MCP protocol requires strings)
+      const stringArgs = args && Object.keys(args).length > 0
+        ? Object.fromEntries(Object.entries(args).map(([k, v]) => [k, String(v)]))
+        : undefined;
+
+      this.logger.mcp.debug("Calling getPrompt", {
+        serverId,
+        name,
+        hasArgs: !!stringArgs,
+      });
+
+      // mcp-use TypeScript API: session.connector.getPrompt(name, args)
+      // Args must be an object (empty {} if no args)
+      const result = await session.connector.getPrompt(name, stringArgs || {});
+
+      this.logger.mcp.debug("Got prompt from server (mcp-use)", {
+        serverId,
+        name,
+        messagesCount: result?.messages?.length || 0,
+      });
+
+      return {
+        description: result?.description,
+        messages: (result?.messages || []).map((m: any) => ({
+          role: m.role,
+          content: {
+            type: m.content?.text ? 'text' : 'image',
+            text: m.content?.text,
+            data: m.content?.data,
+            mimeType: m.content?.mimeType,
+          },
+        })),
+      };
+    } catch (error) {
+      this.logger.mcp.error("Failed to get prompt from server (mcp-use)", {
+        serverId,
+        name,
+        error: error instanceof Error ? error.message : error,
+      });
+      throw error;
+    }
   }
 
   /**

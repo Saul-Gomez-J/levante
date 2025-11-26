@@ -47,6 +47,7 @@ export interface MCPServerConfig {
   baseUrl?: string;
   headers?: Record<string, string>;
   transport: 'stdio' | 'http' | 'sse';
+  enabled?: boolean; // Added by listServers(), not stored in JSON
 }
 
 export interface MCPConfiguration {
@@ -96,6 +97,57 @@ export interface MCPServerHealth {
 export interface MCPHealthReport {
   servers: Record<string, MCPServerHealth>;
   lastUpdated: number;
+}
+
+// MCP Resources types
+export interface MCPResource {
+  name: string;
+  uri: string;
+  description?: string;
+  mimeType?: string;
+  annotations?: {
+    audience?: ('user' | 'assistant')[];
+    priority?: number;
+    lastModified?: string;
+  };
+}
+
+export interface MCPResourceContent {
+  uri: string;
+  contents: Array<{
+    uri: string;
+    mimeType?: string;
+    text?: string;
+    blob?: ArrayBuffer;
+  }>;
+}
+
+// MCP Prompts types
+export interface MCPPromptArgument {
+  name: string;
+  description?: string;
+  required?: boolean;
+}
+
+export interface MCPPrompt {
+  name: string;
+  description?: string;
+  arguments?: MCPPromptArgument[];
+}
+
+export interface MCPPromptMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: {
+    type: 'text' | 'image';
+    text?: string;
+    data?: string;
+    mimeType?: string;
+  };
+}
+
+export interface MCPPromptResult {
+  description?: string;
+  messages: MCPPromptMessage[];
 }
 
 // Deep link types

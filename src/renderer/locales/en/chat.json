@@ -70,5 +70,29 @@
     "description": "This model consumes OpenRouter tokens. You don't need to add credits to try it, but it will still deduct credits (OpenRouter has trial credits that allow you to go approximately -$1)",
     "cancel": "Cancel",
     "continue": "Continue"
+  },
+  "add_context": {
+    "button_title": "Add context",
+    "add_from": "Add from {{server}}",
+    "upload_file": "Upload a file",
+    "loading": "Loading...",
+    "no_resources": "No resources available",
+    "prompts": "Prompts",
+    "resources": "Resources",
+    "search_mcp": "Search MCP...",
+    "no_results": "No matching servers"
+  },
+  "prompt_modal": {
+    "title": "Enter prompt inputs",
+    "no_arguments": "This prompt has no arguments",
+    "cancel": "Cancel",
+    "add": "Add prompt"
+  },
+  "preview_modal": {
+    "loading": "Loading...",
+    "error": "Error",
+    "loading_content": "Loading content...",
+    "error_loading": "Failed to load content",
+    "no_content": "No content available"
   }
 }

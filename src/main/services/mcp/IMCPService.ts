@@ -3,6 +3,10 @@ import type {
   Tool,
   ToolCall,
   ToolResult,
+  MCPResource,
+  MCPResourceContent,
+  MCPPrompt,
+  MCPPromptResult,
 } from "../../types/mcp.js";
 import type { MCPRegistry } from "./types.js";
 
@@ -103,4 +107,47 @@ export interface IMCPService {
     issues: string[];
     recommendations: string[];
   }>;
+
+  // ==========================================
+  // MCP Resources methods
+  // ==========================================
+
+  /**
+   * List all resources available from a connected MCP server.
+   * @param serverId - ID of the server to query
+   * @returns Array of available resources
+   * @throws Error if server not connected or doesn't support resources
+   */
+  listResources(serverId: string): Promise<MCPResource[]>;
+
+  /**
+   * Read the content of a specific resource from an MCP server.
+   * @param serverId - ID of the server hosting the resource
+   * @param uri - URI of the resource to read
+   * @returns Resource content with text or binary data
+   * @throws Error if server not connected or resource not found
+   */
+  readResource(serverId: string, uri: string): Promise<MCPResourceContent>;
+
+  // ==========================================
+  // MCP Prompts methods
+  // ==========================================
+
+  /**
+   * List all prompts available from a connected MCP server.
+   * @param serverId - ID of the server to query
+   * @returns Array of available prompts with their arguments
+   * @throws Error if server not connected or doesn't support prompts
+   */
+  listPrompts(serverId: string): Promise<MCPPrompt[]>;
+
+  /**
+   * Get a prompt from an MCP server with optional arguments.
+   * @param serverId - ID of the server hosting the prompt
+   * @param name - Name of the prompt to get
+   * @param args - Optional arguments to pass to the prompt
+   * @returns Prompt result with messages
+   * @throws Error if server not connected or prompt not found
+   */
+  getPrompt(serverId: string, name: string, args?: Record<string, any>): Promise<MCPPromptResult>;
 }
