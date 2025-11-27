@@ -9,7 +9,8 @@
       "icon": "home",
       "type": "local",
       "endpoint": "mcpRegistry.json",
-      "enabled": true
+      "enabled": true,
+      "homepage": "https://github.com/levante-hub/levante"
     },
     {
       "id": "aitempl",
@@ -18,7 +19,8 @@
       "icon": "star",
       "type": "api",
       "endpoint": "https://www.aitmpl.com/components.json",
-      "enabled": true
+      "enabled": true,
+      "homepage": "https://www.aitmpl.com"
     }
   ]
 }

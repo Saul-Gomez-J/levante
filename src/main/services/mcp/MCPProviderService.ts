@@ -14,6 +14,7 @@ export interface MCPProvider {
   type: 'local' | 'github' | 'api';
   endpoint: string;
   enabled: boolean;
+  homepage?: string;
   lastSynced?: string;
   serverCount?: number;
   config?: {
