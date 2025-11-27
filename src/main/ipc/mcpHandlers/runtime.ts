@@ -6,31 +6,34 @@ const logger = getLogger();
 const runtimeManager = new RuntimeManager();
 
 export function registerRuntimeHandlers() {
-    ipcMain.handle("mcp:get-runtimes", async () => {
+    ipcMain.handle("levante/mcp/get-runtimes", async () => {
         try {
-            return await runtimeManager.getInstalledRuntimes();
-        } catch (error) {
+            const data = await runtimeManager.getInstalledRuntimes();
+            return { success: true, data };
+        } catch (error: any) {
             logger.mcp.error("Failed to get runtimes", { error });
-            throw error;
+            return { success: false, error: error.message };
         }
     });
 
-    ipcMain.handle("mcp:cleanup-runtimes", async () => {
+    ipcMain.handle("levante/mcp/cleanup-runtimes", async () => {
         try {
-            // await runtimeManager.cleanupUnusedRuntimes();
-        } catch (error) {
+            await runtimeManager.cleanupUnusedRuntimes();
+            return { success: true };
+        } catch (error: any) {
             logger.mcp.error("Failed to cleanup runtimes", { error });
-            throw error;
+            return { success: false, error: error.message };
         }
     });
 
     // For testing purposes
-    ipcMain.handle("mcp:install-runtime", async (_, { type, version }) => {
+    ipcMain.handle("levante/mcp/install-runtime", async (_, { type, version }) => {
         try {
-            return await runtimeManager.installRuntime(type, version);
-        } catch (error) {
+            const data = await runtimeManager.installRuntime(type, version);
+            return { success: true, data };
+        } catch (error: any) {
             logger.mcp.error("Failed to install runtime", { error });
-            throw error;
+            return { success: false, error: error.message };
         }
     });
 }

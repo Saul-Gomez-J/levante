@@ -107,5 +107,18 @@
       "example": "Con 24 herramientas: {{baseSteps}} + (24 ÷ 5) × 2 = {{result}} pasos",
       "note": "Previene bucles infinitos mientras permite operaciones complejas"
     }
+  },
+  "runtimes": {
+    "title": "Entornos de Ejecución",
+    "description": "Gestiona los entornos de ejecución instalados para servidores MCP",
+    "auto_manage": "Levante gestiona automáticamente estos entornos de ejecución.",
+    "buttons": {
+      "install_node": "Instalar Node",
+      "install_python": "Instalar Python",
+      "refresh": "Actualizar",
+      "cleanup": "Limpiar No Usados"
+    },
+    "empty_state": "No hay entornos de ejecución instalados aún. Se instalarán automáticamente cuando sea necesario.",
+    "source": "Fuente"
   }
 }

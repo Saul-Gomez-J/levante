@@ -1,14 +1,22 @@
 import { app } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { pipeline } from 'stream/promises';
+import { createWriteStream } from 'fs';
 import { RuntimeConfig, RuntimeInfo, RuntimeType } from '../../../types/runtime';
-import { DEFAULT_NODE_VERSION, DEFAULT_PYTHON_VERSION, LEVANTE_DIR_NAME, RUNTIME_DIR_NAME } from './constants';
+import { DEFAULT_NODE_VERSION, DEFAULT_PYTHON_VERSION, LEVANTE_DIR_NAME, RUNTIME_DIR_NAME, NODE_DIST_BASE_URL } from './constants';
+
+const execAsync = promisify(exec);
 
 export class RuntimeManager {
     private runtimesPath: string;
+    private usagePath: string;
 
     constructor() {
         this.runtimesPath = path.join(app.getPath('home'), LEVANTE_DIR_NAME, RUNTIME_DIR_NAME);
+        this.usagePath = path.join(this.runtimesPath, 'usage.json');
     }
 
     /**
@@ -56,10 +64,6 @@ export class RuntimeManager {
    * Detects if a runtime is installed on the system.
    */
     async detectSystemRuntime(type: RuntimeType, version?: string): Promise<string | null> {
-        const { exec } = require('child_process');
-        const { promisify } = require('util');
-        const execAsync = promisify(exec);
-
         try {
             const command = type === 'node' ? 'node' : (process.platform === 'win32' ? 'python' : 'python3');
             const versionFlag = type === 'node' ? '-v' : '--version';
@@ -88,15 +92,6 @@ export class RuntimeManager {
      * Installs a runtime locally in the levante/runtimes directory.
      */
     async installRuntime(type: RuntimeType, version: string): Promise<string> {
-        const { NODE_DIST_BASE_URL } = require('./constants');
-        const fs = require('fs');
-        const path = require('path');
-        const { pipeline } = require('stream/promises');
-        const { createWriteStream } = require('fs');
-        const { exec } = require('child_process');
-        const { promisify } = require('util');
-        const execAsync = promisify(exec);
-
         const runtimeDir = path.join(this.runtimesPath, type, version);
 
         // Check if already installed (Node only)
@@ -128,7 +123,7 @@ export class RuntimeManager {
             if (!response.ok) throw new Error(`Failed to download Node.js: ${response.statusText}`);
             if (!response.body) throw new Error('No response body');
 
-            // @ts-ignore - fetch body is a ReadableStream
+            // @ts-ignore - fetch body is a ReadableStream (Node.js fetch vs web fetch types)
             await pipeline(response.body, createWriteStream(downloadPath));
 
             // Extract
@@ -207,7 +202,16 @@ export class RuntimeManager {
      * Registers that a server is using a specific runtime.
      */
     async registerServerUsage(serverId: string, runtimeKey: string): Promise<void> {
-        // TODO: Implement
+        const usage = await this.loadUsage();
+
+        if (!usage[runtimeKey]) {
+            usage[runtimeKey] = [];
+        }
+
+        if (!usage[runtimeKey].includes(serverId)) {
+            usage[runtimeKey].push(serverId);
+            await this.saveUsage(usage);
+        }
     }
 
     /**
@@ -215,16 +219,17 @@ export class RuntimeManager {
      */
     async getInstalledRuntimes(): Promise<RuntimeInfo[]> {
         const runtimes: RuntimeInfo[] = [];
-        const fs = require('fs');
 
         if (!fs.existsSync(this.runtimesPath)) {
             return [];
         }
 
+        const usage = await this.loadUsage();
+
         const types = fs.readdirSync(this.runtimesPath);
         for (const type of types) {
             // Skip if not a directory or hidden
-            if (type.startsWith('.')) continue;
+            if (type.startsWith('.') || type === 'usage.json' || type === 'uv') continue;
 
             const typePath = path.join(this.runtimesPath, type);
             if (!fs.statSync(typePath).isDirectory()) continue;
@@ -236,18 +241,98 @@ export class RuntimeManager {
                 const versionPath = path.join(typePath, version);
                 if (!fs.statSync(versionPath).isDirectory()) continue;
 
+                const runtimeKey = `${type}-${version}`;
+                const usedBy = usage[runtimeKey] || [];
+
                 // Basic info
                 runtimes.push({
                     type: type as RuntimeType,
                     version: version,
                     path: versionPath,
                     source: 'shared',
-                    usedBy: [], // TODO: Implement usage tracking
+                    usedBy: usedBy,
                     size: 'Unknown' // TODO: Implement size calculation
                 });
             }
         }
 
         return runtimes;
+    }
+
+    /**
+     * Removes runtimes that are not being used by any server.
+     */
+    async cleanupUnusedRuntimes(): Promise<void> {
+        if (!fs.existsSync(this.runtimesPath)) {
+            return;
+        }
+
+        const usage = await this.loadUsage();
+
+        const types = fs.readdirSync(this.runtimesPath);
+        for (const type of types) {
+            // Skip special directories
+            if (type.startsWith('.') || type === 'usage.json' || type === 'uv') continue;
+
+            const typePath = path.join(this.runtimesPath, type);
+            if (!fs.statSync(typePath).isDirectory()) continue;
+
+            const versions = fs.readdirSync(typePath);
+            for (const version of versions) {
+                if (version.startsWith('.')) continue;
+
+                const versionPath = path.join(typePath, version);
+                if (!fs.statSync(versionPath).isDirectory()) continue;
+
+                const runtimeKey = `${type}-${version}`;
+                const usedBy = usage[runtimeKey] || [];
+
+                // If not used by any server, remove it
+                if (usedBy.length === 0) {
+                    console.log(`Removing unused runtime: ${runtimeKey} at ${versionPath}`);
+
+                    // Remove directory recursively
+                    try {
+                        if (process.platform === 'win32') {
+                            await execAsync(`rmdir /s /q "${versionPath}"`);
+                        } else {
+                            await execAsync(`rm -rf "${versionPath}"`);
+                        }
+
+                        // Remove from usage tracking
+                        delete usage[runtimeKey];
+                    } catch (error) {
+                        console.error(`Failed to remove runtime ${runtimeKey}:`, error);
+                    }
+                }
+            }
+        }
+
+        // Save updated usage
+        await this.saveUsage(usage);
+    }
+
+    private async loadUsage(): Promise<Record<string, string[]>> {
+        try {
+            if (fs.existsSync(this.usagePath)) {
+                const content = fs.readFileSync(this.usagePath, 'utf-8');
+                return JSON.parse(content);
+            }
+        } catch (error) {
+            console.error('Failed to load runtime usage:', error);
+        }
+        return {};
+    }
+
+    private async saveUsage(usage: Record<string, string[]>): Promise<void> {
+        try {
+            // Ensure runtimes directory exists
+            if (!fs.existsSync(this.runtimesPath)) {
+                fs.mkdirSync(this.runtimesPath, { recursive: true });
+            }
+            fs.writeFileSync(this.usagePath, JSON.stringify(usage, null, 2), 'utf-8');
+        } catch (error) {
+            console.error('Failed to save runtime usage:', error);
+        }
     }
 }

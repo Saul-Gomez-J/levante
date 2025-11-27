@@ -107,5 +107,18 @@
       "example": "With 24 tools: {{baseSteps}} + (24 ÷ 5) × 2 = {{result}} steps",
       "note": "Prevents infinite loops while allowing complex operations"
     }
+  },
+  "runtimes": {
+    "title": "Runtimes",
+    "description": "Manage installed runtimes for MCP servers",
+    "auto_manage": "Levante automatically manages these runtimes.",
+    "buttons": {
+      "install_node": "Install Node",
+      "install_python": "Install Python",
+      "refresh": "Refresh",
+      "cleanup": "Cleanup Unused"
+    },
+    "empty_state": "No runtimes installed yet. They will be installed automatically when needed.",
+    "source": "Source"
   }
 }
