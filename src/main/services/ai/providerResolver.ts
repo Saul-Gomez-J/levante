@@ -3,6 +3,8 @@ import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createGateway } from "@ai-sdk/gateway";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import type { LanguageModelV2 } from "@ai-sdk/provider";
 import type { ProviderConfig } from "../../../types/models";
 import { getLogger } from '../logging';
 
@@ -12,7 +14,7 @@ const logger = getLogger();
  * Resolve and configure the AI model provider for a given model ID
  * Handles all provider types: OpenRouter, Vercel Gateway, Local, and Cloud providers
  */
-export async function getModelProvider(modelId: string) {
+export async function getModelProvider(modelId: string): Promise<LanguageModelV2> {
   try {
     // Get providers configuration from preferences via IPC
     const { preferencesService } = await import("../preferencesService");
@@ -172,6 +174,7 @@ function configureVercelGateway(provider: ProviderConfig, modelId: string) {
 
 /**
  * Configure OpenRouter provider
+ * Uses official @openrouter/ai-sdk-provider for full OpenRouter API compatibility
  */
 function configureOpenRouter(provider: ProviderConfig, modelId: string) {
   if (!provider.apiKey) {
@@ -180,15 +183,10 @@ function configureOpenRouter(provider: ProviderConfig, modelId: string) {
     );
   }
 
-  logger.aiSdk.debug("Creating OpenRouter provider", {
-    modelId,
-    baseURL: "https://openrouter.ai/api/v1"
-  });
+  logger.aiSdk.debug("Creating OpenRouter provider", { modelId });
 
-  const openrouter = createOpenAICompatible({
-    name: "openrouter",
+  const openrouter = createOpenRouter({
     apiKey: provider.apiKey,
-    baseURL: "https://openrouter.ai/api/v1",
   });
 
   return openrouter(modelId);

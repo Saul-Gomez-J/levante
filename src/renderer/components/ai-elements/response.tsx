@@ -3,12 +3,12 @@
 import { cn } from '@/lib/utils';
 import { type ComponentProps, memo, useEffect, useState } from 'react';
 import { Streamdown } from 'streamdown';
+import type { BundledTheme } from 'shiki';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { Mermaid } from '@/components/ui/mermaid';
 import { useStreamingContext } from '@/contexts/StreamingContext';
-import { useThemeDetector } from '@/hooks/useThemeDetector';
 
 // Custom components for proper list rendering
 const listComponents = {
@@ -75,8 +75,8 @@ export const Response = memo(
   ({ className, children, ...props }: ResponseProps) => {
     const [shouldProcessMermaid, setShouldProcessMermaid] = useState(false);
     const { streamFinished } = useStreamingContext();
-    const theme = useThemeDetector();
-    const shikiTheme = theme === 'dark' ? 'github-dark' : 'github-light';
+    // Streamdown expects [lightTheme, darkTheme] tuple
+    const shikiTheme: [BundledTheme, BundledTheme] = ['github-light', 'github-dark'];
 
     // Listen for streaming finish events
     useEffect(() => {

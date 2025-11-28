@@ -111,6 +111,10 @@ const ChartTooltipContent = React.forwardRef<
       indicator?: "line" | "dot" | "dashed"
       nameKey?: string
       labelKey?: string
+      // Props passed by Recharts Tooltip
+      payload?: any[]
+      label?: string
+      active?: boolean
     }
 >(
   (
@@ -261,9 +265,16 @@ const ChartLegend = RechartsPrimitive.Legend
 const ChartLegendContent = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> &
-    Pick<RechartsPrimitive.LegendProps, "payload" | "verticalAlign"> & {
+    Pick<RechartsPrimitive.LegendProps, "verticalAlign"> & {
       hideIcon?: boolean
       nameKey?: string
+      // payload is passed by Recharts Legend
+      payload?: Array<{
+        value: string
+        dataKey?: string
+        color?: string
+        [key: string]: any
+      }>
     }
 >(
   (
