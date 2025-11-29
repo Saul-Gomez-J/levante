@@ -20,44 +20,121 @@ export class RuntimeManager {
     }
 
     /**
+     * Returns the base path where Levante runtimes are installed.
+     */
+    getRuntimesPath(): string {
+        return this.runtimesPath;
+    }
+
+    /**
    * Ensures that the requested runtime is available.
-   * If source is 'system', it checks system path.
-   * If source is 'shared' (or system check fails), it checks local installation or installs it.
+   * Priority depends on developerMode and preferSystemRuntimes flags:
+   *
+   * Simple Mode (developerMode = false):
+   * - Levante → System → Auto-install (silent)
+   * - Prioritizes Levante for tracking and guaranteed compatibility
+   *
+   * Advanced Mode (developerMode = true):
+   * - If preferSystemRuntimes: System → Levante → Prompt
+   * - If !preferSystemRuntimes: Levante → System → Prompt
+   *
+   * If source is 'system', only checks system path (no installation).
    */
-    async ensureRuntime(config: RuntimeConfig): Promise<string> {
+    async ensureRuntime(config: RuntimeConfig, preferSystemRuntimes = false, developerMode = false): Promise<string> {
         const { type, version, source = 'shared' } = config;
 
-        // 1. If source is 'system' or not specified, try to find it on system
-        // Note: We might want to be stricter if source is explicitly 'system'
+        // 1. If source is explicitly 'system', only look in system
         if (source === 'system') {
             const systemPath = await this.detectSystemRuntime(type, version);
             if (systemPath) {
-                return systemPath; // Return directory containing bin/node or just the executable? 
-                // Usually we want the prefix path (e.g. /usr/local), but detectSystemRuntime returns executable path.
-                // Let's normalize to return the executable path for now, or the prefix.
-                // The PRD examples imply returning the path to the executable or the prefix?
-                // "Returns: ~/levante/runtimes/node/current/bin/node" -> executable path.
-                // My detectSystemRuntime returns executable path.
+                return systemPath;
             } else {
                 throw new Error(`System runtime ${type} not found`);
             }
         }
 
-        // 2. If source is 'shared' (or fallback), check if we have it installed
-        // For now, we default to 'shared' behavior if system is not explicitly requested?
-        // PRD says: "Fallback inteligente: Intenta sistema primero, luego instala compartido"
-        // So if source is NOT 'system' (meaning it's 'shared' or undefined), we should STILL check system first?
-        // "System vs Levante priority? System first (default)"
+        // 2. If source is 'shared' (default): Check preference based on mode
 
-        // So:
-        const systemPath = await this.detectSystemRuntime(type, version);
-        if (systemPath) {
-            // TODO: Check version compatibility if needed
-            return systemPath;
+        if (!developerMode) {
+            // SIMPLE MODE: Levante → System → Auto-install (silent)
+            // Prioritizes Levante for tracking and guaranteed compatibility
+
+            const levanteRuntime = this.findLevanteRuntime(type, version);
+            if (levanteRuntime) {
+                return levanteRuntime; // Use Levante runtime (trackeable)
+            }
+
+            const systemPath = await this.detectSystemRuntime(type, version);
+            if (systemPath) {
+                return systemPath; // Fallback to system
+            }
+
+            // Not found anywhere: install automatically WITHOUT prompting
+            return this.installRuntime(type, version);
+
+        } else {
+            // ADVANCED MODE: Respects preferSystemRuntimes setting
+
+            if (preferSystemRuntimes) {
+                // User prefers System: System → Levante → Prompt
+                const systemPath = await this.detectSystemRuntime(type, version);
+                if (systemPath) {
+                    return systemPath; // Use system (not tracked)
+                }
+
+                const levanteRuntime = this.findLevanteRuntime(type, version);
+                if (levanteRuntime) {
+                    return levanteRuntime; // Fallback to Levante
+                }
+
+                // Not found anywhere: throw error so UI can show confirmation dialog
+                throw new Error('RUNTIME_NOT_FOUND');
+
+            } else {
+                // User prefers Levante: Check Levante first
+                const levanteRuntime = this.findLevanteRuntime(type, version);
+                if (levanteRuntime) {
+                    return levanteRuntime; // Use Levante runtime (trackeable)
+                }
+
+                // Levante not found, check if exists in system
+                const systemPath = await this.detectSystemRuntime(type, version);
+                if (systemPath) {
+                    // System exists but user prefers Levante
+                    // Throw special error to prompt: "Download Levante runtime or use System?"
+                    const error = new Error('RUNTIME_CHOICE_REQUIRED');
+                    (error as any).systemPath = systemPath;
+                    (error as any).runtimeType = type;
+                    (error as any).runtimeVersion = version;
+                    throw error;
+                }
+
+                // Not found anywhere: throw error so UI can show install dialog
+                throw new Error('RUNTIME_NOT_FOUND');
+            }
+        }
+    }
+
+    /**
+     * Finds an installed Levante runtime without triggering installation.
+     */
+    private findLevanteRuntime(type: RuntimeType, version: string): string | null {
+        const runtimeDir = path.join(this.runtimesPath, type, version);
+
+        if (!fs.existsSync(runtimeDir)) {
+            return null;
         }
 
-        // 3. If not on system, install it
-        return this.installRuntime(type, version);
+        if (type === 'node') {
+            const binPath = process.platform === 'win32'
+                ? path.join(runtimeDir, 'node.exe')
+                : path.join(runtimeDir, 'bin', 'node');
+            return fs.existsSync(binPath) ? binPath : null;
+        } else {
+            // Python
+            const binPath = path.join(runtimeDir, 'bin', 'python3');
+            return fs.existsSync(binPath) ? binPath : null;
+        }
     }
 
     /**

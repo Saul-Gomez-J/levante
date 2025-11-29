@@ -108,10 +108,27 @@
       "note": "Previene bucles infinitos mientras permite operaciones complejas"
     }
   },
+  "developer_mode": {
+    "title": "Modo Desarrollador",
+    "label": "Controles Avanzados de Runtime",
+    "recommended": "Automático (Recomendado)",
+    "simple_desc": "Los runtimes se instalan automáticamente en segundo plano. Perfecto para comenzar.",
+    "advanced_desc": "Control total sobre instalación y configuración de runtimes. Muestra detalles técnicos y diálogos de confirmación.",
+    "warning": "El modo avanzado muestra terminología técnica y requiere confirmaciones manuales para instalaciones de runtime."
+  },
   "runtimes": {
-    "title": "Entornos de Ejecución",
-    "description": "Gestiona los entornos de ejecución instalados para servidores MCP",
+    "title": "Gestión de Runtimes",
+    "description": "Gestiona runtimes de Node.js y Python para servidores MCP. Solo visible en Modo Desarrollador.",
+    "note": "Esta sección solo está disponible cuando el Modo Desarrollador está activado.",
     "auto_manage": "Levante gestiona automáticamente estos entornos de ejecución.",
+    "preference": {
+      "title": "Prioridad de Runtime",
+      "levante": "Preferir Runtimes de Levante",
+      "levante_desc": "Descarga y gestiona runtimes en ~/levante/. Permite tracking y limpieza automática.",
+      "system": "Preferir Runtimes del Sistema",
+      "system_desc": "Usa Node/Python del sistema cuando esté disponible. No se rastrea ni gestiona.",
+      "recommended": "Recomendado"
+    },
     "buttons": {
       "install_node": "Instalar Node",
       "install_python": "Instalar Python",
@@ -119,6 +136,9 @@
       "cleanup": "Limpiar No Usados"
     },
     "empty_state": "No hay entornos de ejecución instalados aún. Se instalarán automáticamente cuando sea necesario.",
-    "source": "Fuente"
+    "source": "Fuente",
+    "used_by": "Usado por",
+    "servers_count": "servidor",
+    "servers_count_plural": "servidores"
   }
 }
