@@ -143,35 +143,3 @@ export async function migrateCloudProvidersToDynamic(
 
   return { migrated, providers: updatedProviders };
 }
-
-/**
- * Add Hugging Face provider if missing (for existing users)
- */
-export async function addHuggingFaceProvider(
-  providers: ProviderConfig[]
-): Promise<{ migrated: boolean; providers: ProviderConfig[] }> {
-  // Check if Hugging Face already exists
-  const hasHuggingFace = providers.some(p => p.id === 'huggingface');
-
-  if (hasHuggingFace) {
-    return { migrated: false, providers };
-  }
-
-  logger.models.info('Adding Hugging Face provider for existing user');
-
-  const huggingFaceProvider: ProviderConfig = {
-    id: 'huggingface',
-    name: 'Hugging Face',
-    type: 'huggingface',
-    models: [],
-    isActive: false,
-    settings: {},
-    modelSource: 'dynamic',
-    baseUrl: 'https://router.huggingface.co/v1'
-  };
-
-  return {
-    migrated: true,
-    providers: [...providers, huggingFaceProvider]
-  };
-}

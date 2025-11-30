@@ -1,7 +1,7 @@
 import type { Model, ProviderConfig } from '../../types/models';
 import type { ModelCategory, SessionType } from '../../types/modelCategories';
 import { getRendererLogger } from '@/services/logger';
-import { migrateCloudProvider, migrateCloudProvidersToDynamic, addHuggingFaceProvider } from './model/migrations';
+import { migrateCloudProvider, migrateCloudProvidersToDynamic } from './model/migrations';
 import { fetchOpenRouterModels } from './model/providers/openRouterProvider';
 import { fetchGatewayModels } from './model/providers/gatewayProvider';
 import { discoverLocalModels } from './model/providers/localProvider';
@@ -54,14 +54,6 @@ class ModelServiceImpl {
       if (dynamicMigrationResult.migrated) {
         this.providers = dynamicMigrationResult.providers;
         logger.models.info('Migrated cloud providers to dynamic model source');
-        await this.saveProviders();
-      }
-
-      // Add Hugging Face provider for existing users
-      const huggingFaceMigrationResult = await addHuggingFaceProvider(this.providers);
-      if (huggingFaceMigrationResult.migrated) {
-        this.providers = huggingFaceMigrationResult.providers;
-        logger.models.info('Added Hugging Face provider');
         await this.saveProviders();
       }
 
