@@ -161,6 +161,16 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
           }
         });
       } else {
+        // Check for runtime-specific errors that need UI intervention
+        if ((result as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' || (result as any).errorCode === 'RUNTIME_NOT_FOUND') {
+          // Throw enriched error for UI to catch and show dialog
+          const enrichedError = new Error(result.error || 'Runtime error');
+          (enrichedError as any).errorCode = (result as any).errorCode;
+          (enrichedError as any).metadata = (result as any).metadata;
+          (enrichedError as any).serverConfig = config;
+          throw enrichedError;
+        }
+
         set(state => ({
           connectionStatus: {
             ...state.connectionStatus,
@@ -170,6 +180,11 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
         }));
       }
     } catch (error) {
+      // Re-throw runtime errors for UI handling
+      if ((error as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' || (error as any).errorCode === 'RUNTIME_NOT_FOUND') {
+        throw error;
+      }
+
       console.error('Failed to connect server:', error);
       set(state => ({
         connectionStatus: {
