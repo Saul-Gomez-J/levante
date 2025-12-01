@@ -12,6 +12,7 @@ import { ImportExport } from '../config/import-export';
 import { NetworkStatus } from '../connection/connection-status';
 import { SystemDiagnosticAlert } from '../SystemDiagnosticAlert';
 import { ApiKeysModal } from '../config/api-keys-modal';
+import { RuntimeChoiceDialog, RuntimeErrorType } from '@/components/runtime/RuntimeChoiceDialog';
 import { getRendererLogger } from '@/services/logger';
 import { toast } from 'sonner';
 import { MCPServerConfig, MCPConfigField } from '@/types/mcp';
@@ -64,6 +65,24 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
     fields: [],
   });
 
+  const [runtimeDialogState, setRuntimeDialogState] = useState<{
+    isOpen: boolean;
+    errorType: RuntimeErrorType | null;
+    serverName: string;
+    serverConfig: MCPServerConfig | null;
+    metadata: {
+      systemPath?: string;
+      runtimeType?: 'node' | 'python';
+      runtimeVersion?: string;
+    };
+  }>({
+    isOpen: false,
+    errorType: null,
+    serverName: '',
+    serverConfig: null,
+    metadata: {},
+  });
+
   useEffect(() => {
     // Load initial data
     loadRegistry();
@@ -81,7 +100,23 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
     if (isActive) {
       await disconnectServer(serverId);
     } else if (server) {
-      await connectServer(server);
+      try {
+        await connectServer(server);
+      } catch (error: any) {
+        // Handle runtime-specific errors
+        if (error.errorCode === 'RUNTIME_CHOICE_REQUIRED' || error.errorCode === 'RUNTIME_NOT_FOUND') {
+          setRuntimeDialogState({
+            isOpen: true,
+            errorType: error.errorCode,
+            serverName: server.name,
+            serverConfig: error.serverConfig || server,
+            metadata: error.metadata || {},
+          });
+        } else {
+          // Other errors are already handled by store
+          logger.mcp.error('Failed to toggle server', { serverId, error: error.message });
+        }
+      }
     } else {
       // Server not configured yet, open config modal
       const registryEntry = getRegistryEntryById(serverId);
@@ -219,6 +254,53 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
     } catch (error) {
       logger.mcp.error('Failed to delete server', { serverId, error });
       toast.error(t('messages.delete_failed'));
+    }
+  };
+
+  const handleRuntimeUseSystem = async () => {
+    if (!runtimeDialogState.serverConfig) return;
+
+    try {
+      // Modify server config to use system runtime explicitly
+      const modifiedConfig = {
+        ...runtimeDialogState.serverConfig,
+        runtime: {
+          ...runtimeDialogState.serverConfig.runtime!,
+          source: 'system' as const
+        }
+      };
+
+      await connectServer(modifiedConfig);
+      toast.success(`Connected ${runtimeDialogState.serverName} using system runtime`);
+    } catch (error: any) {
+      logger.mcp.error('Failed to connect with system runtime', { error: error.message });
+      toast.error('Failed to connect with system runtime');
+    }
+  };
+
+  const handleRuntimeInstallLevante = async () => {
+    if (!runtimeDialogState.serverConfig) return;
+
+    try {
+      const toastId = toast.loading(`Installing runtime for ${runtimeDialogState.serverName}...`);
+
+      // Install runtime via IPC
+      const installResult = await window.levante.mcp.installRuntime(
+        runtimeDialogState.metadata.runtimeType!,
+        runtimeDialogState.metadata.runtimeVersion!
+      );
+
+      if (!installResult.success) {
+        throw new Error(installResult.error || 'Failed to install runtime');
+      }
+
+      // Now connect with the installed Levante runtime
+      await connectServer(runtimeDialogState.serverConfig);
+
+      toast.success(`Runtime installed and ${runtimeDialogState.serverName} connected!`, { id: toastId });
+    } catch (error: any) {
+      logger.mcp.error('Failed to install runtime', { error: error.message });
+      toast.error(`Failed to install runtime: ${error.message}`);
     }
   };
 
@@ -443,6 +525,17 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
         onSubmit={handleApiKeysSubmit}
         serverName={apiKeysModalState.serverName}
         fields={apiKeysModalState.fields}
+      />
+
+      {/* Runtime Choice Dialog */}
+      <RuntimeChoiceDialog
+        open={runtimeDialogState.isOpen}
+        onClose={() => setRuntimeDialogState({ isOpen: false, errorType: null, serverName: '', serverConfig: null, metadata: {} })}
+        errorType={runtimeDialogState.errorType!}
+        serverName={runtimeDialogState.serverName}
+        metadata={runtimeDialogState.metadata}
+        onUseSystem={handleRuntimeUseSystem}
+        onInstallLevante={handleRuntimeInstallLevante}
       />
     </div>
   );

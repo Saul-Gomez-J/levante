@@ -407,23 +407,6 @@ interface RuntimeResolver {
   - If `preferSystemRuntimes: true`: System → Levante
   - If `preferSystemRuntimes: false`: Levante → System
 
-#### mcp.json Extension (per server)
-```json
-{
-  "mcpServers": {
-    "filesystem": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem"],
-      "runtime": {
-        "type": "node",
-        "source": "system",
-        "resolvedPath": "/usr/local/bin/npx",
-        "version": "22.10.0"
-      }
-    }
-  }
-}
-```
 
 ### 4.5 IPC Handlers
 

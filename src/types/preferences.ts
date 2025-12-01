@@ -34,8 +34,12 @@ export interface UIPreferences {
     maxSteps: number;
   };
   hasAcceptedFreeModelWarning?: boolean;
+  developerMode: boolean;
   security: {
     encryptApiKeys: boolean;
+  };
+  runtime: {
+    preferSystemRuntimes: boolean;
   };
 }
 
@@ -79,7 +83,11 @@ export const DEFAULT_PREFERENCES: UIPreferences = {
     maxSteps: 20
   },
   hasAcceptedFreeModelWarning: false,
+  developerMode: false,
   security: {
     encryptApiKeys: false
+  },
+  runtime: {
+    preferSystemRuntimes: false
   }
 };

@@ -92,6 +92,16 @@ export const mcpApi = {
   verifyPackage: (packageName: string) =>
     ipcRenderer.invoke('levante/mcp/verify-package', packageName),
 
+  // Runtime management
+  getRuntimes: () =>
+    ipcRenderer.invoke('levante/mcp/get-runtimes'),
+
+  cleanupRuntimes: () =>
+    ipcRenderer.invoke('levante/mcp/cleanup-runtimes'),
+
+  installRuntime: (type: string, version: string) =>
+    ipcRenderer.invoke('levante/mcp/install-runtime', { type, version }),
+
   // Provider management
   providers: {
     list: () =>

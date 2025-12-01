@@ -8,6 +8,7 @@ import { registerHealthHandlers } from "./health.js";
 import { registerExtractionHandlers } from "./extraction.js";
 import { registerRegistryHandlers } from "./registry.js";
 import { registerProviderHandlers } from "./providers.js";
+import { registerRuntimeHandlers } from "./runtime.js";
 
 // Create singleton instances
 const mcpService = new MCPService();
@@ -23,6 +24,7 @@ export function registerMCPHandlers() {
   registerExtractionHandlers(mcpService);
   registerRegistryHandlers(mcpService, configManager);
   registerProviderHandlers();
+  registerRuntimeHandlers();
 
   logger.mcp.info("MCP IPC handlers registered successfully");
 }

@@ -31,6 +31,7 @@ import type {
   ValidationResult,
   ProviderValidationConfig,
 } from './types';
+import type { RuntimeInfo, RuntimeType } from '../types/runtime';
 
 // Import API modules
 import { appApi } from './api/app';
@@ -172,6 +173,9 @@ export interface LevanteAPI {
     extractConfig: (text: string) => Promise<{ success: boolean; data?: any; error?: string; suggestion?: string }>;
     checkStructuredOutputSupport: () => Promise<{ success: boolean; data?: { supported: boolean; currentModel: string; currentProvider: string; supportedModels: any[] }; error?: string }>;
     verifyPackage: (packageName: string) => Promise<{ success: boolean; data?: { exists: boolean; status: number }; error?: string }>;
+    getRuntimes: () => Promise<{ success: boolean; data?: RuntimeInfo[]; error?: string }>;
+    cleanupRuntimes: () => Promise<{ success: boolean; error?: string }>;
+    installRuntime: (type: RuntimeType, version: string) => Promise<{ success: boolean; data?: string; error?: string }>;
     providers: {
       list: () => Promise<{ success: boolean; data?: any[]; error?: string }>;
       sync: (providerId: string) => Promise<{ success: boolean; data?: { providerId: string; entries: any[]; syncedAt: string }; error?: string }>;

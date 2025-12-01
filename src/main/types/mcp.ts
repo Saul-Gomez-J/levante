@@ -1,3 +1,5 @@
+import { RuntimeConfig } from '../../types/runtime';
+
 export interface MCPServerConfig {
   id: string;
   name?: string;
@@ -8,6 +10,7 @@ export interface MCPServerConfig {
   headers?: Record<string, string>;
   transport: 'stdio' | 'http' | 'sse';
   enabled?: boolean;  // Added by listServers(), not stored in JSON
+  runtime?: RuntimeConfig;
 }
 
 export interface MCPConfiguration {

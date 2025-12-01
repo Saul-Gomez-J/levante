@@ -107,5 +107,38 @@
       "example": "With 24 tools: {{baseSteps}} + (24 ÷ 5) × 2 = {{result}} steps",
       "note": "Prevents infinite loops while allowing complex operations"
     }
+  },
+  "developer_mode": {
+    "title": "Developer Mode",
+    "label": "Advanced Runtime Controls",
+    "recommended": "Automatic (Recommended)",
+    "simple_desc": "Runtimes install automatically in the background. Perfect for getting started.",
+    "advanced_desc": "Full control over runtime installation and configuration. Shows technical details and confirmation dialogs.",
+    "warning": "Advanced mode shows technical terminology and requires manual confirmations for runtime installations."
+  },
+  "runtimes": {
+    "title": "Runtime Management",
+    "description": "Manage Node.js and Python runtimes for MCP servers. Only visible in Developer Mode.",
+    "note": "This section is only available when Developer Mode is enabled.",
+    "auto_manage": "Levante automatically manages these runtimes.",
+    "preference": {
+      "title": "Runtime Priority",
+      "levante": "Prefer Levante Runtimes",
+      "levante_desc": "Downloads and manages runtimes in ~/levante/. Enables tracking and automatic cleanup.",
+      "system": "Prefer System Runtimes",
+      "system_desc": "Uses system Node/Python when available. Not tracked or managed by Levante.",
+      "recommended": "Recommended"
+    },
+    "buttons": {
+      "install_node": "Install Node",
+      "install_python": "Install Python",
+      "refresh": "Refresh",
+      "cleanup": "Cleanup Unused"
+    },
+    "empty_state": "No runtimes installed yet. They will be installed automatically when needed.",
+    "source": "Source",
+    "used_by": "Used by",
+    "servers_count": "server",
+    "servers_count_plural": "servers"
   }
 }
