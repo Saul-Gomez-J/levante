@@ -1,5 +1,4 @@
-import { RefreshCw, Home, Star } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Home, Star } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -14,8 +13,6 @@ interface ProviderFilterProps {
   providers: MCPProvider[];
   selectedProvider: string | 'all';
   onSelectProvider: (id: string | 'all') => void;
-  onSyncProvider: (id: string) => void;
-  loadingProviders: Record<string, boolean>;
 }
 
 const providerIcons: Record<string, React.ReactNode> = {
@@ -27,58 +24,37 @@ export function ProviderFilter({
   providers,
   selectedProvider,
   onSelectProvider,
-  onSyncProvider,
-  loadingProviders,
 }: ProviderFilterProps) {
   const { t } = useTranslation('mcp');
 
   const enabledProviders = providers.filter(p => p.enabled);
-  const currentProvider = selectedProvider === 'all'
-    ? null
-    : providers.find(p => p.id === selectedProvider);
-
-  const isLoading = selectedProvider !== 'all' && loadingProviders[selectedProvider];
 
   return (
-    <div className="flex items-center gap-2">
-      <Select
-        value={selectedProvider}
-        onValueChange={(value) => onSelectProvider(value as string | 'all')}
-      >
-        <SelectTrigger className="w-[180px]">
-          <SelectValue placeholder={t('store.filter_provider')} />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">
-            {t('store.all_providers')}
+    <Select
+      value={selectedProvider}
+      onValueChange={(value) => onSelectProvider(value as string | 'all')}
+    >
+      <SelectTrigger className="w-[180px]">
+        <SelectValue placeholder={t('store.filter_provider')} />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="all">
+          {t('store.all_providers')}
+        </SelectItem>
+        {enabledProviders.map((provider) => (
+          <SelectItem key={provider.id} value={provider.id}>
+            <div className="flex items-center gap-2">
+              {providerIcons[provider.icon] || <Home className="h-4 w-4" />}
+              <span>{provider.name}</span>
+              {provider.serverCount !== undefined && provider.serverCount > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  ({provider.serverCount})
+                </span>
+              )}
+            </div>
           </SelectItem>
-          {enabledProviders.map((provider) => (
-            <SelectItem key={provider.id} value={provider.id}>
-              <div className="flex items-center gap-2">
-                {providerIcons[provider.icon] || <Home className="h-4 w-4" />}
-                <span>{provider.name}</span>
-                {provider.serverCount !== undefined && provider.serverCount > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    ({provider.serverCount})
-                  </span>
-                )}
-              </div>
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      {selectedProvider !== 'all' && currentProvider && (
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={() => onSyncProvider(selectedProvider)}
-          disabled={isLoading}
-          title={t('store.sync_provider')}
-        >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-        </Button>
-      )}
-    </div>
+        ))}
+      </SelectContent>
+    </Select>
   );
 }

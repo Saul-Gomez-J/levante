@@ -456,10 +456,11 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
     }
   },
 
-  // Sync all enabled providers
+  // Sync all enabled providers (excluding local providers which are already loaded via static imports)
   syncAllProviders: async () => {
     const { providers } = get();
-    const enabledProviders = providers.filter(p => p.enabled);
+    // Only sync external providers (api/github), not local ones
+    const enabledProviders = providers.filter(p => p.enabled && p.type !== 'local');
 
     for (const provider of enabledProviders) {
       await get().syncProvider(provider.id);

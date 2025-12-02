@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useMCPStore } from '@/stores/mcpStore';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Loader2, AlertCircle, Store, Wrench } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Plus, Loader2, AlertCircle, Store, Wrench, Search } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { IntegrationCard } from './integration-card';
 import { ProviderFilter } from './provider-filter';
@@ -29,6 +30,7 @@ interface StoreLayoutProps {
 
 export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
   const { t } = useTranslation('mcp');
+  const hasSyncedProviders = useRef(false);
   const {
     registry,
     activeServers,
@@ -46,7 +48,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
     providers,
     selectedProvider,
     loadingProviders,
-    syncProvider,
+    syncAllProviders,
     setSelectedProvider,
     getFilteredEntries,
     getRegistryEntryById
@@ -56,6 +58,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
   const [isFullJSONEditorOpen, setIsFullJSONEditorOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [installingServerId, setInstallingServerId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [apiKeysModalState, setApiKeysModalState] = useState<{
     isOpen: boolean;
     entryId: string | null;
@@ -94,15 +97,37 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
     entryId: null,
   });
 
+  // Filter entries by provider and search query
+  const getFilteredAndSearchedEntries = () => {
+    const filteredByProvider = getFilteredEntries();
+
+    if (!searchQuery.trim()) {
+      return filteredByProvider;
+    }
+
+    const query = searchQuery.toLowerCase();
+    return filteredByProvider.filter(entry =>
+      entry.name.toLowerCase().includes(query) ||
+      entry.description.toLowerCase().includes(query) ||
+      entry.category.toLowerCase().includes(query)
+    );
+  };
+
   useEffect(() => {
     // Load initial data
     loadRegistry();
     loadActiveServers();
 
+    // Sync all providers once per session
+    if (!hasSyncedProviders.current) {
+      hasSyncedProviders.current = true;
+      syncAllProviders();
+    }
+
     // Refresh connection status every 30 seconds
     const interval = setInterval(refreshConnectionStatus, 30000);
     return () => clearInterval(interval);
-  }, [loadRegistry, loadActiveServers, refreshConnectionStatus]);
+  }, [loadRegistry, loadActiveServers, refreshConnectionStatus, syncAllProviders]);
 
   const handleToggleServer = async (serverId: string) => {
     const server = activeServers.find(s => s.id === serverId);
@@ -581,17 +606,40 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
                 providers={providers}
                 selectedProvider={selectedProvider}
                 onSelectProvider={setSelectedProvider}
-                onSyncProvider={syncProvider}
-                loadingProviders={loadingProviders}
               />
               <Badge variant="outline">
-                {t('store.available', { count: getFilteredEntries().length })}
+                {t('store.available', { count: getFilteredAndSearchedEntries().length })}
               </Badge>
             </div>
           </div>
+
+          {/* Search Bar */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder={t('store.search_placeholder')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          {/* No Results Message */}
+          {getFilteredAndSearchedEntries().length === 0 && searchQuery.trim() && (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-2">{t('store.no_results')}</p>
+              <p className="text-sm text-muted-foreground">
+                {t('store.no_results_description')}
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Registry Cards */}
-            {getFilteredEntries().map(entry => {
+            {getFilteredAndSearchedEntries().map(entry => {
               const server = activeServers.find(s => s.id === entry.id);
               const status = connectionStatus[entry.id] || 'disconnected';
               const isActive = !!server;

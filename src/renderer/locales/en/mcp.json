@@ -22,7 +22,10 @@
     "syncing": "Syncing...",
     "last_synced": "Last synced: {{date}}",
     "provider_settings": "Provider settings",
-    "from_provider": "From {{provider}}"
+    "from_provider": "From {{provider}}",
+    "search_placeholder": "Search integrations...",
+    "no_results": "No integrations found",
+    "no_results_description": "Try adjusting your search or filters"
   },
   "server": {
     "configure": "Configure",
