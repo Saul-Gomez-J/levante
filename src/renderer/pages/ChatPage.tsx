@@ -1229,24 +1229,24 @@ const ChatPage = () => {
 
                             // Log for debugging UI resources
                             if (part.state === 'output-available') {
-                              logger.aiSdk.info('[AI-SDK] Tool output received in UI', {
-                                toolName,
-                                outputType: typeof part.output,
-                                outputIsObject: typeof part.output === 'object',
-                                outputKeys: typeof part.output === 'object' && part.output ? Object.keys(part.output) : [],
-                                hasUIResources: uiResources.length > 0,
-                                uiResourceCount: uiResources.length,
-                                rawOutput: JSON.stringify(part.output)?.substring(0, 500)
-                              });
+                              // logger.aiSdk.info('[AI-SDK] Tool output received in UI', {
+                              //   toolName,
+                              //   outputType: typeof part.output,
+                              //   outputIsObject: typeof part.output === 'object',
+                              //   outputKeys: typeof part.output === 'object' && part.output ? Object.keys(part.output) : [],
+                              //   hasUIResources: uiResources.length > 0,
+                              //   uiResourceCount: uiResources.length,
+                              //   rawOutput: JSON.stringify(part.output)?.substring(0, 500)
+                              // });
 
-                              if (uiResources.length > 0) {
-                                logger.aiSdk.info('[AI-SDK] Extracted UI resources', {
-                                  count: uiResources.length,
-                                  firstResourceUri: uiResources[0]?.resource?.uri,
-                                  firstResourceHasText: !!uiResources[0]?.resource?.text,
-                                  firstResourceMimeType: uiResources[0]?.resource?.mimeType
-                                });
-                              }
+                              // if (uiResources.length > 0) {
+                              //   logger.aiSdk.info('[AI-SDK] Extracted UI resources', {
+                              //     count: uiResources.length,
+                              //     firstResourceUri: uiResources[0]?.resource?.uri,
+                              //     firstResourceHasText: !!uiResources[0]?.resource?.text,
+                              //     firstResourceMimeType: uiResources[0]?.resource?.mimeType
+                              //   });
+                              // }
                             }
 
                             return (

@@ -73,6 +73,9 @@ export function AddContextMenu({
   const [loadingServers, setLoadingServers] = useState<Record<string, boolean>>({});
   const [serverContent, setServerContent] = useState<Record<string, ServerContent>>({});
 
+  // Dropdown open state
+  const [isOpen, setIsOpen] = useState(false);
+
   // Search state for filtering servers
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -83,40 +86,53 @@ export function AddContextMenu({
     prompt: MCPPrompt;
   } | null>(null);
 
+  // Load connected MCP servers
+  const loadServers = async () => {
+    try {
+      // Get all servers
+      const serversResult = await window.levante.mcp.listServers();
+      if (!serversResult.success || !serversResult.data) {
+        return;
+      }
+
+      // Get connection status
+      const statusResult = await window.levante.mcp.connectionStatus();
+      const connectionStatus = statusResult.data || {};
+
+      // Map servers with connection status
+      const servers: MCPServer[] = serversResult.data
+        .filter(s => s.enabled !== false) // Only enabled servers
+        .map(s => ({
+          id: s.id,
+          name: s.name || s.id,
+          connected: connectionStatus[s.id] === 'connected',
+        }))
+        .filter(s => s.connected); // Only show connected servers
+
+      setMcpServers(servers);
+    } catch (error) {
+      logger.mcp.error('Failed to load MCP servers', {
+        error: error instanceof Error ? error.message : error,
+      });
+    }
+  };
+
   // Fetch connected MCP servers on mount
   useEffect(() => {
-    const loadServers = async () => {
-      try {
-        // Get all servers
-        const serversResult = await window.levante.mcp.listServers();
-        if (!serversResult.success || !serversResult.data) {
-          return;
-        }
-
-        // Get connection status
-        const statusResult = await window.levante.mcp.connectionStatus();
-        const connectionStatus = statusResult.data || {};
-
-        // Map servers with connection status
-        const servers: MCPServer[] = serversResult.data
-          .filter(s => s.enabled !== false) // Only enabled servers
-          .map(s => ({
-            id: s.id,
-            name: s.name || s.id,
-            connected: connectionStatus[s.id] === 'connected',
-          }))
-          .filter(s => s.connected); // Only show connected servers
-
-        setMcpServers(servers);
-      } catch (error) {
-        logger.mcp.error('Failed to load MCP servers', {
-          error: error instanceof Error ? error.message : error,
-        });
-      }
-    };
-
     loadServers();
   }, []);
+
+  // Handle dropdown open/close - refresh server status when opening
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (open) {
+      // Refresh MCP server connection status every time the menu opens
+      loadServers();
+    } else {
+      // Clear search when closing
+      setSearchQuery('');
+    }
+  };
 
   // Handle hovering over a server to load resources and prompts
   const handleServerHover = async (serverId: string) => {
@@ -235,7 +251,7 @@ export function AddContextMenu({
 
   return (
     <>
-      <DropdownMenu>
+      <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
         <DropdownMenuTrigger asChild>
           <Button
             type="button"

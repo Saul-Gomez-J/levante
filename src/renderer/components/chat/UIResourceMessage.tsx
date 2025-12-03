@@ -182,7 +182,7 @@ export function UIResourceMessage({
     return (
       <div
         className={cn(
-          'relative group rounded-lg overflow-hidden border bg-background',
+          'relative group rounded-lg overflow-hidden bg-background',
           'min-h-[100px]',
           className
         )}
@@ -270,7 +270,7 @@ export function UIResourceMessage({
 
         {/* Floating PiP window */}
         <div
-          className="fixed bottom-4 right-4 z-40 w-[400px] h-[300px] rounded-lg overflow-hidden border shadow-lg bg-background group"
+          className="fixed bottom-4 right-4 z-40 w-[400px] h-[300px] rounded-lg overflow-hidden shadow-lg bg-background group"
           style={{ resize: 'both' }}
         >
           <div className="h-6 bg-muted flex items-center justify-between px-2 cursor-move">
