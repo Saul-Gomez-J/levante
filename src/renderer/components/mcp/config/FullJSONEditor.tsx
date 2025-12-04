@@ -76,8 +76,17 @@ export function FullJSONEditor({ onClose, onConfigChange }: FullJSONEditorProps)
 
         const config = serverConfig as any;
 
-        // Accept both "transport" and "type" for compatibility
-        const transportType = config.transport || config.type;
+        // Auto-detect transport type if not provided
+        let transportType = config.transport || config.type;
+
+        if (!transportType) {
+          // Auto-detect based on configuration
+          if (config.command) {
+            transportType = 'stdio';
+          } else if (config.url || config.baseUrl) {
+            transportType = 'http';
+          }
+        }
 
         if (!transportType || !['stdio', 'http', 'sse'].includes(transportType)) {
           return { valid: false, error: t('config.validation.invalid_transport', { serverId }) };
@@ -111,8 +120,17 @@ export function FullJSONEditor({ onClose, onConfigChange }: FullJSONEditorProps)
 
           const config = serverConfig as any;
 
-          // Accept both "transport" and "type" for compatibility
-          const transportType = config.transport || config.type;
+          // Auto-detect transport type if not provided
+          let transportType = config.transport || config.type;
+
+          if (!transportType) {
+            // Auto-detect based on configuration
+            if (config.command) {
+              transportType = 'stdio';
+            } else if (config.url || config.baseUrl) {
+              transportType = 'http';
+            }
+          }
 
           if (!transportType || !['stdio', 'http', 'sse'].includes(transportType)) {
             return { valid: false, error: t('config.validation.invalid_disabled_transport', { serverId }) };

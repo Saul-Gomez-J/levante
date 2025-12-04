@@ -74,10 +74,20 @@ export function FullJSONEditorPanel({ isOpen, onClose }: FullJSONEditorPanelProp
     }));
 
     try {
+      // Auto-detect transport type if not provided
+      let transportType = serverConfig.transport || serverConfig.type;
+      if (!transportType) {
+        if (serverConfig.command) {
+          transportType = 'stdio';
+        } else if (serverConfig.url || serverConfig.baseUrl) {
+          transportType = 'http';
+        }
+      }
+
       const testConfig: MCPServerConfig = {
         id: `test-${serverId}-${Date.now()}`,
         name: serverConfig.name || serverId,
-        transport: serverConfig.transport || serverConfig.type,
+        transport: transportType,
         command: serverConfig.command,
         args: serverConfig.args || [],
         env: serverConfig.env || {},

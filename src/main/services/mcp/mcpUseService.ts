@@ -61,24 +61,42 @@ export class MCPUseService implements IMCPService {
 
       const codeModeConfig = this.resolveCodeModeConfig(config);
 
+      // Auto-detect transport type if not provided (fallback safety)
+      let transport = config.transport;
+      if (!transport) {
+        if (config.command) {
+          transport = 'stdio';
+        } else if (config.baseUrl || (config as any).url) {
+          transport = 'http';
+        }
+      }
+
+      // Normalize url → baseUrl
+      const baseUrl = config.baseUrl || (config as any).url;
+
       this.logger.mcp.info("Attempting to connect to server (mcp-use)", {
         serverId: config.id,
+        transport,
         codeMode: codeModeConfig.enabled,
         executor: codeModeConfig.executor,
       });
 
+      if (!transport) {
+        throw new Error('Cannot determine transport type from config');
+      }
+
       // Build server configuration for mcp-use
       const serverConfig: Record<string, any> = {
-        transport: config.transport,
+        transport,
       };
 
       // Add transport-specific configuration
-      if (config.transport === 'stdio') {
+      if (transport === 'stdio') {
         serverConfig.command = config.command;
         serverConfig.args = config.args;
         serverConfig.env = config.env;
-      } else if (config.transport === 'http' || config.transport === 'sse') {
-        serverConfig.url = config.baseUrl;
+      } else if (transport === 'http' || transport === 'sse') {
+        serverConfig.url = baseUrl;
         if (config.headers) {
           serverConfig.headers = config.headers;
         }
