@@ -1,4 +1,4 @@
-import { MCPClient, type MCPClientOptions } from 'mcp-use';
+import { MCPClient, type MCPClientOptions, Logger as MCPLogger } from 'mcp-use';
 import type { MCPSession } from 'mcp-use';
 import type {
   MCPServerConfig,
@@ -32,6 +32,7 @@ export class MCPUseService implements IMCPService {
   private sessions: Map<string, MCPSession> = new Map();
   private globalPreferences: MCPPreferences;
   private runtimeResolver: RuntimeResolver;
+  private static mcpLoggerConfigured = false;
 
   constructor(preferences: MCPPreferences) {
     this.globalPreferences = preferences;
@@ -42,6 +43,22 @@ export class MCPUseService implements IMCPService {
       new PreferencesService(),
       this.logger
     );
+  }
+
+  /**
+   * Initialize the mcp-use Logger. Must be called before using MCPClient.
+   * This configures Winston for the mcp-use library.
+   */
+  async initialize(): Promise<void> {
+    if (!MCPUseService.mcpLoggerConfigured) {
+      try {
+        await MCPLogger.configure({ console: false }); // Disable console to avoid duplicate logs
+        MCPUseService.mcpLoggerConfigured = true;
+        this.logger.mcp.debug('mcp-use Logger configured');
+      } catch (error) {
+        this.logger.mcp.warn('Failed to configure mcp-use Logger', { error });
+      }
+    }
   }
 
   async connectServer(config: MCPServerConfig): Promise<void> {

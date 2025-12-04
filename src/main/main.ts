@@ -49,7 +49,7 @@ app.whenReady().then(async () => {
   await initializeServices();
 
   // Register all IPC handlers
-  registerIPCHandlers(() => mainWindow);
+  await registerIPCHandlers(() => mainWindow);
 
   // Create main window
   mainWindow = createMainWindow();

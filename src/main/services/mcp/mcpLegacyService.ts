@@ -38,6 +38,13 @@ export class MCPLegacyService implements IMCPService {
     );
   }
 
+  /**
+   * Initialize the MCP service. No-op for legacy service.
+   */
+  async initialize(): Promise<void> {
+    // No initialization needed for legacy service
+  }
+
   async connectServer(config: MCPServerConfig): Promise<void> {
     // Normalize transport for configs that still use `type` (Claude compatibility)
     const transport = config.transport || (config as any).type;

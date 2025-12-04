@@ -108,7 +108,7 @@ export async function initializeServices(): Promise<void> {
  * Should be called after service initialization
  * @param getMainWindow - Function to get current main window reference
  */
-export function registerIPCHandlers(getMainWindow: () => BrowserWindow | null): void {
+export async function registerIPCHandlers(getMainWindow: () => BrowserWindow | null): Promise<void> {
   // Service-specific handlers
   setupDatabaseHandlers();
   setupPreferencesHandlers();
@@ -118,7 +118,7 @@ export function registerIPCHandlers(getMainWindow: () => BrowserWindow | null): 
   setupLoggerHandlers();
   setupWizardHandlers();
   setupProfileHandlers();
-  registerMCPHandlers();
+  await registerMCPHandlers();
   registerDebugHandlers();
 
   // App-level handlers

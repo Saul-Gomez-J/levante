@@ -18,6 +18,12 @@ import type { MCPRegistry } from "./types.js";
  */
 export interface IMCPService {
   /**
+   * Initialize the MCP service. Must be called before using other methods.
+   * This allows for async initialization like configuring loggers.
+   */
+  initialize(): Promise<void>;
+
+  /**
    * Connect to an MCP server with the given configuration.
    * @param config - Server configuration including transport details
    * @throws Error if connection fails
