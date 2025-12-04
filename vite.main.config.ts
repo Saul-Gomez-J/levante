@@ -24,6 +24,9 @@ export default defineConfig(({ command }) => ({
         // Optional native modules (ws dependencies)
         'bufferutil',
         'utf-8-validate',
+        // Winston logger (used by mcp-use)
+        'winston',
+        /^winston\/.*/,
       ]
     }
   },
