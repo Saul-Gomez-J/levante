@@ -74,12 +74,15 @@ export function CustomMCPConfig({ serverId, onClose, initialConfig, onConfigChan
           env: {}
         }, null, 2));
       } else if (server) {
+        // Normalize url → baseUrl for compatibility
+        const baseUrl = server.baseUrl || (server as any).url;
+
         const config = {
           type: server.transport,
           command: server.command,
           args: server.args || [],
           env: server.env || {},
-          ...(server.baseUrl && { baseUrl: server.baseUrl }),
+          ...(baseUrl && { baseUrl }),
           ...(server.headers && { headers: server.headers })
         };
         setJsonText(JSON.stringify(config, null, 2));
@@ -137,15 +140,31 @@ export function CustomMCPConfig({ serverId, onClose, initialConfig, onConfigChan
         return { valid: false, error: t('config.validation.missing_name') };
       }
 
-      if (!parsed.type) {
+      // Auto-detect transport type if not provided
+      let transportType = parsed.type || parsed.transport;
+
+      if (!transportType) {
+        // Auto-detect based on configuration
+        if (parsed.command) {
+          transportType = 'stdio';
+        } else if (parsed.url || parsed.baseUrl) {
+          transportType = 'http';
+        }
+      }
+
+      if (!transportType) {
         return { valid: false, error: t('config.validation.missing_type') };
       }
 
-      if (parsed.type === 'stdio' && !parsed.command) {
+      if (!['stdio', 'http', 'sse'].includes(transportType)) {
+        return { valid: false, error: t('config.validation.invalid_transport') };
+      }
+
+      if (transportType === 'stdio' && !parsed.command) {
         return { valid: false, error: t('config.validation.missing_command') };
       }
 
-      if ((parsed.type === 'http' || parsed.type === 'sse') && !parsed.baseUrl) {
+      if ((transportType === 'http' || transportType === 'sse') && !parsed.baseUrl && !parsed.url) {
         return { valid: false, error: t('config.validation.missing_baseurl') };
       }
 

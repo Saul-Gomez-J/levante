@@ -277,8 +277,8 @@ Adding `'wasm-unsafe-eval'` is a **measured and justified security decision** th
 
 - [CSP Warnings](./CSP-WARNINGS.md) - Expected CSP warnings
 - [CSP Audit](./csp-audit.md) - Full CSP analysis
-- [Phase 1 Summary](./FASE-1-IMPLEMENTATION-SUMMARY.md) - Electron security baseline
-- [Phase 2 Summary](./FASE-2-IMPLEMENTATION-SUMMARY.md) - IPC security hardening
+- [Phase 1 Summary](../archive/FASE-1-IMPLEMENTATION-SUMMARY.md) - Electron security baseline (archived)
+- [Phase 2 Summary](../archive/FASE-2-IMPLEMENTATION-SUMMARY.md) - IPC security hardening (archived)
 
 ---
 

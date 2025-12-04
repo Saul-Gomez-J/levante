@@ -116,6 +116,64 @@ export class PreferencesService {
           type: ['string', 'null'],
           default: null
         },
+        ai: {
+          type: 'object',
+          properties: {
+            baseSteps: { type: 'number', minimum: 1, default: 5 },
+            maxSteps: { type: 'number', minimum: 1, default: 20 }
+          },
+          required: ['baseSteps', 'maxSteps'],
+          default: { baseSteps: 5, maxSteps: 20 }
+        },
+        hasAcceptedFreeModelWarning: {
+          type: 'boolean',
+          default: false
+        },
+        developerMode: {
+          type: 'boolean',
+          default: false
+        },
+        runtime: {
+          type: 'object',
+          properties: {
+            preferSystemRuntimes: { type: 'boolean', default: false }
+          },
+          required: ['preferSystemRuntimes'],
+          default: { preferSystemRuntimes: false }
+        },
+        mcp: {
+          type: 'object',
+          properties: {
+            sdk: { type: 'string', enum: ['mcp-use', 'official-sdk'], default: 'mcp-use' },
+            codeModeDefaults: {
+              type: 'object',
+              properties: {
+                enabled: { type: 'boolean', default: true },
+                executor: { type: 'string', enum: ['vm', 'e2b'], default: 'vm' },
+                vmTimeout: { type: 'number', default: 30000 },
+                vmMemoryLimit: { type: 'number', default: 134217728 }
+              },
+              required: ['enabled', 'executor', 'vmTimeout', 'vmMemoryLimit'],
+              default: {
+                enabled: true,
+                executor: 'vm',
+                vmTimeout: 30000,
+                vmMemoryLimit: 134217728
+              }
+            },
+            e2bApiKey: { type: 'string' }
+          },
+          required: ['sdk', 'codeModeDefaults'],
+          default: {
+            sdk: 'mcp-use',
+            codeModeDefaults: {
+              enabled: true,
+              executor: 'vm',
+              vmTimeout: 30000,
+              vmMemoryLimit: 134217728
+            }
+          }
+        },
         security: {
           type: 'object',
           properties: {

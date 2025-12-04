@@ -147,7 +147,7 @@ Si actualizas y aparecen MÁS warnings:
 ## Referencias
 
 - [CSP Audit](./csp-audit.md) - Análisis completo de CSP
-- [Fase 1 Summary](./FASE-1-IMPLEMENTATION-SUMMARY.md) - Cambios implementados
+- [Fase 1 Summary](../archive/FASE-1-IMPLEMENTATION-SUMMARY.md) - Cambios implementados (archived)
 - [MDN: CSP script-src](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/script-src)
 
 ---

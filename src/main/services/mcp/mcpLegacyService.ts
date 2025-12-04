@@ -15,6 +15,9 @@ import { diagnoseSystem } from "./diagnostics.js";
 import { loadMCPRegistry } from "./registry.js";
 import type { MCPRegistry } from "./types";
 import type { IMCPService } from "./IMCPService.js";
+import { RuntimeResolver } from "../runtime/RuntimeResolver.js";
+import { RuntimeManager } from "../runtime/runtimeManager.js";
+import { PreferencesService } from "../preferencesService.js";
 
 /**
  * Legacy MCP service implementation using @modelcontextprotocol/sdk.
@@ -25,8 +28,30 @@ import type { IMCPService } from "./IMCPService.js";
 export class MCPLegacyService implements IMCPService {
   private logger = getLogger();
   private clients: Map<string, Client> = new Map();
+  private runtimeResolver: RuntimeResolver;
+
+  constructor() {
+    // Initialize RuntimeResolver for automatic runtime management
+    this.runtimeResolver = new RuntimeResolver(
+      new RuntimeManager(),
+      new PreferencesService(),
+      this.logger
+    );
+  }
 
   async connectServer(config: MCPServerConfig): Promise<void> {
+    // Normalize transport for configs that still use `type` (Claude compatibility)
+    const transport = config.transport || (config as any).type;
+    const normalizedConfig = { ...config, transport };
+
+    // Resolve runtime if needed (stdio transport only)
+    // This handles auto-detection, installation, and path resolution
+    if (transport === 'stdio' && this.runtimeResolver.needsRuntime(normalizedConfig)) {
+      config = await this.runtimeResolver.resolve(normalizedConfig);
+    } else {
+      config = normalizedConfig;
+    }
+
     const transportType = config.transport || (config as any).type;
     const baseUrl = config.baseUrl || (config as any).url;
 
