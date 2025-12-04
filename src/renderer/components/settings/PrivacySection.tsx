@@ -46,6 +46,10 @@ export const PrivacySection = () => {
           },
         });
       } else {
+        // User declined - update backend to set sharing_data = false
+        // This is the last analytics call before stopping
+        window.levante.analytics?.disableAnalytics?.().catch(() => { });
+
         // User declined - save that too (but don't generate UUID)
         await window.levante.profile.update({
           analytics: {

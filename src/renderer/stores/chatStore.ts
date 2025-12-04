@@ -375,6 +375,9 @@ export const useChatStore = create<ChatStore>()(
               if (userMessageCount === 1) {
                 logger.database.debug('Generating title for first message');
 
+                // Track conversation creation (fire and forget)
+                window.levante.analytics?.trackConversation?.().catch(() => { });
+
                 const titleResult = await window.levante.db.generateTitle(content);
 
                 if (titleResult.success && titleResult.data) {

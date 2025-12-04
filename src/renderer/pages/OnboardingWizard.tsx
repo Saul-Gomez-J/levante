@@ -133,6 +133,15 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
               anonymousUserId: existingId || crypto.randomUUID(),
             },
           });
+
+          // Track user record creation (await to ensure it completes before reload)
+          console.log('[Onboarding] Tracking user...');
+          try {
+            await window.levante.analytics?.trackUser?.();
+            console.log('[Onboarding] User tracked successfully');
+          } catch (e) {
+            console.error('[Onboarding] Failed to track user', e);
+          }
         } else {
           // User declined - save that too (but don't generate UUID)
           await window.levante.profile.update({
@@ -218,8 +227,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
         setValidationStatus('invalid');
         setValidationError(
           result.data?.error ||
-            result.error ||
-            'Validation failed. Please check your credentials.'
+          result.error ||
+          'Validation failed. Please check your credentials.'
         );
       }
     } catch (error) {
@@ -312,8 +321,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
         setValidationStatus('invalid');
         setValidationError(
           result.data?.error ||
-            result.error ||
-            'OAuth validation failed'
+          result.error ||
+          'OAuth validation failed'
         );
         console.error('OAuth validation failed', result);
         return;

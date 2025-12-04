@@ -376,11 +376,11 @@ class ModelServiceImpl {
           // Cache for O(1) lookup
           this.classificationCache.set(model.id, classification);
 
-          logger.models.debug('Model classified', {
-            modelId: model.id,
-            category: classification.category,
-            capabilities: classification.capabilities
-          });
+          // logger.models.debug('Model classified', {
+          //   modelId: model.id,
+          //   category: classification.category,
+          //   capabilities: classification.capabilities
+          // });
         } catch (error) {
           logger.models.warn('Failed to classify model, using defaults', {
             modelId: model.id,
@@ -449,6 +449,10 @@ class ModelServiceImpl {
       provider.selectedModelIds = provider.models.filter(m => m.isSelected).map(m => m.id);
       provider.lastModelSync = Date.now();
       await this.saveProviders();
+
+      // Track provider stats (fire and forget)
+      const selectedCount = provider.selectedModelIds?.length || 0;
+      window.levante.analytics?.trackProvider?.(provider.name, selectedCount).catch(() => { });
 
       return models;
     } catch (error) {

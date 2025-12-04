@@ -85,10 +85,10 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   // Load active servers from configuration
   loadActiveServers: async () => {
     set({ isLoading: true, error: null });
-    
+
     try {
       const result = await window.levante.mcp.listServers();
-      
+
       if (result.success && result.data) {
         set({ activeServers: result.data });
         // Also refresh connection status
@@ -108,7 +108,7 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   refreshConnectionStatus: async () => {
     try {
       const result = await window.levante.mcp.connectionStatus();
-      
+
       if (result.success && result.data) {
         set({ connectionStatus: result.data });
       }
@@ -160,6 +160,9 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
             };
           }
         });
+
+        // Track MCP activation
+        window.levante.analytics?.trackMCP?.(config.name || config.id, 'active').catch(() => { });
       } else {
         // Check for runtime-specific errors that need UI intervention
         if ((result as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' || (result as any).errorCode === 'RUNTIME_NOT_FOUND') {
@@ -243,13 +246,16 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   // Add a new server
   addServer: async (config: MCPServerConfig) => {
     set({ isLoading: true, error: null });
-    
+
     try {
       const result = await window.levante.mcp.addServer(config);
-      
+
       if (result.success) {
         // Reload active servers
         await get().loadActiveServers();
+
+        // Track MCP installation/activation
+        window.levante.analytics?.trackMCP?.(config.name || config.id, 'active').catch(() => { });
       } else {
         set({ error: result.error || 'Failed to add server' });
       }
@@ -264,15 +270,15 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   // Update a server configuration
   updateServer: async (serverId: string, config: Partial<Omit<MCPServerConfig, 'id'>>) => {
     set({ isLoading: true, error: null });
-    
+
     try {
       const result = await window.levante.mcp.updateServer(serverId, config);
-      
+
       if (result.success) {
         // Update local state
         set(state => ({
-          activeServers: state.activeServers.map(server => 
-            server.id === serverId 
+          activeServers: state.activeServers.map(server =>
+            server.id === serverId
               ? { ...server, ...config }
               : server
           )
@@ -291,14 +297,22 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   // Remove a server
   removeServer: async (serverId: string) => {
     set({ isLoading: true, error: null });
-    
+
     try {
       // First disconnect if connected
       await get().disconnectServer(serverId);
-      
+
+      // Get server info for analytics before removal
+      const server = get().getServerById(serverId);
+
       const result = await window.levante.mcp.removeServer(serverId);
-      
+
       if (result.success) {
+        // Track MCP removal
+        if (server) {
+          window.levante.analytics?.trackMCP?.(server.name || server.id, 'removed').catch(() => { });
+        }
+
         set(state => ({
           activeServers: state.activeServers.filter(s => s.id !== serverId),
           connectionStatus: {
@@ -320,10 +334,10 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   // Import configuration
   importConfiguration: async (config: any) => {
     set({ isLoading: true, error: null });
-    
+
     try {
       const result = await window.levante.mcp.importConfiguration(config);
-      
+
       if (result.success) {
         // Reload everything
         await get().loadActiveServers();
@@ -342,7 +356,7 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   exportConfiguration: async () => {
     try {
       const result = await window.levante.mcp.exportConfiguration();
-      
+
       if (result.success) {
         return result.data;
       } else {
