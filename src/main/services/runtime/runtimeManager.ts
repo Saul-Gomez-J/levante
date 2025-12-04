@@ -190,10 +190,12 @@ export class RuntimeManager {
         fs.mkdirSync(runtimeDir, { recursive: true });
 
         if (type === 'node') {
-            const platform = process.platform;
             const arch = process.arch; // 'x64', 'arm64'
-            const extension = platform === 'win32' ? 'zip' : 'tar.gz';
-            const fileName = `node-v${version}-${platform}-${arch}.${extension}`;
+            const isWindows = process.platform === 'win32';
+            const extension = isWindows ? 'zip' : 'tar.gz';
+            // Node.js uses 'win' not 'win32' in download URLs
+            const platformName = isWindows ? 'win' : process.platform;
+            const fileName = `node-v${version}-${platformName}-${arch}.${extension}`;
             const url = `${NODE_DIST_BASE_URL}/v${version}/${fileName}`;
             const downloadPath = path.join(runtimeDir, fileName);
 
@@ -209,12 +211,17 @@ export class RuntimeManager {
 
             // Extract
             console.log(`Extracting Node.js to ${runtimeDir}...`);
-            if (extension === 'tar.gz') {
-                await execAsync(`tar -xzf "${downloadPath}" -C "${runtimeDir}" --strip-components=1`);
+            if (isWindows) {
+                // Windows: Use PowerShell to extract zip
+                const extractDir = path.join(runtimeDir, 'temp_extract');
+                await execAsync(`powershell -Command "Expand-Archive -Path '${downloadPath}' -DestinationPath '${extractDir}' -Force"`);
+                // Move contents from nested folder (node-v22.11.0-win-x64) to runtimeDir
+                const nestedFolder = path.join(extractDir, `node-v${version}-${platformName}-${arch}`);
+                await execAsync(`powershell -Command "Move-Item -Path '${nestedFolder}\\*' -Destination '${runtimeDir}' -Force"`);
+                // Cleanup temp folder
+                await execAsync(`powershell -Command "Remove-Item -Path '${extractDir}' -Recurse -Force"`);
             } else {
-                // Windows zip extraction (simplified)
-                // In a real app we might use a library or powershell
-                throw new Error('Windows extraction not yet implemented');
+                await execAsync(`tar -xzf "${downloadPath}" -C "${runtimeDir}" --strip-components=1`);
             }
 
             // Cleanup
@@ -229,7 +236,8 @@ export class RuntimeManager {
             // Python installation via uv
             // 1. Install uv if not present
             const uvPath = path.join(this.runtimesPath, 'uv');
-            const uvBin = path.join(uvPath, 'bin', 'uv');
+            // Note: UV_INSTALL_DIR places binaries directly in the directory, not in a 'bin' subdirectory
+            const uvBin = path.join(uvPath, 'uv');
 
             if (!fs.existsSync(uvBin)) {
                 console.log('Installing uv...');
