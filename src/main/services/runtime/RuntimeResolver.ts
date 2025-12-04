@@ -39,6 +39,13 @@ export class RuntimeResolver {
    * @throws Error if runtime installation fails
    */
   async resolve(config: MCPServerConfig): Promise<MCPServerConfig> {
+    // Special case: uv/uvx commands need uv installed, not Python runtime
+    // uv manages its own isolated Python environments internally
+    const command = config.command?.toLowerCase();
+    if (command === 'uvx' || command === 'uv') {
+      return this.resolveUv(config, command);
+    }
+
     // Auto-detect runtime based on command if not specified
     const configWithRuntime = this.autoDetectRuntime(config);
 
@@ -91,6 +98,48 @@ export class RuntimeResolver {
   }
 
   /**
+   * Resolves uv/uvx command by ensuring uv is installed.
+   * uv manages its own isolated Python environments - no need for Levante Python runtime.
+   *
+   * @param config - Server configuration with uv or uvx command
+   * @param command - The command ('uv' or 'uvx')
+   * @returns Modified config with uv/uvx path resolved
+   */
+  private async resolveUv(config: MCPServerConfig, command: string): Promise<MCPServerConfig> {
+    try {
+      this.logger.mcp.info(`Resolving ${command} for server`, {
+        serverId: config.id
+      });
+
+      // Ensure uv is available (will install if needed)
+      // ensureUvx installs uv which includes both uv and uvx binaries
+      const uvxPath = await this.runtimeManager.ensureUvx();
+
+      // Get the correct binary path (uv or uvx)
+      const binPath = command === 'uv'
+        ? uvxPath.replace(/uvx(\.exe)?$/, process.platform === 'win32' ? 'uv.exe' : 'uv')
+        : uvxPath;
+
+      // Create modified config with resolved path
+      const modifiedConfig = { ...config };
+      modifiedConfig.command = binPath;
+
+      this.logger.mcp.info(`${command} resolved successfully`, {
+        serverId: config.id,
+        command: binPath
+      });
+
+      return modifiedConfig;
+    } catch (error) {
+      this.logger.mcp.error(`Failed to resolve ${command}`, {
+        serverId: config.id,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Auto-detects runtime requirements based on command.
    *
    * @param config - Server configuration
@@ -121,8 +170,8 @@ export class RuntimeResolver {
         command: config.command
       });
     }
-    // Detect Python commands
-    else if (command === 'uvx' || command === 'python' || command === 'python3') {
+    // Detect Python commands (uvx is handled separately in resolve())
+    else if (command === 'python' || command === 'python3') {
       configCopy.runtime = {
         type: 'python',
         version: DEFAULT_PYTHON_VERSION
@@ -205,10 +254,8 @@ export class RuntimeResolver {
         binDir,
         process.platform === 'win32' ? 'npx.cmd' : 'npx'
       );
-    } else if (command === 'uvx') {
-      // uvx: keep uvx as-is (installed separately)
-      // No modification needed
     } else {
+      // Note: uvx is handled separately in resolveUvx() before this method is called
       // Script execution: prepend runtime to args
       modifiedConfig.args = [command, ...(modifiedConfig.args || [])];
       modifiedConfig.command = runtimeExecutable;
@@ -282,7 +329,7 @@ export class RuntimeResolver {
     }
 
     const command = config.command.toLowerCase();
-    const runtimeCommands = ['npx', 'node', 'uvx', 'python', 'python3'];
+    const runtimeCommands = ['npx', 'node', 'uv', 'uvx', 'python', 'python3'];
 
     return runtimeCommands.includes(command);
   }

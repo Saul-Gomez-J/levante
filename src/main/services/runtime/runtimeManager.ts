@@ -451,6 +451,85 @@ export class RuntimeManager {
         await this.saveUsage(usage);
     }
 
+    /**
+     * Ensures uv/uvx is available and returns the path to uvx executable.
+     * uv is installed in ~/levante/runtimes/uv/
+     */
+    async ensureUvx(): Promise<string> {
+        // First check if uv is already installed in Levante runtimes
+        const uvDir = path.join(this.runtimesPath, 'uv');
+        const isWindows = process.platform === 'win32';
+        const uvxBin = isWindows
+            ? path.join(uvDir, 'uvx.exe')
+            : path.join(uvDir, 'uvx');
+
+        if (fs.existsSync(uvxBin)) {
+            return uvxBin;
+        }
+
+        // Check if uvx exists in system PATH
+        try {
+            const whichCommand = isWindows ? 'where uvx' : 'which uvx';
+            const { stdout } = await execAsync(whichCommand);
+            const systemPath = stdout.trim().split('\n')[0];
+            if (systemPath && fs.existsSync(systemPath)) {
+                return systemPath;
+            }
+        } catch {
+            // Not in system PATH
+        }
+
+        // Install uv (which includes uvx)
+        console.log('Installing uv/uvx...');
+        await this.installUv();
+
+        if (fs.existsSync(uvxBin)) {
+            return uvxBin;
+        }
+
+        throw new Error('Failed to install uvx. Please install uv manually: https://docs.astral.sh/uv/');
+    }
+
+    /**
+     * Installs uv (which includes uvx) using the official installer.
+     * Installs to ~/levante/runtimes/uv/
+     */
+    private async installUv(): Promise<void> {
+        const uvDir = path.join(this.runtimesPath, 'uv');
+        fs.mkdirSync(uvDir, { recursive: true });
+
+        const isWindows = process.platform === 'win32';
+
+        if (isWindows) {
+            // Windows: Use PowerShell installer with custom install dir
+            // UV_INSTALL_DIR sets where uv installs binaries
+            const installScript = `
+                $env:UV_INSTALL_DIR = '${uvDir.replace(/\\/g, '\\\\')}';
+                irm https://astral.sh/uv/install.ps1 | iex
+            `;
+            await execAsync(`powershell -ExecutionPolicy Bypass -Command "${installScript}"`);
+        } else {
+            // macOS/Linux: Use shell installer with custom install dir
+            const installCommand = `curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR="${uvDir}" sh`;
+            await execAsync(installCommand);
+        }
+
+        console.log('uv/uvx installed successfully');
+    }
+
+    /**
+     * Gets the path to uvx if installed, or null if not found.
+     */
+    getUvxPath(): string | null {
+        const uvDir = path.join(this.runtimesPath, 'uv');
+        const isWindows = process.platform === 'win32';
+        const uvxBin = isWindows
+            ? path.join(uvDir, 'uvx.exe')
+            : path.join(uvDir, 'uvx');
+
+        return fs.existsSync(uvxBin) ? uvxBin : null;
+    }
+
     private async loadUsage(): Promise<Record<string, string[]>> {
         try {
             if (fs.existsSync(this.usagePath)) {
