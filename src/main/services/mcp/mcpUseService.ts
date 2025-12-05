@@ -17,6 +17,9 @@ import { diagnoseSystem } from "./diagnostics.js";
 import { loadMCPRegistry } from "./registry.js";
 import type { MCPRegistry } from "./types";
 import type { IMCPService } from "./IMCPService.js";
+import { RuntimeResolver } from "../runtime/RuntimeResolver.js";
+import { RuntimeManager } from "../runtime/runtimeManager.js";
+import { PreferencesService } from "../preferencesService.js";
 
 /**
  * Modern MCP service implementation using mcp-use framework.
@@ -29,33 +32,65 @@ export class MCPUseService implements IMCPService {
   private clients: Map<string, MCPClient> = new Map();
   private sessions: Map<string, MCPSession> = new Map();
   private globalPreferences: MCPPreferences;
+  private runtimeResolver: RuntimeResolver;
 
   constructor(preferences: MCPPreferences) {
     this.globalPreferences = preferences;
+
+    // Initialize RuntimeResolver for automatic runtime management
+    this.runtimeResolver = new RuntimeResolver(
+      new RuntimeManager(),
+      new PreferencesService(),
+      this.logger
+    );
   }
 
   async connectServer(config: MCPServerConfig): Promise<void> {
     try {
+      // Normalize transport for configs that still use `type` (Claude compatibility)
+      const transport = config.transport || (config as any).type;
+      const normalizedConfig = { ...config, transport };
+
+      // Resolve runtime if needed (stdio transport only)
+      // This handles auto-detection, installation, and path resolution
+      if (transport === 'stdio' && this.runtimeResolver.needsRuntime(normalizedConfig)) {
+        config = await this.runtimeResolver.resolve(normalizedConfig);
+      } else {
+        config = normalizedConfig;
+      }
+
       const codeModeConfig = this.resolveCodeModeConfig(config);
+
+      // Auto-detect transport type if not provided (already normalized above, but fallback)
+      const finalTransport = config.transport ||
+        (config.command ? 'stdio' : (config.baseUrl || (config as any).url) ? 'http' : null);
+
+      // Normalize url → baseUrl
+      const baseUrl = config.baseUrl || (config as any).url;
 
       this.logger.mcp.info("Attempting to connect to server (mcp-use)", {
         serverId: config.id,
+        transport: finalTransport,
         codeMode: codeModeConfig.enabled,
         executor: codeModeConfig.executor,
       });
 
+      if (!finalTransport) {
+        throw new Error('Cannot determine transport type from config');
+      }
+
       // Build server configuration for mcp-use
       const serverConfig: Record<string, any> = {
-        transport: config.transport,
+        transport: finalTransport,
       };
 
       // Add transport-specific configuration
-      if (config.transport === 'stdio') {
+      if (finalTransport === 'stdio') {
         serverConfig.command = config.command;
         serverConfig.args = config.args;
         serverConfig.env = config.env;
-      } else if (config.transport === 'http' || config.transport === 'sse') {
-        serverConfig.url = config.baseUrl;
+      } else if (finalTransport === 'http' || finalTransport === 'sse') {
+        serverConfig.url = baseUrl;
         if (config.headers) {
           serverConfig.headers = config.headers;
         }
