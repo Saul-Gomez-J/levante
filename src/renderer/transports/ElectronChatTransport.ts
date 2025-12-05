@@ -30,7 +30,6 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
   constructor(
     private defaultOptions: {
       model?: string;
-      webSearch?: boolean;
       enableMCP?: boolean;
     } = {}
   ) {}
@@ -55,10 +54,8 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
     const bodyObj = (body || {}) as Record<string, any>;
     const model =
       (bodyObj.model as string) || this.defaultOptions.model || "openai/gpt-4o";
-    const webSearch =
-      (bodyObj.webSearch as boolean) ?? this.defaultOptions.webSearch ?? false;
     const enableMCP =
-      (bodyObj.enableMCP as boolean) ?? this.defaultOptions.enableMCP ?? false;
+      (bodyObj.enableMCP as boolean) ?? this.defaultOptions.enableMCP ?? true;
     const attachments = bodyObj.attachments; // Extract attachments directly from body
 
     logger.aiSdk.debug("Transport body received", {
@@ -111,7 +108,6 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
     const request: ChatRequest = {
       messages: messagesWithAttachments,
       model,
-      webSearch,
       enableMCP,
     };
 
@@ -383,7 +379,6 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
  * ```tsx
  * const transport = createElectronChatTransport({
  *   model: 'openai/gpt-4o',
- *   webSearch: false,
  *   enableMCP: true
  * });
  *
@@ -392,7 +387,6 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
  */
 export function createElectronChatTransport(options?: {
   model?: string;
-  webSearch?: boolean;
   enableMCP?: boolean;
 }): ElectronChatTransport {
   return new ElectronChatTransport(options);

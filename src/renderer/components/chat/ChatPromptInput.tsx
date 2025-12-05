@@ -18,9 +18,7 @@ interface ChatPromptInputProps {
   input: string;
   onInputChange: (value: string) => void;
   onSubmit: (e: React.FormEvent) => void;
-  webSearch: boolean;
   enableMCP: boolean;
-  onWebSearchChange: (enabled: boolean) => void;
   onMCPChange: (enabled: boolean) => void;
   model: string;
   onModelChange: (modelId: string) => void;
@@ -47,9 +45,7 @@ export function ChatPromptInput({
   input,
   onInputChange,
   onSubmit,
-  webSearch,
   enableMCP,
-  onWebSearchChange,
   onMCPChange,
   model,
   onModelChange,
@@ -122,9 +118,7 @@ export function ChatPromptInput({
       <PromptInputToolbar className="p-0 border-none">
         <PromptInputTools>
           <ToolsMenu
-            webSearch={webSearch}
             enableMCP={enableMCP}
-            onWebSearchChange={onWebSearchChange}
             onMCPChange={onMCPChange}
           />
           {/* Add Context Menu (MCP resources + prompts + file upload) */}

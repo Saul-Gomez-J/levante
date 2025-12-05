@@ -76,7 +76,14 @@ export class AttachmentStorage {
       await fs.writeFile(filePath, buffer);
 
       // Determine attachment type from MIME
-      const type = mimeType.startsWith('image/') ? 'image' : 'audio';
+      let type: 'image' | 'audio' | 'video' = 'audio'; // default fallback
+      if (mimeType.startsWith('image/')) {
+        type = 'image';
+      } else if (mimeType.startsWith('video/')) {
+        type = 'video';
+      } else if (mimeType.startsWith('audio/')) {
+        type = 'audio';
+      }
 
       // Create attachment metadata
       const attachment: MessageAttachment = {

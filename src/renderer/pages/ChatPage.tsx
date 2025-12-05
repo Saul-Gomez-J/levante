@@ -59,6 +59,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useMCPResources } from '@/hooks/useMCPResources';
 import type { SelectedResource, SelectedPrompt, MCPResource, MCPPrompt } from '@/hooks/useMCPResources';
+import { usePreference } from '@/hooks/usePreferences';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
@@ -70,8 +71,7 @@ const ChatPage = () => {
   const { t } = useTranslation('chat');
   const [input, setInput] = useState('');
   const [model, setModel] = useState<string>('');
-  const [webSearch, setWebSearch] = useState(false);
-  const [enableMCP, setEnableMCP] = useState(false);
+  const [enableMCP, setEnableMCP] = usePreference('enableMCP');
   const [availableModels, setAvailableModels] = useState<Model[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [userName, setUserName] = useState<string>(t('welcome.default_user_name'));
@@ -218,8 +218,7 @@ const ChatPage = () => {
     () =>
       createElectronChatTransport({
         model: model || 'openai/gpt-4o',
-        webSearch,
-        enableMCP,
+        enableMCP: enableMCP ?? true,
       }),
     [] // Keep same transport instance
   );
@@ -228,10 +227,9 @@ const ChatPage = () => {
   useEffect(() => {
     transport.updateOptions({
       model: model || 'openai/gpt-4o',
-      webSearch,
-      enableMCP,
+      enableMCP: enableMCP ?? true,
     });
-  }, [model, webSearch, enableMCP, transport]);
+  }, [model, enableMCP, transport]);
 
   // Use AI SDK native useChat hook
   const {
@@ -1074,9 +1072,7 @@ const ChatPage = () => {
                 input={input}
                 onInputChange={setInput}
                 onSubmit={handleSubmit}
-                webSearch={webSearch}
-                enableMCP={enableMCP}
-                onWebSearchChange={setWebSearch}
+                enableMCP={enableMCP ?? true}
                 onMCPChange={setEnableMCP}
                 model={model}
                 onModelChange={handleModelChange}
@@ -1317,9 +1313,7 @@ const ChatPage = () => {
               input={input}
               onInputChange={setInput}
               onSubmit={handleSubmit}
-              webSearch={webSearch}
-              enableMCP={enableMCP}
-              onWebSearchChange={setWebSearch}
+              enableMCP={enableMCP ?? true}
               onMCPChange={setEnableMCP}
               model={model}
               onModelChange={handleModelChange}
