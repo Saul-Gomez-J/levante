@@ -59,6 +59,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { useMCPResources } from '@/hooks/useMCPResources';
 import type { SelectedResource, SelectedPrompt, MCPResource, MCPPrompt } from '@/hooks/useMCPResources';
+import { usePreference } from '@/hooks/usePreferences';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
@@ -70,8 +71,7 @@ const ChatPage = () => {
   const { t } = useTranslation('chat');
   const [input, setInput] = useState('');
   const [model, setModel] = useState<string>('');
-  const [webSearch, setWebSearch] = useState(false);
-  const [enableMCP, setEnableMCP] = useState(false);
+  const [enableMCP, setEnableMCP] = usePreference('enableMCP');
   const [availableModels, setAvailableModels] = useState<Model[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [userName, setUserName] = useState<string>(t('welcome.default_user_name'));
@@ -124,23 +124,39 @@ const ChatPage = () => {
     }
 
     const sessionType = currentSession.session_type;
+    let filtered: Model[] = [];
 
     if (sessionType === 'chat') {
       // Chat session - only show chat and multimodal chat models
-      return availableModels.filter(m => {
+      filtered = availableModels.filter(m => {
         const taskType = m.taskType;
         return !taskType || taskType === 'chat' || taskType === 'image-text-to-text';
       });
     } else if (sessionType === 'inference') {
       // Inference session - only show inference models
-      return availableModels.filter(m => {
+      filtered = availableModels.filter(m => {
         const taskType = m.taskType;
         return taskType && taskType !== 'chat' && taskType !== 'image-text-to-text';
       });
+    } else {
+      // Fallback - show all models
+      filtered = availableModels;
     }
 
-    // Fallback - show all models
-    return availableModels;
+    // ALWAYS include the session's current model, even if not in filtered list
+    // This allows continuing conversations with the same model
+    if (currentSession.model) {
+      const currentModel = availableModels.find(m => m.id === currentSession.model);
+      if (currentModel && !filtered.find(m => m.id === currentModel.id)) {
+        logger.core.info('Adding session model to filtered list', {
+          model: currentSession.model,
+          sessionType
+        });
+        filtered = [currentModel, ...filtered];
+      }
+    }
+
+    return filtered;
   }, [availableModels, currentSession]);
 
   // Enable file attachments for models that support or require visual inputs
@@ -218,8 +234,7 @@ const ChatPage = () => {
     () =>
       createElectronChatTransport({
         model: model || 'openai/gpt-4o',
-        webSearch,
-        enableMCP,
+        enableMCP: enableMCP ?? true,
       }),
     [] // Keep same transport instance
   );
@@ -228,10 +243,9 @@ const ChatPage = () => {
   useEffect(() => {
     transport.updateOptions({
       model: model || 'openai/gpt-4o',
-      webSearch,
-      enableMCP,
+      enableMCP: enableMCP ?? true,
     });
-  }, [model, webSearch, enableMCP, transport]);
+  }, [model, enableMCP, transport]);
 
   // Use AI SDK native useChat hook
   const {
@@ -418,6 +432,17 @@ const ChatPage = () => {
       setMessages([]);
     }
   }, [currentSession?.id, loadHistoricalMessages, setMessages]);
+
+  // Sync model with current session when session changes
+  useEffect(() => {
+    if (currentSession?.model) {
+      logger.core.info('Syncing model from session', {
+        sessionId: currentSession.id,
+        model: currentSession.model
+      });
+      setModel(currentSession.model);
+    }
+  }, [currentSession?.id, currentSession?.model]);
 
   // Handle model change with session type validation
   const handleModelChange = (newModelId: string) => {
@@ -1074,9 +1099,7 @@ const ChatPage = () => {
                 input={input}
                 onInputChange={setInput}
                 onSubmit={handleSubmit}
-                webSearch={webSearch}
-                enableMCP={enableMCP}
-                onWebSearchChange={setWebSearch}
+                enableMCP={enableMCP ?? true}
                 onMCPChange={setEnableMCP}
                 model={model}
                 onModelChange={handleModelChange}
@@ -1317,9 +1340,7 @@ const ChatPage = () => {
               input={input}
               onInputChange={setInput}
               onSubmit={handleSubmit}
-              webSearch={webSearch}
-              enableMCP={enableMCP}
-              onWebSearchChange={setWebSearch}
+              enableMCP={enableMCP ?? true}
               onMCPChange={setEnableMCP}
               model={model}
               onModelChange={handleModelChange}

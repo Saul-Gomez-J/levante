@@ -8,7 +8,7 @@
  */
 
 import { Button } from '@/components/ui/button';
-import { PaperclipIcon, XIcon, ImageIcon, MicIcon } from 'lucide-react';
+import { PaperclipIcon, XIcon, ImageIcon, MicIcon, VideoIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MessageAttachment } from '../../../types/database';
 
@@ -26,7 +26,7 @@ interface AttachmentButtonProps {
 
 export function AttachmentButton({
   onFilesSelected,
-  accept = 'image/*,audio/*',
+  accept = 'image/*,audio/*,video/*',
   disabled = false,
   multiple = true,
   title,
@@ -110,10 +110,11 @@ function FilePreviewItem({ file, onRemove }: FilePreviewItemProps) {
   // Determine file type icon
   const isImage = mimeType.startsWith('image/');
   const isAudio = mimeType.startsWith('audio/');
-  const Icon = isImage ? ImageIcon : isAudio ? MicIcon : PaperclipIcon;
+  const isVideo = mimeType.startsWith('video/');
+  const Icon = isImage ? ImageIcon : isVideo ? VideoIcon : isAudio ? MicIcon : PaperclipIcon;
 
-  // Create preview URL for images
-  const previewUrl = isFile && isImage ? URL.createObjectURL(file) : null;
+  // Create preview URL for images and videos
+  const previewUrl = isFile && (isImage || isVideo) ? URL.createObjectURL(file) : null;
 
   return (
     <div
@@ -124,13 +125,22 @@ function FilePreviewItem({ file, onRemove }: FilePreviewItemProps) {
     >
       {/* Preview or Icon */}
       <div className="shrink-0">
-        {previewUrl ? (
+        {previewUrl && isImage ? (
           <img
             src={previewUrl}
             alt={filename}
             className="size-10 rounded object-cover"
             onLoad={() => {
               // Cleanup blob URL after image loads
+              if (previewUrl) URL.revokeObjectURL(previewUrl);
+            }}
+          />
+        ) : previewUrl && isVideo ? (
+          <video
+            src={previewUrl}
+            className="size-10 rounded object-cover"
+            onLoadedData={() => {
+              // Cleanup blob URL after video loads
               if (previewUrl) URL.revokeObjectURL(previewUrl);
             }}
           />

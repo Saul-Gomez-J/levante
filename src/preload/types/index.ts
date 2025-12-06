@@ -6,7 +6,6 @@ import type { ValidationResult, ProviderValidationConfig } from '../../types/wiz
 export interface ChatRequest {
   messages: UIMessage[];
   model: string;
-  webSearch: boolean;
   enableMCP?: boolean;
 }
 
