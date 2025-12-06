@@ -64,6 +64,14 @@ export class UserProfileService {
               occupation: { type: 'string' },
               aboutUser: { type: 'string' }
             }
+          },
+          analytics: {
+            type: 'object',
+            properties: {
+              hasConsented: { type: 'boolean' },
+              consentedAt: { type: 'string' },
+              anonymousUserId: { type: 'string' }
+            }
           }
         }
       });

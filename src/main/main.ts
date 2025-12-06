@@ -10,6 +10,7 @@ import { initializeLogger } from "./services/logging";
 import { updateService } from "./services/updateService";
 import { deepLinkService } from "./services/deepLinkService";
 import { oauthCallbackServer } from "./services/oauthCallbackServer";
+import { analyticsService } from "./services/analytics";
 import { createApplicationMenu } from "./menu";
 
 // Lifecycle modules
@@ -53,6 +54,9 @@ app.whenReady().then(async () => {
 
   // Create main window
   mainWindow = createMainWindow();
+
+  // Track app open (fire and forget, don't block UI)
+  analyticsService.trackAppOpen().catch(() => { });
 
   // Create application menu
   createApplicationMenu(mainWindow);

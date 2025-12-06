@@ -41,6 +41,32 @@ export interface UserProfile {
    * Personalization settings
    */
   personalization?: PersonalizationSettings;
+
+  /**
+   * Analytics consent and tracking
+   */
+  analytics?: AnalyticsConsent;
+}
+
+/**
+ * Analytics consent and tracking
+ */
+export interface AnalyticsConsent {
+  /**
+   * Whether user has consented to share minimal analytics
+   */
+  hasConsented: boolean;
+
+  /**
+   * Timestamp when consent was given (or withdrawn)
+   */
+  consentedAt?: string;
+
+  /**
+   * Anonymous user ID (UUID v4)
+   * Generated once on first consent, persists even if consent is withdrawn
+   */
+  anonymousUserId?: string;
 }
 
 /**

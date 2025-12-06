@@ -29,7 +29,35 @@
         "description": "Extend AI with powerful tools"
       }
     },
-    "get_started": "Let's get you set up in just a few steps!"
+    "get_started": "Let's get you set up in just a few steps!",
+    "analytics": {
+      "checkbox_label": "Help to improve the app by sharing minimal information",
+      "info_button_aria": "Learn more about data sharing",
+      "yes": "Yes",
+      "no": "No",
+      "yes_description": "Yes, I share minimal information to help improve the app",
+      "no_description": "No, I don't share minimal information to help improve the app",
+      "modal": {
+        "title": "What Data We Collect",
+        "description": "We respect your privacy. If you consent, we collect only minimal, anonymous data to improve Levante.",
+        "collected_title": "What we collect:",
+        "collected_items": {
+          "number_of_logins": "Number of times you open the application and when",
+          "mcp_count": "Which MCP servers you are using",
+          "conversation_count": "Number of conversations created",
+          "providers_count": "Providers you've configured",
+          "models_count": "Number of models you've configured by provider",
+          "version_and_so_on": "Version and software of your operating system when using the app"
+        },
+        "not_collected_title": "What we do NOT collect:",
+        "not_collected_items": {
+          "conversation_content": "Content of your conversations",
+          "personal_info": "Any personal or identifiable information"
+        },
+        "anonymous_id": "An anonymous ID is generated to help us understand usage patterns without identifying you personally.",
+        "close_button": "Got it"
+      }
+    }
   },
   "mcp": {
     "title": "What is MCP (Model Context Protocol)?",

@@ -3,9 +3,19 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Folder, Database, Settings, FileText, Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { AnalyticsInfoModal } from './AnalyticsInfoModal';
 
-export function DirectoryStep() {
+interface DirectoryStepProps {
+  analyticsConsent: boolean | null;
+  onAnalyticsConsentChange: (consent: boolean) => void;
+}
+
+export function DirectoryStep({
+  analyticsConsent,
+  onAnalyticsConsentChange,
+}: DirectoryStepProps) {
   const { t } = useTranslation('wizard');
+  const [showAnalyticsModal, setShowAnalyticsModal] = useState(false);
   const [directoryPath, setDirectoryPath] = useState('');
   const [directoryInfo, setDirectoryInfo] = useState<{
     exists: boolean;
@@ -112,6 +122,50 @@ export function DirectoryStep() {
           <AlertDescription dangerouslySetInnerHTML={{ __html: t('directory.privacy_guarantee') }} />
         </Alert>
 
+        {/* Analytics Consent */}
+        <div className="space-y-3 pt-4 border-t">
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-sm font-medium">
+              {t('welcome.analytics.checkbox_label')}
+            </p>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5 shrink-0"
+              onClick={() => setShowAnalyticsModal(true)}
+              aria-label={t('welcome.analytics.info_button_aria')}
+            >
+              <Info className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </div>
+          <div className="flex items-center justify-center gap-3">
+            <Button
+              variant={analyticsConsent === true ? "default" : "outline"}
+              onClick={() => onAnalyticsConsentChange(true)}
+              className="min-w-[100px]"
+            >
+              {t('welcome.analytics.yes')}
+            </Button>
+            <Button
+              variant={analyticsConsent === false ? "default" : "outline"}
+              onClick={() => onAnalyticsConsentChange(false)}
+              className="min-w-[100px]"
+            >
+              {t('welcome.analytics.no')}
+            </Button>
+          </div>
+          {/* Description of selected option - space always reserved */}
+          <p className="text-center text-sm text-muted-foreground px-4 min-h-[40px] flex items-center justify-center">
+            {analyticsConsent !== null ? (
+              analyticsConsent
+                ? t('welcome.analytics.yes_description')
+                : t('welcome.analytics.no_description')
+            ) : (
+              '\u00A0' // Non-breaking space to reserve the height
+            )}
+          </p>
+        </div>
+
         {directoryInfo && directoryInfo.exists && (
           <div className="flex items-center justify-center pt-2">
             <Button
@@ -129,6 +183,11 @@ export function DirectoryStep() {
           {t('directory.tip')}
         </p>
       </div>
+
+      <AnalyticsInfoModal
+        open={showAnalyticsModal}
+        onOpenChange={setShowAnalyticsModal}
+      />
     </div>
   );
 }

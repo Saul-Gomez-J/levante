@@ -4,8 +4,12 @@
     "personalization": "Personalization",
     "appearance": "Appearance",
     "security": "Security",
+    "privacy": "Privacy & Analytics",
     "ai_configuration": "AI Configuration",
     "mcp_configuration": "MCP Configuration"
+  },
+  "privacy": {
+    "your_id": "Your anonymous ID"
   },
   "language": {
     "label": "Language",

@@ -29,7 +29,35 @@
         "description": "Extiende la IA con herramientas poderosas"
       }
     },
-    "get_started": "¡Configuremos todo en solo unos pasos!"
+    "get_started": "¡Configuremos todo en solo unos pasos!",
+    "analytics": {
+      "checkbox_label": "Ayuda a mejorar la aplicación compartiendo información mínima",
+      "info_button_aria": "Más información sobre el uso de datos",
+      "yes": "Sí",
+      "no": "No",
+      "yes_description": "Sí, comparto información mínima para ayudar a mejorar la aplicación",
+      "no_description": "No, no comparto información mínima para ayudar a mejorar la aplicación",
+      "modal": {
+        "title": "Qué Datos Recopilamos",
+        "description": "Respetamos tu privacidad. Si aceptas, recopilamos solo datos mínimos y anónimos para mejorar Levante.",
+        "collected_title": "Lo que recopilamos:",
+        "collected_items": {
+          "number_of_logins": "Número de veces que abres la aplicación y cuándo",
+          "mcp_count": "Qué servidores MCP estás usando",
+          "conversation_count": "Número de conversaciones creadas",
+          "providers_count": "Proveedores que has configurado",
+          "models_count": "Número de modelos que has configurado por proveedor",
+          "version_and_so_on": "Versión y software de tu sistema operativo cuando usas la aplicación"
+        },
+        "not_collected_title": "Lo que NO recopilamos:",
+        "not_collected_items": {
+          "conversation_content": "Contenido de tus conversaciones",
+          "personal_info": "Ninguna información personal o identificable"
+        },
+        "anonymous_id": "Se genera un ID anónimo para ayudarnos a entender patrones de uso sin identificarte personalmente.",
+        "close_button": "Entendido"
+      }
+    }
   },
   "mcp": {
     "title": "¿Qué es MCP (Model Context Protocol)?",
