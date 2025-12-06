@@ -103,7 +103,7 @@ export function IntegrationCard({
           {/* Switch solo en modo Active */}
           {mode === 'active' && (
             <Switch
-              checked={status === 'connected'}
+              checked={server?.enabled !== false}
               disabled={status === 'connecting'}
               onCheckedChange={onToggle}
             />
@@ -114,18 +114,15 @@ export function IntegrationCard({
           {description}
         </p>
 
-        {/* Status indicator solo en modo Active */}
-        {mode === 'active' && (
-          <div className="flex items-center justify-between">
+        {/* Status indicator solo en modo Active y cuando está conectado/conectando */}
+        {mode === 'active' && (status === 'connected' || status === 'connecting') && (
+          <div className="flex items-center">
             <ConnectionStatus
               serverId={server?.id || entry?.id || 'unknown'}
               status={status}
               size="sm"
               variant="indicator"
             />
-            <Badge variant={server?.enabled !== false ? 'default' : 'secondary'}>
-              {server?.enabled !== false ? t('server.active') : t('server.disabled')}
-            </Badge>
           </div>
         )}
       </CardContent>

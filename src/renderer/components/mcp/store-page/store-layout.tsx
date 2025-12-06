@@ -131,11 +131,13 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
 
   const handleToggleServer = async (serverId: string) => {
     const server = activeServers.find(s => s.id === serverId);
-    const isActive = connectionStatus[serverId] === 'connected';
+    const isEnabled = server?.enabled !== false;
 
-    if (isActive) {
+    if (isEnabled) {
+      // Server is enabled → disable it (disconnect + move to disabled)
       await disconnectServer(serverId);
     } else if (server) {
+      // Server is disabled → enable it (connect + move to mcpServers)
       try {
         await connectServer(server);
       } catch (error: any) {
@@ -471,7 +473,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
                   </div>
                 </div>
                 <Badge variant="secondary">
-                  {t('active.active_count', { count: activeServers.length })}
+                  {t('active.active_count', { count: activeServers.filter(s => s.enabled !== false).length })}
                 </Badge>
               </div>
 
