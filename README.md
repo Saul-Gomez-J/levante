@@ -203,32 +203,34 @@ For the full terms, please refer to:
 
 ## Contributors
 
-<div style="display: flex; gap: 16px; align-items: center; justify-content: center; flex-wrap: wrap;">
-  <div style="text-align: center;">
-    <img src="https://1y03izjmgsaiyedf.public.blob.vercel-storage.com/Perfiles%20Linkedin/saul.jpeg" alt="Saul" width="120" style="border-radius: 50%;" />
-    <div><strong>Saúl</strong></div>
-  </div>
-  <div style="text-align: center;">
-    <img src="https://1y03izjmgsaiyedf.public.blob.vercel-storage.com/Perfiles%20Linkedin/oliver.jpeg" alt="Oliver" width="120" style="border-radius: 50%;" />
-    <div><strong>Oliver</strong></div>
-  </div>
-  <div style="text-align: center;">
-    <img src="https://1y03izjmgsaiyedf.public.blob.vercel-storage.com/Perfiles%20Linkedin/perfil_Alejandro.png" alt="Alejandro" width="120" style="border-radius: 50%;" />
-    <div><strong>Alejandro</strong></div>
-  </div>
-  <div style="text-align: center;">
-    <img src="https://1y03izjmgsaiyedf.public.blob.vercel-storage.com/Perfiles%20Linkedin/Dennis.jpeg" alt="Dennis" width="120" style="border-radius: 50%;" />
-    <div><strong>Dennis</strong></div>
-  </div>
-  <div style="text-align: center;">
-    <img src="https://1y03izjmgsaiyedf.public.blob.vercel-storage.com/Perfiles%20Linkedin/Mauro.jpeg" alt="Mauro" width="120" style="border-radius: 50%;" />
-    <div><strong>Mauro</strong></div>
-  </div>
-  <div style="text-align: center;">
-    <img src="https://1y03izjmgsaiyedf.public.blob.vercel-storage.com/Perfiles%20Linkedin/Javier.jpeg" alt="Javier" width="120" style="border-radius: 50%;" />
-    <div><strong>Javier</strong></div>
-  </div>
-</div>
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="https://1y03izjmgsaiyedf.public.blob.vercel-storage.com/Perfiles%20Linkedin/saul.jpeg" alt="Saul" width="120" style="border-radius: 50%;" />
+      <div><strong>Saúl</strong></div>
+    </td>
+    <td align="center">
+      <img src="https://1y03izjmgsaiyedf.public.blob.vercel-storage.com/Perfiles%20Linkedin/oliver.jpeg" alt="Oliver" width="120" style="border-radius: 50%;" />
+      <div><strong>Oliver</strong></div>
+    </td>
+    <td align="center">
+      <img src="https://1y03izjmgsaiyedf.public.blob.vercel-storage.com/Perfiles%20Linkedin/perfil_Alejandro.png" alt="Alejandro" width="120" style="border-radius: 50%;" />
+      <div><strong>Alejandro</strong></div>
+    </td>
+    <td align="center">
+      <img src="https://1y03izjmgsaiyedf.public.blob.vercel-storage.com/Perfiles%20Linkedin/Dennis.jpeg" alt="Dennis" width="120" style="border-radius: 50%;" />
+      <div><strong>Dennis</strong></div>
+    </td>
+    <td align="center">
+      <img src="https://1y03izjmgsaiyedf.public.blob.vercel-storage.com/Perfiles%20Linkedin/Mauro.jpeg" alt="Mauro" width="120" style="border-radius: 50%;" />
+      <div><strong>Mauro</strong></div>
+    </td>
+    <td align="center">
+      <img src="https://1y03izjmgsaiyedf.public.blob.vercel-storage.com/Perfiles%20Linkedin/Javier.jpeg" alt="Javier" width="120" style="border-radius: 50%;" />
+      <div><strong>Javier</strong></div>
+    </td>
+  </tr>
+</table>
 
 We’re grateful to everyone who has contributed code, ideas, issues, and feedback.
 
