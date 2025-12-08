@@ -7,7 +7,6 @@ import type {
 } from "../../types/mcp.js";
 import { getLogger } from "../logging";
 import { createTransport, handleConnectionError } from "./transports.js";
-import { diagnoseSystem } from "./diagnostics.js";
 import { loadMCPRegistry } from "./registry.js";
 import type { MCPRegistry } from "./types";
 import { RuntimeManager } from "../runtime/runtimeManager";
@@ -366,14 +365,5 @@ export class MCPService {
         message: "Unable to validate package due to registry loading error",
       };
     }
-  }
-
-  // Diagnose system for MCP compatibility
-  async diagnoseSystem(): Promise<{
-    success: boolean;
-    issues: string[];
-    recommendations: string[];
-  }> {
-    return await diagnoseSystem();
   }
 }

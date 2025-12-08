@@ -11,7 +11,6 @@ import type {
 } from "../../types/mcp.js";
 import { getLogger } from "../logging";
 import { createTransport, handleConnectionError } from "./transports.js";
-import { diagnoseSystem } from "./diagnostics.js";
 import { loadMCPRegistry } from "./registry.js";
 import type { MCPRegistry } from "./types";
 import type { IMCPService } from "./IMCPService.js";
@@ -37,6 +36,13 @@ export class MCPLegacyService implements IMCPService {
       new PreferencesService(),
       this.logger
     );
+  }
+
+  /**
+   * Initialize the MCP service. No-op for legacy service.
+   */
+  async initialize(): Promise<void> {
+    // No initialization needed for legacy service
   }
 
   async connectServer(config: MCPServerConfig): Promise<void> {
@@ -274,14 +280,6 @@ export class MCPLegacyService implements IMCPService {
         message: "Unable to validate package due to registry loading error",
       };
     }
-  }
-
-  async diagnoseSystem(): Promise<{
-    success: boolean;
-    issues: string[];
-    recommendations: string[];
-  }> {
-    return await diagnoseSystem();
   }
 
   // ==========================================

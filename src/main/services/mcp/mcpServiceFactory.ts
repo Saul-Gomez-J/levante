@@ -20,7 +20,7 @@ export class MCPServiceFactory {
    * @param preferences - MCP preferences (SDK selection and code mode config)
    * @returns Configured MCP service instance
    */
-  static create(preferences?: MCPPreferences): IMCPService {
+  static async create(preferences?: MCPPreferences): Promise<IMCPService> {
     // Use defaults if no preferences provided
     const mcpPrefs = preferences || DEFAULT_MCP_PREFERENCES;
 
@@ -30,17 +30,24 @@ export class MCPServiceFactory {
       executor: mcpPrefs.codeModeDefaults?.executor,
     });
 
+    let service: IMCPService;
+
     // Select implementation based on SDK preference
     if (mcpPrefs.sdk === 'official-sdk') {
       this.logger.mcp.info("Using Official MCP SDK (@modelcontextprotocol/sdk)");
-      return new MCPLegacyService();
+      service = new MCPLegacyService();
+    } else {
+      // Default to mcp-use
+      this.logger.mcp.info("Using mcp-use framework (default)", {
+        codeMode: mcpPrefs.codeModeDefaults?.enabled ?? true,
+      });
+      service = new MCPUseService(mcpPrefs);
     }
 
-    // Default to mcp-use
-    this.logger.mcp.info("Using mcp-use framework (default)", {
-      codeMode: mcpPrefs.codeModeDefaults?.enabled ?? true,
-    });
-    return new MCPUseService(mcpPrefs);
+    // Initialize the service (configures loggers, etc.)
+    await service.initialize();
+
+    return service;
   }
 
   /**
@@ -50,7 +57,7 @@ export class MCPServiceFactory {
    * @param uiPreferences - Full UI preferences object
    * @returns Configured MCP service instance
    */
-  static createFromUIPreferences(uiPreferences: any): IMCPService {
+  static async createFromUIPreferences(uiPreferences: any): Promise<IMCPService> {
     const mcpPrefs = uiPreferences?.mcp || DEFAULT_MCP_PREFERENCES;
     return this.create(mcpPrefs);
   }

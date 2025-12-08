@@ -43,7 +43,16 @@ export function registerConfigurationHandlers(
           results[serverId] = { success: true };
           logger.mcp.info("Successfully reconnected MCP server", { serverId });
         } catch (error: any) {
-          results[serverId] = { success: false, error: error.message };
+          // Handle runtime errors gracefully during batch refresh
+          if (error.message === 'RUNTIME_NOT_FOUND') {
+            results[serverId] = {
+              success: false,
+              error: "Runtime not available. Please check your connection and try again."
+            };
+          } else {
+            results[serverId] = { success: false, error: error.message };
+          }
+
           logger.mcp.error("Failed to reconnect MCP server", {
             serverId,
             error: error.message,

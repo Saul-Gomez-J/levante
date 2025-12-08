@@ -158,7 +158,10 @@
     "export": "Exportar"
   },
   "messages": {
-    "added": "{{name}} añadido a MCPs Activos",
+    "added": "{{name}} añadido y conectado",
+    "added_not_connected": "{{name}} añadido pero no se pudo conectar. Intenta conectar manualmente.",
+    "connecting": "Configurando {{name}}...",
+    "runtime_not_available": "Runtime no disponible. Comprueba tu conexión e inténtalo de nuevo.",
     "deleted": "Servidor eliminado exitosamente",
     "saved": "Configuración guardada y aplicada exitosamente",
     "refreshed": "Configuración actualizada exitosamente",

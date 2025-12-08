@@ -153,7 +153,10 @@
     "export": "Export"
   },
   "messages": {
-    "added": "{{name}} added to Active MCPs",
+    "added": "{{name}} added and connected",
+    "added_not_connected": "{{name}} added but couldn't connect. Try connecting manually.",
+    "connecting": "Setting up {{name}}...",
+    "runtime_not_available": "Runtime not available. Check your connection and try again.",
     "deleted": "Server deleted successfully",
     "saved": "Configuration saved and applied successfully",
     "refreshed": "Configuration refreshed successfully",

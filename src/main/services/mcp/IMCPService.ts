@@ -18,6 +18,12 @@ import type { MCPRegistry } from "./types.js";
  */
 export interface IMCPService {
   /**
+   * Initialize the MCP service. Must be called before using other methods.
+   * This allows for async initialization like configuring loggers.
+   */
+  initialize(): Promise<void>;
+
+  /**
    * Connect to an MCP server with the given configuration.
    * @param config - Server configuration including transport details
    * @throws Error if connection fails
@@ -96,16 +102,6 @@ export interface IMCPService {
     status: string;
     message: string;
     alternative?: string;
-  }>;
-
-  /**
-   * Run system diagnostics for MCP compatibility.
-   * @returns Diagnostic results with issues and recommendations
-   */
-  diagnoseSystem(): Promise<{
-    success: boolean;
-    issues: string[];
-    recommendations: string[];
   }>;
 
   // ==========================================

@@ -21,11 +21,11 @@ let mcpService: IMCPService;
 const configManager = new MCPConfigurationManager();
 const logger = getLogger();
 
-export function registerMCPHandlers() {
+export async function registerMCPHandlers() {
   try {
     // Create MCP service based on user preferences
     const uiPreferences = preferencesService.getAll();
-    mcpService = MCPServiceFactory.createFromUIPreferences(uiPreferences);
+    mcpService = await MCPServiceFactory.createFromUIPreferences(uiPreferences);
 
     logger.mcp.info("MCP service created via factory", {
       sdk: uiPreferences.mcp?.sdk || "mcp-use",

@@ -192,7 +192,7 @@ importers:
         version: 0.541.0(react@19.2.0)
       mcp-use:
         specifier: ^1.4.1
-        version: 1.6.2(@cfworker/json-schema@4.1.1)(@langchain/anthropic@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(zod@4.1.13))(@langchain/openai@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(ws@8.18.3))(@opentelemetry/api@1.9.0)(@preact/signals-core@1.12.1)(@types/node@24.10.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(express@5.1.0)(jiti@1.21.7)(lightningcss@1.30.2)(openai@6.9.1(ws@8.18.3)(zod@4.1.13))(react-dom@19.2.0(react@19.2.0))(react-router-dom@7.9.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(terser@5.44.1)(typescript@5.9.3)
+        version: 1.6.2(@cfworker/json-schema@4.1.1)(@langchain/anthropic@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(zod@3.25.76))(@langchain/openai@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(ws@8.18.3))(@opentelemetry/api@1.9.0)(@preact/signals-core@1.12.1)(@types/node@24.10.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(express@5.1.0)(jiti@1.21.7)(lightningcss@1.30.2)(openai@6.9.1(ws@8.18.3)(zod@4.1.13))(react-dom@19.2.0(react@19.2.0))(react-router-dom@7.9.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(terser@5.44.1)(typescript@5.9.3)
       mermaid:
         specifier: ^11.12.1
         version: 11.12.1
@@ -256,6 +256,9 @@ importers:
       vaul:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      winston:
+        specifier: ^3.18.3
+        version: 3.18.3
       zod:
         specifier: ^4.1.12
         version: 4.1.13
@@ -9303,7 +9306,7 @@ snapshots:
       dotenv: 16.6.1
       esbuild: 0.19.12
       globby: 14.1.0
-      mcp-use: 1.6.2(@cfworker/json-schema@4.1.1)(@langchain/anthropic@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(zod@4.1.13))(@langchain/openai@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(ws@8.18.3))(@opentelemetry/api@1.9.0)(@preact/signals-core@1.12.1)(@types/node@24.10.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(express@5.1.0)(jiti@1.21.7)(lightningcss@1.30.2)(openai@6.9.1(ws@8.18.3)(zod@4.1.13))(react-dom@19.2.0(react@19.2.0))(react-router-dom@7.9.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(terser@5.44.1)(typescript@5.9.3)
+      mcp-use: 1.6.2(@cfworker/json-schema@4.1.1)(@langchain/anthropic@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(zod@3.25.76))(@langchain/openai@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(ws@8.18.3))(@opentelemetry/api@1.9.0)(@preact/signals-core@1.12.1)(@types/node@24.10.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(express@5.1.0)(jiti@1.21.7)(lightningcss@1.30.2)(openai@6.9.1(ws@8.18.3)(zod@4.1.13))(react-dom@19.2.0(react@19.2.0))(react-router-dom@7.9.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(terser@5.44.1)(typescript@5.9.3)
       open: 10.2.0
       tsx: 4.20.6
       vite: 6.4.1(@types/node@24.10.1)(jiti@1.21.7)(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.20.6)
@@ -9376,7 +9379,7 @@ snapshots:
       hono: 4.10.7
       lucide-react: 0.545.0(react@19.2.0)
       markdown-to-jsx: 7.7.17(react@19.2.0)
-      mcp-use: 1.6.2(@cfworker/json-schema@4.1.1)(@langchain/anthropic@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(zod@4.1.13))(@langchain/openai@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(ws@8.18.3))(@opentelemetry/api@1.9.0)(@preact/signals-core@1.12.1)(@types/node@24.10.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(express@5.1.0)(jiti@1.21.7)(lightningcss@1.30.2)(openai@6.9.1(ws@8.18.3)(zod@4.1.13))(react-dom@19.2.0(react@19.2.0))(react-router-dom@7.9.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(terser@5.44.1)(typescript@5.9.3)
+      mcp-use: 1.6.2(@cfworker/json-schema@4.1.1)(@langchain/anthropic@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(zod@3.25.76))(@langchain/openai@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(ws@8.18.3))(@opentelemetry/api@1.9.0)(@preact/signals-core@1.12.1)(@types/node@24.10.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(express@5.1.0)(jiti@1.21.7)(lightningcss@1.30.2)(openai@6.9.1(ws@8.18.3)(zod@4.1.13))(react-dom@19.2.0(react@19.2.0))(react-router-dom@7.9.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(terser@5.44.1)(typescript@5.9.3)
       motion: 12.23.24(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       next-themes: 0.4.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       open: 10.2.0
@@ -9455,7 +9458,7 @@ snapshots:
       hono: 4.10.7
       lucide-react: 0.545.0(react@19.2.0)
       markdown-to-jsx: 7.7.17(react@19.2.0)
-      mcp-use: 1.6.2(@cfworker/json-schema@4.1.1)(@langchain/anthropic@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(zod@4.1.13))(@langchain/openai@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(ws@8.18.3))(@opentelemetry/api@1.9.0)(@preact/signals-core@1.12.1)(@types/node@24.10.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(express@5.1.0)(jiti@1.21.7)(lightningcss@1.30.2)(openai@6.9.1(ws@8.18.3)(zod@4.1.13))(react-dom@19.2.0(react@19.2.0))(react-router-dom@7.9.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(terser@5.44.1)(typescript@5.9.3)
+      mcp-use: 1.6.2(@cfworker/json-schema@4.1.1)(@langchain/anthropic@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(zod@3.25.76))(@langchain/openai@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(ws@8.18.3))(@opentelemetry/api@1.9.0)(@preact/signals-core@1.12.1)(@types/node@24.10.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(express@5.1.0)(jiti@1.21.7)(lightningcss@1.30.2)(openai@6.9.1(ws@8.18.3)(zod@4.1.13))(react-dom@19.2.0(react@19.2.0))(react-router-dom@7.9.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(terser@5.44.1)(typescript@5.9.3)
       motion: 12.23.24(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       next-themes: 0.4.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       open: 10.2.0
@@ -14098,7 +14101,7 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcp-use@1.6.2(@cfworker/json-schema@4.1.1)(@langchain/anthropic@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(zod@4.1.13))(@langchain/openai@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(ws@8.18.3))(@opentelemetry/api@1.9.0)(@preact/signals-core@1.12.1)(@types/node@24.10.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(express@5.1.0)(jiti@1.21.7)(lightningcss@1.30.2)(openai@6.9.1(ws@8.18.3)(zod@4.1.13))(react-dom@19.2.0(react@19.2.0))(react-router-dom@7.9.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(terser@5.44.1)(typescript@5.9.3):
+  mcp-use@1.6.2(@cfworker/json-schema@4.1.1)(@langchain/anthropic@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(zod@3.25.76))(@langchain/openai@1.1.3(@langchain/core@1.1.0(@opentelemetry/api@1.9.0)(openai@6.9.1(ws@8.18.3)(zod@4.1.13)))(ws@8.18.3))(@opentelemetry/api@1.9.0)(@preact/signals-core@1.12.1)(@types/node@24.10.1)(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(express@5.1.0)(jiti@1.21.7)(lightningcss@1.30.2)(openai@6.9.1(ws@8.18.3)(zod@4.1.13))(react-dom@19.2.0(react@19.2.0))(react-router-dom@7.9.6(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(react@19.2.0)(terser@5.44.1)(typescript@5.9.3):
     dependencies:
       '@dmitryrechkin/json-schema-to-zod': 1.0.1
       '@hono/node-server': 1.19.6(hono@4.10.7)

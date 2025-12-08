@@ -11,6 +11,11 @@ import { analyticsService } from '../analytics/analyticsService';
 
 const execAsync = promisify(exec);
 
+// Installation locks to prevent concurrent installations of the same runtime
+const installationLocks: Map<string, Promise<string>> = new Map();
+// Separate lock for uv installation (returns void, not string)
+const uvInstallationLock: { promise: Promise<void> | null } = { promise: null };
+
 export class RuntimeManager {
     private runtimesPath: string;
     private usagePath: string;
@@ -66,16 +71,21 @@ export class RuntimeManager {
             }
 
             try {
-                return await this.installRuntime(type, version)
-            } catch {
+                return await this.installRuntimeWithLock(type, version);
+            } catch (installError) {
+                console.warn(`[RuntimeManager] Installation failed for ${type} ${version}:`, installError);
+
+                // Fallback to system runtime
                 const systemPath = await this.detectSystemRuntime(type, version);
                 if (systemPath) {
+                    console.log(`[RuntimeManager] Using system runtime as fallback: ${systemPath}`);
                     return systemPath; // Fallback to system
                 }
-            }
 
-            // Not found anywhere: install automatically WITHOUT prompting
-            throw new Error("couldnt install the runtime");;
+                // Re-throw with more informative message
+                const errorMsg = installError instanceof Error ? installError.message : String(installError);
+                throw new Error(`Failed to install ${type} ${version} runtime: ${errorMsg}`);
+            }
 
         } else {
             // ADVANCED MODE: Respects preferSystemRuntimes setting
@@ -102,20 +112,23 @@ export class RuntimeManager {
                     return levanteRuntime; // Use Levante runtime (trackeable)
                 }
 
-                // Levante not found, check if exists in system
-                const systemPath = await this.detectSystemRuntime(type, version);
-                if (systemPath) {
-                    // System exists but user prefers Levante
-                    // Throw special error to prompt: "Download Levante runtime or use System?"
-                    const error = new Error('RUNTIME_CHOICE_REQUIRED');
-                    (error as any).systemPath = systemPath;
-                    (error as any).runtimeType = type;
-                    (error as any).runtimeVersion = version;
-                    throw error;
-                }
+                // Levante not found: try to install it (user prefers Levante)
+                try {
+                    console.log(`[RuntimeManager] Installing ${type} ${version} runtime (user prefers Levante)...`);
+                    return await this.installRuntimeWithLock(type, version);
+                } catch (installError) {
+                    console.warn(`[RuntimeManager] Installation failed for ${type} ${version}:`, installError);
 
-                // Not found anywhere: throw error so UI can show install dialog
-                throw new Error('RUNTIME_NOT_FOUND');
+                    // Fallback to system runtime if available
+                    const systemPath = await this.detectSystemRuntime(type, version);
+                    if (systemPath) {
+                        console.log(`[RuntimeManager] Using system ${type} runtime as fallback: ${systemPath}`);
+                        return systemPath;
+                    }
+
+                    // Nothing available
+                    throw new Error('RUNTIME_NOT_FOUND');
+                }
             }
         }
     }
@@ -173,6 +186,33 @@ export class RuntimeManager {
             // Not found or error
         }
         return null;
+    }
+
+    /**
+     * Installs a runtime with locking to prevent concurrent installations.
+     * If another installation is in progress, waits for it to complete.
+     */
+    private async installRuntimeWithLock(type: RuntimeType, version: string): Promise<string> {
+        const lockKey = `${type}-${version}`;
+
+        // Check if installation is already in progress
+        const existingInstallation = installationLocks.get(lockKey);
+        if (existingInstallation) {
+            console.log(`[RuntimeManager] Waiting for ongoing ${type} ${version} installation...`);
+            return await existingInstallation;
+        }
+
+        // Start new installation with lock
+        const installPromise = this.installRuntime(type, version)
+            .finally(() => {
+                // Remove lock when done (success or failure)
+                installationLocks.delete(lockKey);
+            });
+
+        installationLocks.set(lockKey, installPromise);
+        console.log(`[RuntimeManager] Starting installation of ${type} ${version}...`);
+
+        return await installPromise;
     }
 
     /**
@@ -476,6 +516,126 @@ export class RuntimeManager {
 
         // Save updated usage
         await this.saveUsage(usage);
+    }
+
+    /**
+     * Ensures uv/uvx is available and returns the path to uvx executable.
+     * uv is installed in ~/levante/runtimes/uv/
+     */
+    async ensureUvx(): Promise<string> {
+        // First check if uv is already installed in Levante runtimes
+        const uvDir = path.join(this.runtimesPath, 'uv');
+        const isWindows = process.platform === 'win32';
+
+        // Check for uvx in Levante runtimes
+        // The uv installer may place binaries directly in uvDir or in uvDir/bin/
+        // depending on the platform and installer version - check both locations
+        const uvxBinPaths = isWindows
+            ? [
+                path.join(uvDir, 'uvx.exe'),
+                path.join(uvDir, 'bin', 'uvx.exe'),
+              ]
+            : [
+                path.join(uvDir, 'uvx'),
+                path.join(uvDir, 'bin', 'uvx'),
+              ];
+
+        for (const uvxBin of uvxBinPaths) {
+            if (fs.existsSync(uvxBin)) {
+                return uvxBin;
+            }
+        }
+
+        // Not found in Levante runtimes - install it
+        // Note: We always use Levante's own uv/uvx, never the system one
+        await this.installUvWithLock();
+
+        // Check again after installation
+        for (const uvxBin of uvxBinPaths) {
+            if (fs.existsSync(uvxBin)) {
+                return uvxBin;
+            }
+        }
+
+        throw new Error('Failed to install uvx. Please install uv manually: https://docs.astral.sh/uv/');
+    }
+
+    /**
+     * Installs uv with locking to prevent concurrent installations.
+     */
+    private async installUvWithLock(): Promise<void> {
+        // Check if installation is already in progress
+        if (uvInstallationLock.promise) {
+            console.log('[RuntimeManager] Waiting for ongoing uv installation...');
+            await uvInstallationLock.promise;
+            return;
+        }
+
+        // Start new installation with lock
+        const installPromise = this.installUv()
+            .finally(() => {
+                uvInstallationLock.promise = null;
+            });
+
+        uvInstallationLock.promise = installPromise;
+        console.log('[RuntimeManager] Starting installation of uv/uvx...');
+
+        await installPromise;
+    }
+
+    /**
+     * Installs uv (which includes uvx) using the official installer.
+     * Installs to ~/levante/runtimes/uv/
+     */
+    private async installUv(): Promise<void> {
+        const uvDir = path.join(this.runtimesPath, 'uv');
+        fs.mkdirSync(uvDir, { recursive: true });
+
+        const isWindows = process.platform === 'win32';
+
+        if (isWindows) {
+            // Windows: Use PowerShell installer with custom install dir
+            // UV_INSTALL_DIR sets where uv installs binaries
+            const installScript = `
+                $env:UV_INSTALL_DIR = '${uvDir.replace(/\\/g, '\\\\')}';
+                irm https://astral.sh/uv/install.ps1 | iex
+            `;
+            await execAsync(`powershell -ExecutionPolicy Bypass -Command "${installScript}"`);
+        } else {
+            // macOS/Linux: Use shell installer with custom install dir
+            const installCommand = `curl -LsSf https://astral.sh/uv/install.sh | UV_INSTALL_DIR="${uvDir}" sh`;
+            await execAsync(installCommand);
+        }
+
+        console.log('uv/uvx installed successfully');
+    }
+
+    /**
+     * Gets the path to uvx if installed, or null if not found.
+     */
+    getUvxPath(): string | null {
+        const uvDir = path.join(this.runtimesPath, 'uv');
+        const isWindows = process.platform === 'win32';
+
+        // The uv installer may place binaries directly in uvDir or in uvDir/bin/
+        // depending on the platform and installer version - check both locations
+        const uvxBinPaths = isWindows
+            ? [
+                path.join(uvDir, 'uvx.exe'),
+                path.join(uvDir, 'bin', 'uvx.exe'),
+              ]
+            : [
+                path.join(uvDir, 'uvx'),
+                path.join(uvDir, 'bin', 'uvx'),
+              ];
+
+        for (const uvxBin of uvxBinPaths) {
+            if (fs.existsSync(uvxBin)) {
+                return uvxBin;
+            }
+        }
+
+        return null;
     }
 
     private async loadUsage(): Promise<Record<string, string[]>> {

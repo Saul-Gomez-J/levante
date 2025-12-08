@@ -349,11 +349,6 @@ export interface LevanteAPI {
       data?: string;
       error?: string;
     }>;
-    diagnoseSystem: () => Promise<{
-      success: boolean;
-      data?: { success: boolean; issues: string[]; recommendations: string[] };
-      error?: string;
-    }>;
     getRegistry: () => Promise<{
       success: boolean;
       data?: any;

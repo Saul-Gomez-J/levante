@@ -3,13 +3,6 @@ import { MCPRegistry, MCPServerConfig, MCPConnectionStatus, MCPProvider, MCPRegi
 import mcpRegistryData from '../data/mcpRegistry.json';
 import mcpProvidersData from '../data/mcpProviders.json';
 
-interface SystemDiagnosis {
-  success: boolean;
-  issues: string[];
-  recommendations: string[];
-  lastChecked: number | null;
-}
-
 interface MCPStore {
   // State
   registry: MCPRegistry;
@@ -17,7 +10,6 @@ interface MCPStore {
   connectionStatus: Record<string, MCPConnectionStatus>;
   isLoading: boolean;
   error: string | null;
-  systemDiagnosis: SystemDiagnosis;
 
   // Provider state
   providers: MCPProvider[];
@@ -37,7 +29,6 @@ interface MCPStore {
   removeServer: (serverId: string) => Promise<void>;
   importConfiguration: (config: any) => Promise<void>;
   exportConfiguration: () => Promise<any>;
-  diagnoseSystem: () => Promise<void>;
 
   // Provider actions
   loadProviders: () => Promise<void>;
@@ -59,12 +50,6 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   connectionStatus: {},
   isLoading: false,
   error: null,
-  systemDiagnosis: {
-    success: true,
-    issues: [],
-    recommendations: [],
-    lastChecked: null,
-  },
 
   // Provider initial state
   providers: mcpProvidersData.providers as MCPProvider[],
@@ -397,28 +382,6 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
     }
 
     return undefined;
-  },
-
-  // Diagnose system for MCP compatibility
-  diagnoseSystem: async () => {
-    try {
-      const result = await window.levante.mcp.diagnoseSystem();
-
-      if (result.success && result.data) {
-        set({
-          systemDiagnosis: {
-            success: result.data.success,
-            issues: result.data.issues,
-            recommendations: result.data.recommendations,
-            lastChecked: Date.now(),
-          }
-        });
-      } else {
-        console.error('Failed to diagnose system:', result.error);
-      }
-    } catch (error) {
-      console.error('Failed to diagnose system:', error);
-    }
   },
 
   // Load providers from IPC

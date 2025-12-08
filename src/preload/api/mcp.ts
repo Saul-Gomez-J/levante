@@ -59,9 +59,6 @@ export const mcpApi = {
   getConfigPath: () =>
     ipcRenderer.invoke('levante/mcp/get-config-path'),
 
-  diagnoseSystem: () =>
-    ipcRenderer.invoke('levante/mcp/diagnose-system'),
-
   getRegistry: () =>
     ipcRenderer.invoke('levante/mcp/get-registry'),
 
