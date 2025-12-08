@@ -799,7 +799,31 @@ const ChatPage = () => {
 
   // Load available models on component mount
   useEffect(() => {
-    loadAvailableModels();
+    const loadModels = async () => {
+      setModelsLoading(true);
+      try {
+        // Ensure model service is initialized
+        await modelService.initialize();
+        const models = await modelService.getAvailableModels();
+        setAvailableModels(models);
+
+        // Log available models for debugging
+        logger.models.debug(`ChatPage loaded ${models.length} available models`, {
+          models: models.map(m => ({ id: m.id, name: m.name, provider: m.provider }))
+        });
+      } catch (error) {
+        logger.models.error('Failed to load models in ChatPage', {
+          error: error instanceof Error ? error.message : error
+        });
+      } finally {
+        setModelsLoading(false);
+      }
+    };
+
+    loadModels();
+
+    // Subscribe to model store changes if needed, or just reload when provider changes
+    // For now, we'll just rely on this initial load and maybe reload when active provider changes?
     loadUserName();
   }, []);
 
@@ -810,29 +834,7 @@ const ChatPage = () => {
         setUserName(profile.data.personalization.nickname);
       }
     } catch (error) {
-      logger.preferences.error('Error loading user name', {
-        error: error instanceof Error ? error.message : error,
-      });
-    }
-  };
-
-  const loadAvailableModels = async () => {
-    try {
-      setModelsLoading(true);
-      await modelService.initialize();
-      const models = await modelService.getAvailableModels();
-      setAvailableModels(models);
-
-      // Set default model if none selected
-      if (!model && models.length > 0) {
-        setModel(models[0].id);
-      }
-    } catch (error) {
-      logger.core.error('Failed to load models in ChatPage', {
-        error: error instanceof Error ? error.message : error,
-      });
-    } finally {
-      setModelsLoading(false);
+      console.error('Failed to load user name:', error);
     }
   };
 
