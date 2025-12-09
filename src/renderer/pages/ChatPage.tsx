@@ -1252,6 +1252,10 @@ const ChatPage = () => {
                               ? extractUIResources(part.output)
                               : [];
 
+                            // Extract serverId from toolName (format: serverId_toolName)
+                            const toolNameParts = toolName.split('_');
+                            const serverId = toolNameParts.length > 1 ? toolNameParts[0] : undefined;
+
                             // Log for debugging UI resources
                             if (part.state === 'output-available') {
                               // logger.aiSdk.info('[AI-SDK] Tool output received in UI', {
@@ -1285,6 +1289,7 @@ const ChatPage = () => {
                                   <UIResourceMessage
                                     key={`${message.id}-${i}-ui-${resourceIdx}`}
                                     resource={resource}
+                                    serverId={serverId}
                                     className="mt-2"
                                     onPrompt={(prompt) => {
                                       setInput(prompt);

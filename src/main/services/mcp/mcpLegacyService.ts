@@ -125,6 +125,7 @@ export class MCPLegacyService implements IMCPService {
         name: tool.name,
         description: tool.description || "",
         inputSchema: tool.inputSchema,
+        _meta: (tool as any)._meta, // Preserve metadata (e.g., openai/outputTemplate for Skybridge)
       }));
     } catch (error) {
       this.logger.mcp.error("Failed to list tools from server", {

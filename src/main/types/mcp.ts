@@ -38,6 +38,8 @@ export interface Tool {
     properties?: Record<string, any>;
     required?: string[];
   };
+  /** Metadata including widget configuration (e.g., openai/outputTemplate for Skybridge) */
+  _meta?: Record<string, any>;
 }
 
 export interface ToolCall {
