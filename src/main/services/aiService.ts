@@ -281,10 +281,10 @@ export class AIService {
    */
   private async getModelInfo(modelId: string): Promise<
     | {
-        category: ModelCategory;
-        capabilities: ModelCapabilities;
-        taskType?: string;
-      }
+      category: ModelCategory;
+      capabilities: ModelCapabilities;
+      taskType?: string;
+    }
     | undefined
   > {
     try {
@@ -339,6 +339,32 @@ export class AIService {
     }
   }
 
+  /**
+   * Helper to determine the provider type for a given model ID
+   */
+  private async getProviderType(modelId: string): Promise<string | undefined> {
+    try {
+      const { preferencesService } = await import("./preferencesService");
+      const providers = (preferencesService.get("providers") as any[]) || [];
+
+      // Find which provider this model belongs to
+      const providerWithModel = providers.find((provider) => {
+        if (provider.modelSource === "dynamic") {
+          return provider.selectedModelIds?.includes(modelId);
+        } else {
+          return provider.models.some(
+            (model: any) => model.id === modelId && model.isSelected !== false
+          );
+        }
+      });
+
+      return providerWithModel?.type;
+    } catch (error) {
+      this.logger.aiSdk.error("Failed to get provider type", { error, modelId });
+      return undefined;
+    }
+  }
+
   async *streamChat(
     request: ChatRequest
   ): AsyncGenerator<ChatStreamChunk, void, unknown> {
@@ -347,6 +373,10 @@ export class AIService {
     try {
       // Get model classification (Phase 3: Model Classification)
       const modelInfo = await this.getModelInfo(model);
+
+      // Get provider type to determine if this is a local model
+      const providerType = await this.getProviderType(model);
+      const isLocalProvider = providerType === "local";
 
       // If model info available, use it for routing and validation
       if (modelInfo) {
@@ -379,8 +409,12 @@ export class AIService {
           return;
         }
 
-        // Validate capabilities BEFORE execution (proactive validation)
-        if (enableMCP && !modelInfo.capabilities.supportsTools) {
+        // Validate capabilities BEFORE execution (skip for local providers)
+        if (
+          enableMCP &&
+          !isLocalProvider &&
+          !modelInfo.capabilities.supportsTools
+        ) {
           this.logger.aiSdk.warn(
             "Model does not support tools, disabling MCP",
             {
@@ -395,6 +429,16 @@ export class AIService {
           };
 
           request.enableMCP = false;
+        } else if (
+          isLocalProvider &&
+          enableMCP &&
+          !modelInfo.capabilities.supportsTools
+        ) {
+          // Log that we're attempting tools with a local model
+          this.logger.aiSdk.info(
+            "Attempting tool use with local model (skipping proactive validation)",
+            { model, enableMCP }
+          );
         }
       } else {
         // No model info available - proceed with default behavior
