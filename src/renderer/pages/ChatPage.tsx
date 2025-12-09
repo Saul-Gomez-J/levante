@@ -9,56 +9,30 @@
  * - Uses setMessages to load session history
  * - Direct message sending on first message
  * - Simple session switching with useEffect
+ * - File attachments extracted to useFileAttachments hook
+ * - Message rendering extracted to ChatMessageItem component
  */
 
 import { Message, MessageContent } from '@/components/ai-elements/message';
-import { Response } from '@/components/ai-elements/response';
 import {
   Conversation,
   ConversationContent,
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { StreamingProvider, useStreamingContext } from '@/contexts/StreamingContext';
 import { ChatList } from '@/components/chat/ChatList';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { ChatPromptInput } from '@/components/chat/ChatPromptInput';
-import { MessageAttachments } from '@/components/chat/MessageAttachments';
+import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
 import { useTranslation } from 'react-i18next';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { AlertTriangle, ExternalLink } from 'lucide-react';
-import {
-  Source,
-  Sources,
-  SourcesContent,
-  SourcesTrigger,
-} from '@/components/ai-elements/source';
-import {
-  Reasoning,
-  ReasoningContent,
-  ReasoningTrigger,
-} from '@/components/ai-elements/reasoning';
 import { BreathingLogo } from '@/components/ai-elements/breathing-logo';
-import { ToolCall } from '@/components/ai-elements/tool-call';
-import { UIResourceMessage } from '@/components/chat/UIResourceMessage';
-import { isUIResource } from '@mcp-ui/client';
-import { extractUIResources } from '@/types/ui-resource';
-import { modelService } from '@/services/modelService';
-import type { Model } from '../../types/models';
 import { getRendererLogger } from '@/services/logger';
 import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
 import { useMCPResources } from '@/hooks/useMCPResources';
-import type { SelectedResource, SelectedPrompt, MCPResource, MCPPrompt } from '@/hooks/useMCPResources';
+import { useFileAttachments } from '@/hooks/useFileAttachments';
+import { useModelSelection, isInferenceModel } from '@/hooks/useModelSelection';
 import { usePreference } from '@/hooks/usePreferences';
 
 // AI SDK v5 imports
@@ -70,17 +44,12 @@ const logger = getRendererLogger();
 const ChatPage = () => {
   const { t } = useTranslation('chat');
   const [input, setInput] = useState('');
-  const [model, setModel] = useState<string>('');
   const [enableMCP, setEnableMCP] = usePreference('enableMCP');
-  const [availableModels, setAvailableModels] = useState<Model[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(true);
   const [userName, setUserName] = useState<string>(t('welcome.default_user_name'));
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [pendingFirstMessage, setPendingFirstMessage] = useState<string | null>(null);
   const [pendingFirstAttachments, setPendingFirstAttachments] = useState<File[] | null>(null);
   const [pendingMessageAfterStop, setPendingMessageAfterStop] = useState<string | null>(null);
-  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
 
   // MCP Resources hook
   const {
@@ -111,79 +80,54 @@ const ChatPage = () => {
   // Streaming context for mermaid processing
   const { triggerMermaidProcessing } = useStreamingContext();
 
-  // Detect if current model is an inference model (supports file attachments)
-  const currentModelInfo = availableModels.find((m) => m.id === model);
-  const modelTaskType = currentModelInfo?.taskType;
-
-  // Filter available models based on current session type
-  // This ensures users can only see compatible models when a session is active
-  const filteredAvailableModels = useMemo(() => {
-    if (!currentSession) {
-      // No session - show all models
-      return availableModels;
-    }
-
-    const sessionType = currentSession.session_type;
-    let filtered: Model[] = [];
-
-    if (sessionType === 'chat') {
-      // Chat session - only show chat and multimodal chat models
-      filtered = availableModels.filter(m => {
-        const taskType = m.taskType;
-        return !taskType || taskType === 'chat' || taskType === 'image-text-to-text';
-      });
-    } else if (sessionType === 'inference') {
-      // Inference session - only show inference models
-      filtered = availableModels.filter(m => {
-        const taskType = m.taskType;
-        return taskType && taskType !== 'chat' && taskType !== 'image-text-to-text';
-      });
-    } else {
-      // Fallback - show all models
-      filtered = availableModels;
-    }
-
-    // ALWAYS include the session's current model, even if not in filtered list
-    // This allows continuing conversations with the same model
-    if (currentSession.model) {
-      const currentModel = availableModels.find(m => m.id === currentSession.model);
-      if (currentModel && !filtered.find(m => m.id === currentModel.id)) {
-        logger.core.info('Adding session model to filtered list', {
-          model: currentSession.model,
-          sessionType
-        });
-        filtered = [currentModel, ...filtered];
+  // Load user name callback
+  const loadUserName = useCallback(async () => {
+    try {
+      const profile = await window.levante.profile.get();
+      if (profile?.data?.personalization?.nickname) {
+        setUserName(profile.data.personalization.nickname);
       }
+    } catch (error) {
+      console.error('Failed to load user name:', error);
     }
+  }, []);
 
-    return filtered;
-  }, [availableModels, currentSession]);
+  // Model selection hook
+  const {
+    model,
+    setModel,
+    availableModels,
+    filteredAvailableModels,
+    modelsLoading,
+    currentModelInfo,
+    modelTaskType,
+    handleModelChange,
+  } = useModelSelection({
+    currentSession,
+    onLoadUserName: loadUserName,
+  });
 
-  // Enable file attachments for models that support or require visual inputs
-  // - image-text-to-text vision chat
-  // - image-to-image transformations
-  // - any model with the "vision" capability flag (e.g., router models tagged as chat)
-  const supportsFileAttachment =
-    !!(
-      (modelTaskType && ['image-text-to-text', 'image-to-image'].includes(modelTaskType)) ||
-      currentModelInfo?.capabilities?.includes('vision')
-    );
-  const enableFileAttachment = supportsFileAttachment;
-
-  // Get file accept attribute based on model task type
-  const getFileAccept = (): string => {
-    if (currentModelInfo?.capabilities?.includes('vision')) {
-      return 'image/*';
-    }
-
-    switch (modelTaskType) {
-      case 'image-text-to-text':
-      case 'image-to-image':
-        return 'image/*';
-      default:
-        return 'image/*';
-    }
-  };
+  // File attachments hook
+  const {
+    attachedFiles,
+    isDragging,
+    setAttachedFiles,
+    handleFilesSelected,
+    handleFileRemove,
+    handleDragEnter,
+    handleDragLeave,
+    handleDragOver,
+    handleDrop,
+    processAttachments,
+    convertFilesToInferenceData,
+    getFileAccept,
+    supportsFileAttachment: enableFileAttachment,
+    clearAttachments,
+  } = useFileAttachments({
+    modelTaskType,
+    modelCapabilities: currentModelInfo?.capabilities,
+    isStreaming: false, // Will be updated after useChat
+  });
 
   const attachFilesToLatestUserMessage = (attachments: Array<{
     id: string;
@@ -211,22 +155,6 @@ const ChatPage = () => {
 
       return updated;
     });
-  };
-
-  // Get attachment button title based on model task type
-  const getAttachmentTitle = (): string => {
-    if (currentModelInfo?.capabilities?.includes('vision')) {
-      return 'Attach image for multimodal chat';
-    }
-
-    switch (modelTaskType) {
-      case 'image-text-to-text':
-        return 'Attach image for multimodal chat';
-      case 'image-to-image':
-        return 'Attach image for transformation';
-      default:
-        return 'Attach image';
-    }
   };
 
   // Create transport with current configuration
@@ -399,7 +327,7 @@ const ChatPage = () => {
     previousSessionIdRef.current = currentSessionId;
 
     // Clear attachments and MCP resources when changing sessions
-    setAttachedFiles([]);
+    clearAttachments();
     clearResources();
 
     // If we just created this session, skip loading historical messages
@@ -433,71 +361,6 @@ const ChatPage = () => {
     }
   }, [currentSession?.id, loadHistoricalMessages, setMessages]);
 
-  // Sync model with current session when session changes
-  useEffect(() => {
-    if (currentSession?.model) {
-      logger.core.info('Syncing model from session', {
-        sessionId: currentSession.id,
-        model: currentSession.model
-      });
-      setModel(currentSession.model);
-    }
-  }, [currentSession?.id, currentSession?.model]);
-
-  // Handle model change with session type validation
-  const handleModelChange = (newModelId: string) => {
-    // If no current session, allow any model (it will determine session type on creation)
-    if (!currentSession) {
-      setModel(newModelId);
-      return;
-    }
-
-    // Get the new model's info
-    const newModelInfo = availableModels.find((m) => m.id === newModelId);
-    const newTaskType = newModelInfo?.taskType;
-    const isNewModelInference = newTaskType && newTaskType !== 'chat' && newTaskType !== 'image-text-to-text';
-
-    // Check session type compatibility
-    const sessionType = currentSession.session_type;
-
-    if (sessionType === 'chat' && isNewModelInference) {
-      logger.core.warn('Cannot switch to inference model in chat session', {
-        currentSessionType: sessionType,
-        newModel: newModelId,
-        newTaskType
-      });
-      alert(
-        '❌ No puedes usar modelos de inferencia en sesiones de chat.\n\n' +
-        'Las sesiones de chat están diseñadas para modelos conversacionales. ' +
-        'Para usar modelos de inferencia (text-to-image, image-to-image, etc.), inicia una nueva conversación.'
-      );
-      return;
-    }
-
-    if (sessionType === 'inference' && !isNewModelInference) {
-      logger.core.warn('Cannot switch to chat model in inference session', {
-        currentSessionType: sessionType,
-        newModel: newModelId,
-        newTaskType
-      });
-      alert(
-        '❌ No puedes usar modelos de chat en sesiones de inferencia.\n\n' +
-        'Las sesiones de inferencia están diseñadas para tareas específicas (text-to-image, image-to-image, etc.). ' +
-        'Para usar modelos de chat normales, inicia una nueva conversación.'
-      );
-      return;
-    }
-
-    // Valid change - update model
-    logger.core.info('Model changed', {
-      oldModel: model,
-      newModel: newModelId,
-      sessionType,
-      compatible: true
-    });
-    setModel(newModelId);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -515,6 +378,15 @@ const ChatPage = () => {
 
     // Otherwise, send a new message
     if (input.trim() || attachedFiles.length > 0 || selectedResources.length > 0 || selectedPrompts.length > 0) {
+      // DEBUG: Log attachments state at submit time
+      logger.core.info('📤 handleSubmit called', {
+        inputLength: input.length,
+        attachedFilesCount: attachedFiles.length,
+        attachedFileNames: attachedFiles.map(f => f.name),
+        modelTaskType,
+        enableFileAttachment,
+      });
+
       // Build message text with MCP resource context if any
       const resourceContext = getContextString();
       const messageText = resourceContext
@@ -525,7 +397,7 @@ const ChatPage = () => {
 
       try {
         setInput('');
-        setAttachedFiles([]); // Clear attachments immediately
+        clearAttachments(); // Clear attachments immediately
         clearResources(); // Clear MCP resources immediately
 
         // If no session exists, create one and save message for later
@@ -797,258 +669,6 @@ const ChatPage = () => {
     }
   }, [pendingPrompt, setPendingPrompt]);
 
-  // Load available models on component mount
-  useEffect(() => {
-    loadAvailableModels();
-    loadUserName();
-  }, []);
-
-  const loadUserName = async () => {
-    try {
-      const profile = await window.levante.profile.get();
-      if (profile?.data?.personalization?.nickname) {
-        setUserName(profile.data.personalization.nickname);
-      }
-    } catch (error) {
-      logger.preferences.error('Error loading user name', {
-        error: error instanceof Error ? error.message : error,
-      });
-    }
-  };
-
-  const loadAvailableModels = async () => {
-    try {
-      setModelsLoading(true);
-      await modelService.initialize();
-      const models = await modelService.getAvailableModels();
-      setAvailableModels(models);
-
-      // Set default model if none selected
-      if (!model && models.length > 0) {
-        setModel(models[0].id);
-      }
-    } catch (error) {
-      logger.core.error('Failed to load models in ChatPage', {
-        error: error instanceof Error ? error.message : error,
-      });
-    } finally {
-      setModelsLoading(false);
-    }
-  };
-
-  // File validation constants
-  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-  const MIN_IMAGE_DIMENSION = 256; // px for inference image tasks
-  const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
-  const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp3', 'audio/flac', 'audio/m4a'];
-
-  // Get allowed MIME types based on current model task type
-  const getAllowedMimeTypes = (): string[] => {
-    switch (modelTaskType) {
-      case 'image-text-to-text':
-      case 'image-to-image':
-        return ALLOWED_IMAGE_TYPES;
-      default:
-        return ALLOWED_IMAGE_TYPES;
-    }
-  };
-
-  // Get file type description for error messages
-  const getFileTypeDescription = (): string => {
-    switch (modelTaskType) {
-      case 'image-text-to-text':
-      case 'image-to-image':
-        return 'images';
-      default:
-        return 'images';
-    }
-  };
-
-  // Handle file selection with validation
-  const handleFilesSelected = async (files: File[]) => {
-    const validFiles: File[] = [];
-    const errors: string[] = [];
-    const allowedTypes = getAllowedMimeTypes();
-    const typeDescription = getFileTypeDescription();
-    const requiresMinDimensions = modelTaskType === 'image-to-image';
-
-    for (const file of files) {
-      // Check file size
-      if (file.size > MAX_FILE_SIZE) {
-        errors.push(`${file.name}: File size exceeds 10MB limit`);
-        logger.core.warn('File size exceeds limit', {
-          filename: file.name,
-          size: file.size,
-          maxSize: MAX_FILE_SIZE,
-        });
-        continue;
-      }
-
-      // Check MIME type
-      if (!allowedTypes.includes(file.type)) {
-        errors.push(`${file.name}: Only ${typeDescription} are supported for this model (got ${file.type})`);
-        logger.core.warn('File type not supported for model', {
-          filename: file.name,
-          mimeType: file.type,
-          modelTaskType,
-          allowedTypes,
-        });
-        continue;
-      }
-
-      if (requiresMinDimensions) {
-        try {
-          const dimensions = await getImageDimensions(file);
-          if (!dimensions || dimensions.width < MIN_IMAGE_DIMENSION || dimensions.height < MIN_IMAGE_DIMENSION) {
-            errors.push(
-              `${file.name}: Image must be at least ${MIN_IMAGE_DIMENSION}x${MIN_IMAGE_DIMENSION}px (got ${dimensions?.width || 0}x${dimensions?.height || 0})`
-            );
-            logger.core.warn('Image dimensions too small for inference model', {
-              filename: file.name,
-              width: dimensions?.width,
-              height: dimensions?.height,
-              min: MIN_IMAGE_DIMENSION
-            });
-            continue;
-          }
-        } catch (error) {
-          errors.push(`${file.name}: Unable to read image dimensions`);
-          logger.core.error('Failed to read image dimensions', {
-            filename: file.name,
-            error: error instanceof Error ? error.message : error,
-          });
-          continue;
-        }
-      }
-
-      validFiles.push(file);
-    }
-
-    // Add valid files
-    if (validFiles.length > 0) {
-      setAttachedFiles((prev) => [...prev, ...validFiles]);
-      logger.core.info('Files attached', {
-        count: validFiles.length,
-        modelTaskType,
-      });
-    }
-
-    // Log errors if any
-    if (errors.length > 0) {
-      logger.core.error('File validation errors', { errors, modelTaskType });
-      toast.error('Some files were rejected', {
-        description: errors.join('\n'),
-      });
-    }
-  };
-
-  // Handle file removal
-  const handleFileRemove = (index: number) => {
-    setAttachedFiles((prev) => prev.filter((_, i) => i !== index));
-    logger.core.info('File removed', { index });
-  };
-
-  // Drag & Drop handlers
-  const handleDragEnter = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!enableFileAttachment || status === 'streaming') return;
-
-    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
-      setIsDragging(true);
-    }
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    // Only set isDragging to false if we're leaving the main container
-    if (e.currentTarget === e.target) {
-      setIsDragging(false);
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-
-  const handleDrop = async (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-
-    if (!enableFileAttachment || status === 'streaming') return;
-
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      await handleFilesSelected(files);
-    }
-  };
-
-  // Process and save attachments
-  const processAttachments = async (
-    files: File[],
-    sessionId: string,
-    messageId: string
-  ) => {
-    const attachmentResults = [];
-
-    for (const file of files) {
-      try {
-        const buffer = await file.arrayBuffer();
-        const result = await window.levante.attachments.save(
-          sessionId,
-          messageId,
-          buffer,
-          file.name,
-          file.type
-        );
-
-        if (result.success && result.data) {
-          attachmentResults.push(result.data);
-          logger.core.info('Attachment saved', {
-            filename: file.name,
-            attachmentId: result.data.id,
-          });
-        } else {
-          logger.core.error('Failed to save attachment', {
-            filename: file.name,
-            error: result.error,
-          });
-        }
-      } catch (error) {
-        logger.core.error('Error processing attachment', {
-          filename: file.name,
-          error: error instanceof Error ? error.message : error,
-        });
-      }
-    }
-
-    return attachmentResults;
-  };
-
-  const getImageDimensions = (file: File): Promise<{ width: number; height: number } | null> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const img = new Image();
-        img.onload = () => {
-          resolve({ width: img.width, height: img.height });
-        };
-        img.onerror = () => reject(new Error('Failed to load image data'));
-        if (typeof event.target?.result === 'string') {
-          img.src = event.target.result;
-        } else {
-          reject(new Error('Invalid image data'));
-        }
-      };
-      reader.onerror = () => reject(new Error('Failed to read image file'));
-      reader.readAsDataURL(file);
-    });
-  };
-
   // Check if chat is empty
   const isChatEmpty = messages.length === 0 && status !== 'streaming';
 
@@ -1127,199 +747,12 @@ const ChatPage = () => {
           <Conversation className="flex-1">
             <ConversationContent className="max-w-3xl mx-auto p-0 pl-4 pr-2 py-4">
               {messages.map((message) => (
-                <div key={message.id}>
-                  {/* Sources (web search results) */}
-                  {message.role === 'assistant' && message.parts && (
-                    <Sources>
-                      {message.parts
-                        .filter((part: any) => part?.value?.type === 'source-url')
-                        .map((part: any, i: number) => (
-                          <>
-                            <SourcesTrigger
-                              key={`trigger-${message.id}-${i}`}
-                              count={
-                                message.parts.filter((p: any) => p.value?.type === 'source-url')
-                                  .length
-                              }
-                            />
-                            <SourcesContent key={`content-${message.id}-${i}`}>
-                              <Source href={part.value.url} title={part.value.title || part.value.url} />
-                            </SourcesContent>
-                          </>
-                        ))}
-                    </Sources>
-                  )}
-
-                  {/* Message */}
-                  <Message
-                    from={message.role}
-                    key={message.id}
-                    className={cn(
-                      'p-0',
-                      message.role === 'user' ? 'is-user my-6' : 'is-assistant'
-                    )}
-                  >
-                    <MessageContent
-                      from={message.role}
-                      className={cn(
-                        '',
-                        message.role === 'user' ? 'p-2 mb-0 dark:text-white' : 'px-2 py-0'
-                      )}
-                    >
-                      {/* Render attachments if present */}
-                      {(message as any).attachments && (message as any).attachments.length > 0 && (
-                        <MessageAttachments attachments={(message as any).attachments} />
-                      )}
-
-                      {/* Debug: Log message structure */}
-                      {(() => {
-                        if ((message as any).attachments?.length > 0) {
-                          logger.core.debug('Rendering message with attachments', {
-                            messageId: message.id,
-                            role: message.role,
-                            attachmentCount: (message as any).attachments.length,
-                            attachments: (message as any).attachments,
-                            partsCount: message.parts?.length || 0,
-                          });
-                        }
-                        return null;
-                      })()}
-
-                      {message.parts?.map((part: any, i: number) => {
-                        try {
-                          // Text content
-                          if (part?.type === 'text' && part?.text) {
-                            return (
-                              <Response key={`${message.id}-${i}`}>
-                                {part.text}
-                              </Response>
-                            );
-                          }
-
-                          // Reasoning (data part)
-                          if (part?.value?.type === 'reasoning') {
-                            return (
-                              <Reasoning
-                                key={`${message.id}-${i}`}
-                                className="w-full"
-                                isStreaming={status === 'streaming'}
-                              >
-                                <ReasoningTrigger />
-                                <ReasoningContent>
-                                  {part.value.text || ''}
-                                </ReasoningContent>
-                              </Reasoning>
-                            );
-                          }
-
-                          // Tool calls (MCP)
-                          if (part?.type?.startsWith('tool-')) {
-                            // Extract tool name from type if toolName field is not available
-                            // During streaming, AI SDK v5 doesn't include toolName field
-                            // Format: "tool-{toolName}" -> extract toolName
-                            const toolName = part.toolName || part.type.replace(/^tool-/, '');
-
-                            // Map part states to ToolCall status
-                            let status: 'pending' | 'running' | 'success' | 'error' = 'pending';
-                            if (part.state === 'input-start') {
-                              status = 'pending';
-                            } else if (part.state === 'input-available') {
-                              status = 'running';
-                            } else if (part.state === 'output-available') {
-                              status = 'success';
-                            } else if (part.state === 'output-error') {
-                              status = 'error';
-                            }
-
-                            const toolCall = {
-                              id: part.toolCallId,
-                              name: toolName,
-                              arguments: part.input || {},
-                              result: part.state === 'output-available' ? {
-                                success: true,
-                                content: JSON.stringify(part.output),
-                              } : part.state === 'output-error' ? {
-                                success: false,
-                                error: part.errorText,
-                              } : undefined,
-                              status,
-                            };
-
-                            // Check if tool output contains UI resources
-                            const uiResources = part.state === 'output-available'
-                              ? extractUIResources(part.output)
-                              : [];
-
-                            // Log for debugging UI resources
-                            if (part.state === 'output-available') {
-                              // logger.aiSdk.info('[AI-SDK] Tool output received in UI', {
-                              //   toolName,
-                              //   outputType: typeof part.output,
-                              //   outputIsObject: typeof part.output === 'object',
-                              //   outputKeys: typeof part.output === 'object' && part.output ? Object.keys(part.output) : [],
-                              //   hasUIResources: uiResources.length > 0,
-                              //   uiResourceCount: uiResources.length,
-                              //   rawOutput: JSON.stringify(part.output)?.substring(0, 500)
-                              // });
-
-                              // if (uiResources.length > 0) {
-                              //   logger.aiSdk.info('[AI-SDK] Extracted UI resources', {
-                              //     count: uiResources.length,
-                              //     firstResourceUri: uiResources[0]?.resource?.uri,
-                              //     firstResourceHasText: !!uiResources[0]?.resource?.text,
-                              //     firstResourceMimeType: uiResources[0]?.resource?.mimeType
-                              //   });
-                              // }
-                            }
-
-                            return (
-                              <div key={`${message.id}-${i}`} className="w-full">
-                                <ToolCall
-                                  toolCall={toolCall}
-                                  className="w-full"
-                                />
-                                {/* Render UI Resources from tool output */}
-                                {uiResources.map((resource, resourceIdx) => (
-                                  <UIResourceMessage
-                                    key={`${message.id}-${i}-ui-${resourceIdx}`}
-                                    resource={resource}
-                                    className="mt-2"
-                                    onPrompt={(prompt) => {
-                                      setInput(prompt);
-                                    }}
-                                  />
-                                ))}
-                              </div>
-                            );
-                          }
-
-                          // Check for standalone UI resource parts (data parts)
-                          if (part?.value?.type === 'ui-resource' && part?.value?.resource) {
-                            return (
-                              <UIResourceMessage
-                                key={`${message.id}-${i}`}
-                                resource={part.value.resource}
-                                className="w-full"
-                                onPrompt={(prompt) => {
-                                  setInput(prompt);
-                                }}
-                              />
-                            );
-                          }
-
-                          return null;
-                        } catch (error) {
-                          console.error('[ChatPage] Error rendering part:', error, {
-                            messageId: message.id,
-                            partIndex: i,
-                            part,
-                          });
-                          return null;
-                        }
-                      })}
-                    </MessageContent>
-                  </Message>
-                </div>
+                <ChatMessageItem
+                  key={message.id}
+                  message={message}
+                  isStreaming={status === 'streaming'}
+                  onPrompt={setInput}
+                />
               ))}
 
               {/* Streaming indicator */}

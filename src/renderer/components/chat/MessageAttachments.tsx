@@ -1,13 +1,14 @@
 /**
  * MessageAttachments Component
  *
- * Renders file attachments (images, audio) in chat messages.
+ * Renders file attachments (images, audio, video) in chat messages.
  * Loads attachment data URLs from storage and displays them.
  */
 
 import { useState, useEffect } from 'react';
 import { ImageIcon, MicIcon, VideoIcon, Loader2Icon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { ImageViewer } from '@/components/ImageViewer';
 import type { MessageAttachment } from '../../../types/database';
 import { getRendererLogger } from '@/services/logger';
 
@@ -112,20 +113,14 @@ function AttachmentItem({ attachment }: AttachmentItemProps) {
   if (isImage && attachment.dataUrl) {
     return (
       <div className="rounded-lg border bg-card overflow-hidden max-w-xs sm:max-w-sm">
-        <a
-          href={attachment.dataUrl}
-          target="_blank"
-          rel="noreferrer"
-          download={attachment.filename}
-          className="block group cursor-zoom-in"
-        >
+        <ImageViewer src={attachment.dataUrl} alt={attachment.filename}>
           <img
             src={attachment.dataUrl}
             alt={attachment.filename}
             className="w-full h-auto object-cover max-h-64 transition group-hover:brightness-110"
             loading="lazy"
           />
-        </a>
+        </ImageViewer>
         <div className="p-2 border-t bg-muted/50">
           <p className="text-xs text-muted-foreground truncate">
             {attachment.filename}

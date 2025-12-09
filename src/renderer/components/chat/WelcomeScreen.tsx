@@ -24,7 +24,7 @@ export const WelcomeScreen = ({ userName = 'User', className }: WelcomeScreenPro
           alt={t('common:app.name')}
           className="w-8 h-8"
         />
-        <h1 className="text-3xl font-serif text-foreground/80">
+        <h1 className="text-3xl font-medium text-foreground/80">
           {t('welcome.greeting', { userName })}
         </h1>
       </div>

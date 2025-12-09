@@ -20,7 +20,7 @@ export const SettingsSection = ({
   children
 }: SettingsSectionProps) => {
   return (
-    <Collapsible defaultOpen={defaultOpen} className="bg-card rounded-lg border-none">
+    <Collapsible defaultOpen={defaultOpen} className="bg-card rounded-lg border border-border">
       <div className="p-6">
         <CollapsibleTrigger className="flex items-center justify-between w-full group">
           <h3 className="text-lg font-semibold flex items-center gap-2">

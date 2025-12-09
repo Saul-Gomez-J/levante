@@ -128,7 +128,7 @@ const ModelPage = () => {
         )}
 
         {/* Provider Selection & Configuration Section */}
-        <Card className="border-none">
+        <Card className="border border-border">
           <CardHeader className="pb-4">
             <CardTitle>{t('provider_config.title')}</CardTitle>
             <CardDescription>{t('provider_config.description')}</CardDescription>
@@ -210,7 +210,7 @@ const ModelPage = () => {
 
         {/* Models Section */}
         {activeProvider && (
-          <Card className="border-none">
+          <Card className="border border-border">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -220,7 +220,7 @@ const ModelPage = () => {
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  {activeProvider.modelSource === 'dynamic' && (
+                  {(activeProvider.modelSource === 'dynamic' || activeProvider.type === 'local') && (
                     <>
                       <Button
                         variant="ghost"
@@ -319,7 +319,7 @@ const ModelPage = () => {
 
                   <ModelList
                     models={activeProvider.models.filter((m) => m.isAvailable)}
-                    showSelection={activeProvider.modelSource === 'dynamic'}
+                    showSelection={activeProvider.modelSource === 'dynamic' || activeProvider.type === 'local'}
                     onModelToggle={handleModelToggle}
                     searchQuery={searchQuery}
                     providerType={activeProvider.type}

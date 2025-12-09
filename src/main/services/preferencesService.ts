@@ -181,6 +181,10 @@ export class PreferencesService {
           },
           required: ['encryptApiKeys'],
           default: { encryptApiKeys: false }
+        },
+        enableMCP: {
+          type: 'boolean',
+          default: true
         }
       }
     });

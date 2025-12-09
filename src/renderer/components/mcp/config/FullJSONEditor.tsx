@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { useMCPStore } from '@/stores/mcpStore';
 import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
+import CodeMirror from '@uiw/react-codemirror';
+import { json } from '@codemirror/lang-json';
+import { oneDark } from '@codemirror/theme-one-dark';
+import { useThemeDetector } from '@/hooks/useThemeDetector';
 
 interface MCPConfiguration {
   mcpServers: Record<string, any>;
@@ -20,6 +23,7 @@ interface FullJSONEditorProps {
 export function FullJSONEditor({ onClose, onConfigChange }: FullJSONEditorProps) {
   const { t } = useTranslation('mcp');
   const { loadActiveServers, refreshConnectionStatus } = useMCPStore();
+  const theme = useThemeDetector();
 
   const [jsonText, setJsonText] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
@@ -206,12 +210,24 @@ export function FullJSONEditor({ onClose, onConfigChange }: FullJSONEditorProps)
           <label className="text-sm font-medium mb-2 block">
             {t('config.full_editor.title')}
           </label>
-          <Textarea
-            value={jsonText}
-            onChange={(e) => handleJSONChange(e.target.value)}
-            className="font-mono text-sm min-h-[400px] resize-y"
-            placeholder={t('config.json_placeholder')}
-          />
+          <div className="border rounded-md overflow-hidden">
+            <CodeMirror
+              value={jsonText}
+              height="400px"
+              extensions={[json()]}
+              theme={theme === 'dark' ? oneDark : 'light'}
+              onChange={(value) => handleJSONChange(value)}
+              placeholder={t('config.json_placeholder')}
+              basicSetup={{
+                lineNumbers: true,
+                highlightActiveLineGutter: true,
+                highlightActiveLine: true,
+                foldGutter: true,
+                bracketMatching: true,
+                autocompletion: true,
+              }}
+            />
+          </div>
         </div>
 
         {/* Validation Error */}

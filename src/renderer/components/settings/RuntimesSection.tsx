@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { RuntimeInfo } from '@/types/runtime';
+import type { RuntimeInfo } from '../../../types/runtime';
 import { Trash2, RefreshCw, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

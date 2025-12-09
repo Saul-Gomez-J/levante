@@ -160,15 +160,16 @@ export function registerConnectionHandlers(
       const testConfig = { ...config, id: testId };
 
       try {
-        // Create a timeout promise that rejects after 15 seconds
+        // Create a timeout promise that rejects after 45 seconds
+        // Increased from 15s to account for cold start and retry attempts
         const timeoutPromise = new Promise<never>((_, reject) => {
           setTimeout(() => {
             reject(
               new Error(
-                `Connection test timed out after 15 seconds. This may indicate a transport mismatch (e.g., trying to connect to an HTTP server with SSE transport, or vice versa).`
+                `Connection test timed out after 45 seconds. This may indicate a transport mismatch or the server is not responding.`
               )
             );
-          }, 15000);
+          }, 45000);
         });
 
         // Race the connection test against the timeout
