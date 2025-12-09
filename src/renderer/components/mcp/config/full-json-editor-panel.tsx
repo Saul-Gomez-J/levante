@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { Sparkles, Code } from 'lucide-react';
-import { AutomaticMCPConfig } from './AutomaticMCPConfig';
+import { FileText, Code } from 'lucide-react';
+import { FormMCPConfig } from './FormMCPConfig';
 import { FullJSONEditor } from './FullJSONEditor';
 import { MCPServerPreview } from './mcp-server-preview';
 import { RuntimeChoiceDialog, RuntimeErrorType } from '@/components/runtime/RuntimeChoiceDialog';
@@ -24,7 +24,7 @@ interface ServerTestState {
 
 export function FullJSONEditorPanel({ isOpen, onClose }: FullJSONEditorPanelProps) {
   const { t } = useTranslation('mcp');
-  const [activeTab, setActiveTab] = useState<'automatic' | 'custom'>('automatic');
+  const [activeTab, setActiveTab] = useState<'form' | 'custom'>('form');
   const [mcpConfig, setMcpConfig] = useState<{ mcpServers: Record<string, any> } | null>(null);
   const [serverTests, setServerTests] = useState<Record<string, ServerTestState>>({});
 
@@ -244,11 +244,11 @@ export function FullJSONEditorPanel({ isOpen, onClose }: FullJSONEditorPanelProp
           <div className="grid grid-cols-2 gap-6">
             {/* Left Column: Tabs */}
             <div className="space-y-4">
-              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'automatic' | 'custom')}>
+              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'form' | 'custom')}>
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="automatic" className="flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" />
-                    {t('config.add_tabs.automatic')}
+                  <TabsTrigger value="form" className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    {t('config.add_tabs.form')}
                   </TabsTrigger>
                   <TabsTrigger value="custom" className="flex items-center gap-2">
                     <Code className="h-4 w-4" />
@@ -256,16 +256,14 @@ export function FullJSONEditorPanel({ isOpen, onClose }: FullJSONEditorPanelProp
                   </TabsTrigger>
                 </TabsList>
 
-                <TabsContent value="automatic" className="mt-6">
-                  <AutomaticMCPConfig
+                <TabsContent value="form" className="mt-6" forceMount hidden={activeTab !== 'form'}>
+                  <FormMCPConfig
                     serverId={null}
                     onClose={onClose}
-                    onSwitchToCustom={() => setActiveTab('custom')}
-                    onServerAdded={loadMCPConfiguration}
                   />
                 </TabsContent>
 
-                <TabsContent value="custom" className="mt-6">
+                <TabsContent value="custom" className="mt-6" forceMount hidden={activeTab !== 'custom'}>
                   <FullJSONEditor
                     onClose={onClose}
                     onConfigChange={setMcpConfig}
@@ -277,7 +275,7 @@ export function FullJSONEditorPanel({ isOpen, onClose }: FullJSONEditorPanelProp
             {/* Right Column: Active MCP Servers Preview */}
             <div className="space-y-4">
               {mcpConfig && mcpConfig.mcpServers && Object.keys(mcpConfig.mcpServers).length > 0 ? (
-                <Card className="border-none">
+                <Card className="border border-border">
                   <CardHeader>
                     <CardTitle className="text-lg">{t('config.preview.active_servers')}</CardTitle>
                     <CardDescription>
@@ -310,7 +308,7 @@ export function FullJSONEditorPanel({ isOpen, onClose }: FullJSONEditorPanelProp
                   </CardContent>
                 </Card>
               ) : (
-                <Card className="border-none bg-muted/30">
+                <Card className="border border-border bg-muted/30">
                   <CardContent className="pt-6">
                     <div className="text-center text-muted-foreground py-12">
                       <p className="text-sm">{t('config.preview.no_servers')}</p>
