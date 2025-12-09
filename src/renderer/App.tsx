@@ -38,10 +38,14 @@ function App() {
           setTheme(themeResult.data);
         }
 
-        const languageResult = await window.levante.preferences.get('language');
-        if (languageResult?.data) {
-          i18n.changeLanguage(languageResult.data);
-          logger.core.info('Language loaded from preferences', { language: languageResult.data });
+        // Only apply language preference once the wizard is completed to avoid
+        // overriding the user's selection in the onboarding flow.
+        if (wizardCompleted) {
+          const languageResult = await window.levante.preferences.get('language');
+          if (languageResult?.data) {
+            i18n.changeLanguage(languageResult.data);
+            logger.core.info('Language loaded from preferences', { language: languageResult.data });
+          }
         }
       } catch (error) {
         logger.core.error('Failed to load user preferences', {
@@ -51,7 +55,7 @@ function App() {
     };
 
     loadUserPreferences();
-  }, [i18n]);
+  }, [i18n, wizardCompleted]);
 
   // Listen for theme changes from settings
   useEffect(() => {
