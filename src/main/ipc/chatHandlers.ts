@@ -62,7 +62,8 @@ async function handleChatStream(
     },
   });
 
-  setTimeout(async () => {
+  // Start streaming immediately (setImmediate ensures return executes first)
+  setImmediate(async () => {
     try {
       logger.aiSdk.debug("Starting AI stream", { streamId });
       let chunkCount = 0;
@@ -79,7 +80,7 @@ async function handleChatStream(
         }
 
         event.sender.send(`levante/chat/stream/${streamId}`, chunk);
-        await new Promise((resolve) => setImmediate(resolve));
+        // Note: for-await already yields to event loop between chunks
 
         if (chunk.done) {
           logger.aiSdk.info("AI stream completed successfully", {
@@ -104,7 +105,7 @@ async function handleChatStream(
       activeStreams.delete(streamId);
       logger.aiSdk.debug("Stream cleanup complete", { streamId });
     }
-  }, 10);
+  });
 
   logger.aiSdk.debug("Returning streamId", { streamId });
   return { streamId };

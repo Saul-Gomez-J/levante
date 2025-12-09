@@ -31,7 +31,8 @@
     "models": "Models",
     "settings": "Settings",
     "mcp": "MCP Store",
-    "active_mcps": "Active MCPs"
+    "active_mcps": "Active MCPs",
+    "inference": "Inference"
   },
   "status": {
     "loading": "Loading...",

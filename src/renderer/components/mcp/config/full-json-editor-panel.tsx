@@ -6,6 +6,8 @@ import { Sparkles, Code } from 'lucide-react';
 import { AutomaticMCPConfig } from './AutomaticMCPConfig';
 import { FullJSONEditor } from './FullJSONEditor';
 import { MCPServerPreview } from './mcp-server-preview';
+import { RuntimeChoiceDialog, RuntimeErrorType } from '@/components/runtime/RuntimeChoiceDialog';
+import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 import { MCPServerConfig, MCPTool } from '@/types/mcp';
 
@@ -25,6 +27,26 @@ export function FullJSONEditorPanel({ isOpen, onClose }: FullJSONEditorPanelProp
   const [activeTab, setActiveTab] = useState<'automatic' | 'custom'>('automatic');
   const [mcpConfig, setMcpConfig] = useState<{ mcpServers: Record<string, any> } | null>(null);
   const [serverTests, setServerTests] = useState<Record<string, ServerTestState>>({});
+
+  const [runtimeDialogState, setRuntimeDialogState] = useState<{
+    isOpen: boolean;
+    errorType: RuntimeErrorType | null;
+    serverName: string;
+    serverId: string;
+    testConfig: MCPServerConfig | null;
+    metadata: {
+      systemPath?: string;
+      runtimeType?: 'node' | 'python';
+      runtimeVersion?: string;
+    };
+  }>({
+    isOpen: false,
+    errorType: null,
+    serverName: '',
+    serverId: '',
+    testConfig: null,
+    metadata: {},
+  });
 
   // Load current MCP configuration
   useEffect(() => {
@@ -52,10 +74,20 @@ export function FullJSONEditorPanel({ isOpen, onClose }: FullJSONEditorPanelProp
     }));
 
     try {
+      // Auto-detect transport type if not provided
+      let transportType = serverConfig.transport || serverConfig.type;
+      if (!transportType) {
+        if (serverConfig.command) {
+          transportType = 'stdio';
+        } else if (serverConfig.url || serverConfig.baseUrl) {
+          transportType = 'http';
+        }
+      }
+
       const testConfig: MCPServerConfig = {
         id: `test-${serverId}-${Date.now()}`,
         name: serverConfig.name || serverId,
-        transport: serverConfig.transport || serverConfig.type,
+        transport: transportType,
         command: serverConfig.command,
         args: serverConfig.args || [],
         env: serverConfig.env || {},
@@ -64,6 +96,23 @@ export function FullJSONEditorPanel({ isOpen, onClose }: FullJSONEditorPanelProp
       };
 
       const result = await window.levante.mcp.testConnection(testConfig);
+
+      // Handle runtime-specific errors
+      if (!result.success && ((result as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' || (result as any).errorCode === 'RUNTIME_NOT_FOUND')) {
+        setServerTests(prev => ({
+          ...prev,
+          [serverId]: { testing: false, result: null, tools: [] }
+        }));
+        setRuntimeDialogState({
+          isOpen: true,
+          errorType: (result as any).errorCode,
+          serverName: serverConfig.name || serverId,
+          serverId,
+          testConfig,
+          metadata: (result as any).metadata || {},
+        });
+        return;
+      }
 
       setServerTests(prev => ({
         ...prev,
@@ -90,9 +139,103 @@ export function FullJSONEditorPanel({ isOpen, onClose }: FullJSONEditorPanelProp
     }
   };
 
+  const handleRuntimeUseSystem = async () => {
+    if (!runtimeDialogState.testConfig || !runtimeDialogState.serverId) return;
+
+    setServerTests(prev => ({
+      ...prev,
+      [runtimeDialogState.serverId]: { testing: true, result: null, tools: [] }
+    }));
+
+    try {
+      const modifiedConfig = {
+        ...runtimeDialogState.testConfig,
+        runtime: {
+          ...runtimeDialogState.testConfig.runtime!,
+          source: 'system' as const
+        }
+      };
+
+      const result = await window.levante.mcp.testConnection(modifiedConfig);
+
+      setServerTests(prev => ({
+        ...prev,
+        [runtimeDialogState.serverId]: {
+          testing: false,
+          result: {
+            success: result.success,
+            message: result.success
+              ? t('config.test.success_with_system_runtime')
+              : result.error || t('config.test.failed_message')
+          },
+          tools: result.data || []
+        }
+      }));
+    } catch (error: any) {
+      setServerTests(prev => ({
+        ...prev,
+        [runtimeDialogState.serverId]: {
+          testing: false,
+          result: { success: false, message: error.message || t('config.test.error_message') },
+          tools: []
+        }
+      }));
+    }
+  };
+
+  const handleRuntimeInstallLevante = async () => {
+    if (!runtimeDialogState.testConfig || !runtimeDialogState.serverId) return;
+
+    setServerTests(prev => ({
+      ...prev,
+      [runtimeDialogState.serverId]: { testing: true, result: null, tools: [] }
+    }));
+
+    try {
+      const toastId = toast.loading(t('config.runtime.installing'));
+
+      const installResult = await window.levante.mcp.installRuntime(
+        runtimeDialogState.metadata.runtimeType!,
+        runtimeDialogState.metadata.runtimeVersion!
+      );
+
+      if (!installResult.success) {
+        throw new Error(installResult.error || 'Failed to install runtime');
+      }
+
+      const result = await window.levante.mcp.testConnection(runtimeDialogState.testConfig);
+
+      toast.success(t('config.runtime.installed'), { id: toastId });
+
+      setServerTests(prev => ({
+        ...prev,
+        [runtimeDialogState.serverId]: {
+          testing: false,
+          result: {
+            success: result.success,
+            message: result.success
+              ? t('config.test.success_with_new_runtime')
+              : result.error || t('config.test.failed_message')
+          },
+          tools: result.data || []
+        }
+      }));
+    } catch (error: any) {
+      toast.error(`${t('config.runtime.install_failed')}: ${error.message}`);
+      setServerTests(prev => ({
+        ...prev,
+        [runtimeDialogState.serverId]: {
+          testing: false,
+          result: { success: false, message: error.message || t('config.test.error_message') },
+          tools: []
+        }
+      }));
+    }
+  };
+
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="right" className="w-[900px] sm:max-w-[90vw] overflow-y-auto">
+      <SheetContent side="right" className="w-[900px] sm:max-w-[90vw] overflow-y-auto" showClose={false}>
         <SheetHeader>
           <SheetTitle>{t('config.full_editor.panel_title')}</SheetTitle>
         </SheetHeader>
@@ -179,6 +322,17 @@ export function FullJSONEditorPanel({ isOpen, onClose }: FullJSONEditorPanelProp
           </div>
         </div>
       </SheetContent>
+
+      {/* Runtime Choice Dialog */}
+      <RuntimeChoiceDialog
+        open={runtimeDialogState.isOpen}
+        onClose={() => setRuntimeDialogState({ isOpen: false, errorType: null, serverName: '', serverId: '', testConfig: null, metadata: {} })}
+        errorType={runtimeDialogState.errorType!}
+        serverName={runtimeDialogState.serverName}
+        metadata={runtimeDialogState.metadata}
+        onUseSystem={handleRuntimeUseSystem}
+        onInstallLevante={handleRuntimeInstallLevante}
+      />
     </Sheet>
   );
 }

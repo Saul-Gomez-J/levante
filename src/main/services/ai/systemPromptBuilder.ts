@@ -86,7 +86,9 @@ For example:
 - If searching files, display the search results
 - If querying data, present the retrieved information
 
-Always explain what tools you're using and provide meaningful responses based on the tool outputs.`;
+Always explain what tools you're using and provide meaningful responses based on the tool outputs.
+
+Some MCP tools may return rich visual content (cards, charts, widgets). When multiple similar tools exist and one provides visual output, consider using the visual version for a better user experience.`;
   }
 
   if (!webSearch && (!enableMCP || toolCount === 0)) {
@@ -123,7 +125,41 @@ sequenceDiagram
     Bob-->>Alice: Hello Alice!
 \`\`\`
 
-Always provide diagrams when users request visual representations, flowcharts, process maps, or any kind of diagram. Be proactive in offering diagrams for complex explanations.`;
+**IMPORTANT - Mermaid Best Practices**:
+To ensure diagrams render correctly, follow these guidelines:
+
+1. **Keep node labels simple and concise** - Use short text (1-3 words per line)
+2. **Limit line breaks** - Use maximum 2-3 <br/> tags per node, prefer shorter labels
+3. **Avoid excessive emojis** - Use sparingly (0-1 per node) as they can cause parsing errors
+4. **Use simple characters** - Avoid special characters, tildes, and complex unicode when possible
+5. **Test complexity** - If a diagram seems too complex, split it into multiple simpler diagrams
+6. **Prefer clarity over detail** - Simple, clear diagrams are better than complex, detailed ones
+7. **Color contrast** - When using colors, ensure good readability:
+   - Avoid bright colors (yellow, light green, cyan) with light text - poor contrast
+   - Use dark colors (#2c5282, #1e3a5f, #2d5016) for white text
+   - Use light colors (#e0f2fe, #f0fdf4) for dark text
+   - BEST: Use default theme colors (no custom styling) for automatic contrast
+   - Example: 'style A fill:#2c5282,color:#fff' (good) vs 'style A fill:#ffff00' (bad - unreadable)
+
+**Example of GOOD syntax**:
+\`\`\`mermaid
+graph LR
+    A[React Hook Form<br/>Winner 2025] --> B[Recommended]
+    C[Formik<br/>Legacy] --> D[Alternative]
+    style A fill:#2c5282,color:#fff
+    style C fill:#f0fdf4,color:#0f172a
+\`\`\`
+
+**Example of BAD syntax (avoid these)**:
+\`\`\`mermaid
+graph TD
+    A[Library ⭐⭐⭐<br/>- Feature 1<br/>- Feature 2<br/>- Feature 3<br/>- Feature 4] --> B
+    style A fill:#ffff00
+    style B fill:#00ff00,color:#fff
+\`\`\`
+(Too many emojis, too many line breaks, bright yellow/green with poor contrast)
+
+Always provide diagrams when users request visual representations, but prioritize simple, parseable syntax over visual complexity.`;
 
   // Debug log for final system prompt
   logger.aiSdk.debug('Final system prompt generated', {

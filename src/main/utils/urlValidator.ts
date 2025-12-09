@@ -167,7 +167,7 @@ export function validateLocalEndpoint(
 ): { valid: boolean; error?: string; parsedUrl?: URL } {
   return validateUrl(endpoint, {
     allowLocalhost: true,
-    allowedPorts: [11434, 8080, 8000, 5000, 3000], // Common AI endpoint ports
+    allowedPorts: [11434, 1234, 8080, 8000, 5000, 3000], // Common AI endpoint ports
     maxPort: 65535
   });
 }

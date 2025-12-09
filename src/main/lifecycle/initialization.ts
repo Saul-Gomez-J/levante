@@ -9,7 +9,7 @@
  */
 
 import { app, BrowserWindow } from "electron";
-import { getLogger } from "../services/logging";
+import { getLogger, setLogTimezone } from "../services/logging";
 import { databaseService } from "../services/databaseService";
 import { preferencesService } from "../services/preferencesService";
 import { userProfileService } from "../services/userProfileService";
@@ -25,6 +25,9 @@ import { registerDebugHandlers } from "../ipc/debugHandlers";
 import { setupChatHandlers } from "../ipc/chatHandlers";
 import { setupAppHandlers } from "../ipc/appHandlers";
 import { setupOAuthHandlers } from "../ipc/oauthHandlers";
+import { setupInferenceHandlers } from "../ipc/inferenceHandlers";
+import { setupAttachmentHandlers } from "../ipc/attachmentHandlers";
+import { registerAnalyticsHandlers } from "../ipc/analyticsHandlers";
 
 const logger = getLogger();
 
@@ -65,6 +68,13 @@ export async function initializeServices(): Promise<void> {
   try {
     await preferencesService.initialize();
     logger.core.info("Preferences service initialized successfully");
+
+    // Configure log timezone from user preferences
+    const timezone = preferencesService.get("timezone");
+    if (timezone) {
+      setLogTimezone(timezone);
+      logger.core.info("Log timezone configured", { timezone });
+    }
   } catch (error) {
     logger.core.error("Failed to initialize preferences service", {
       error: error instanceof Error ? error.message : error,
@@ -99,16 +109,19 @@ export async function initializeServices(): Promise<void> {
  * Should be called after service initialization
  * @param getMainWindow - Function to get current main window reference
  */
-export function registerIPCHandlers(getMainWindow: () => BrowserWindow | null): void {
+export async function registerIPCHandlers(getMainWindow: () => BrowserWindow | null): Promise<void> {
   // Service-specific handlers
   setupDatabaseHandlers();
   setupPreferencesHandlers();
   setupModelHandlers();
+  setupInferenceHandlers();
+  setupAttachmentHandlers();
   setupLoggerHandlers();
   setupWizardHandlers();
   setupProfileHandlers();
-  registerMCPHandlers();
+  await registerMCPHandlers();
   registerDebugHandlers();
+  registerAnalyticsHandlers();
 
   // App-level handlers
   setupChatHandlers();

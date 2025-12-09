@@ -1,29 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useMCPStore } from '@/stores/mcpStore';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Loader2, AlertCircle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Plus, Loader2, AlertCircle, Store, Wrench, Search } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { IntegrationCard } from './integration-card';
+import { ProviderFilter } from './provider-filter';
 import { JSONEditorPanel } from '../config/json-editor-panel';
 import { FullJSONEditorPanel } from '../config/full-json-editor-panel';
 import { ImportExport } from '../config/import-export';
 import { NetworkStatus } from '../connection/connection-status';
-import { SystemDiagnosticAlert } from '../SystemDiagnosticAlert';
 import { ApiKeysModal } from '../config/api-keys-modal';
+import { RuntimeChoiceDialog, RuntimeErrorType } from '@/components/runtime/RuntimeChoiceDialog';
+import { MCPInfoSheet } from '../info/MCPInfoSheet';
 import { getRendererLogger } from '@/services/logger';
 import { toast } from 'sonner';
 import { MCPServerConfig, MCPConfigField } from '@/types/mcp';
 import { useTranslation } from 'react-i18next';
+import { cn } from '@/lib/utils';
 
 const logger = getRendererLogger();
 
 interface StoreLayoutProps {
   mode: 'active' | 'store';
+  onModeChange: (mode: 'active' | 'store') => void;
 }
 
-export function StoreLayout({ mode }: StoreLayoutProps) {
+export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
   const { t } = useTranslation('mcp');
+  const hasSyncedProviders = useRef(false);
   const {
     registry,
     activeServers,
@@ -36,13 +42,22 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
     connectServer,
     disconnectServer,
     addServer,
-    removeServer
+    removeServer,
+    // Provider state and actions
+    providers,
+    selectedProvider,
+    loadingProviders,
+    syncAllProviders,
+    setSelectedProvider,
+    getFilteredEntries,
+    getRegistryEntryById
   } = useMCPStore();
 
   const [configServerId, setConfigServerId] = useState<string | null>(null);
   const [isFullJSONEditorOpen, setIsFullJSONEditorOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [installingServerId, setInstallingServerId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [apiKeysModalState, setApiKeysModalState] = useState<{
     isOpen: boolean;
     entryId: string | null;
@@ -55,27 +70,93 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
     fields: [],
   });
 
+  const [runtimeDialogState, setRuntimeDialogState] = useState<{
+    isOpen: boolean;
+    errorType: RuntimeErrorType | null;
+    serverName: string;
+    serverConfig: MCPServerConfig | null;
+    metadata: {
+      systemPath?: string;
+      runtimeType?: 'node' | 'python';
+      runtimeVersion?: string;
+    };
+  }>({
+    isOpen: false,
+    errorType: null,
+    serverName: '',
+    serverConfig: null,
+    metadata: {},
+  });
+
+  const [infoSheetState, setInfoSheetState] = useState<{
+    isOpen: boolean;
+    entryId: string | null;
+  }>({
+    isOpen: false,
+    entryId: null,
+  });
+
+  // Filter entries by provider and search query
+  const getFilteredAndSearchedEntries = () => {
+    const filteredByProvider = getFilteredEntries();
+
+    if (!searchQuery.trim()) {
+      return filteredByProvider;
+    }
+
+    const query = searchQuery.toLowerCase();
+    return filteredByProvider.filter(entry =>
+      entry.name.toLowerCase().includes(query) ||
+      entry.description.toLowerCase().includes(query) ||
+      entry.category.toLowerCase().includes(query)
+    );
+  };
+
   useEffect(() => {
     // Load initial data
     loadRegistry();
     loadActiveServers();
 
+    // Sync all providers once per session
+    if (!hasSyncedProviders.current) {
+      hasSyncedProviders.current = true;
+      syncAllProviders();
+    }
+
     // Refresh connection status every 30 seconds
     const interval = setInterval(refreshConnectionStatus, 30000);
     return () => clearInterval(interval);
-  }, [loadRegistry, loadActiveServers, refreshConnectionStatus]);
+  }, [loadRegistry, loadActiveServers, refreshConnectionStatus, syncAllProviders]);
 
   const handleToggleServer = async (serverId: string) => {
     const server = activeServers.find(s => s.id === serverId);
-    const isActive = connectionStatus[serverId] === 'connected';
+    const isEnabled = server?.enabled !== false;
 
-    if (isActive) {
+    if (isEnabled) {
+      // Server is enabled → disable it (disconnect + move to disabled)
       await disconnectServer(serverId);
     } else if (server) {
-      await connectServer(server);
+      // Server is disabled → enable it (connect + move to mcpServers)
+      try {
+        await connectServer(server);
+      } catch (error: any) {
+        // Handle runtime-specific errors
+        if (error.errorCode === 'RUNTIME_CHOICE_REQUIRED' || error.errorCode === 'RUNTIME_NOT_FOUND') {
+          setRuntimeDialogState({
+            isOpen: true,
+            errorType: error.errorCode,
+            serverName: server.name,
+            serverConfig: error.serverConfig || server,
+            metadata: error.metadata || {},
+          });
+        } else {
+          // Other errors are already handled by store
+          logger.mcp.error('Failed to toggle server', { serverId, error: error.message });
+        }
+      }
     } else {
       // Server not configured yet, open config modal
-      const registryEntry = registry.entries.find(entry => entry.id === serverId);
+      const registryEntry = getRegistryEntryById(serverId);
       if (registryEntry) {
         // This would trigger server configuration
         logger.mcp.debug('Server needs configuration', { serverId, registryEntry: registryEntry.name });
@@ -88,7 +169,7 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
   };
 
   const handleAddToActive = async (entryId: string, apiKeyValues?: Record<string, string>) => {
-    const registryEntry = registry.entries.find(e => e.id === entryId);
+    const registryEntry = getRegistryEntryById(entryId);
     if (!registryEntry) return;
 
     // Detectar si hay campos que requieren input del usuario
@@ -170,14 +251,33 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
         serverConfig.headers = headers;
       }
 
-      // Guardar directo en .mcp.json (sin test, sin connect)
+      // Guardar directo en .mcp.json
       await addServer(serverConfig);
 
       // Recargar lista de servidores activos
       await loadActiveServers();
 
-      // Feedback al usuario
-      toast.success(t('messages.added', { name: registryEntry.name }));
+      // Intentar conectar (esto instalará el runtime si es necesario)
+      const toastId = toast.loading(t('messages.connecting', { name: registryEntry.name }));
+
+      try {
+        await connectServer(serverConfig);
+        toast.success(t('messages.added', { name: registryEntry.name }), { id: toastId });
+      } catch (connectError: any) {
+        // Server is saved but connection failed
+        // This can happen if runtime installation fails
+        logger.mcp.warn('Server added but connection failed', {
+          serverId: entryId,
+          error: connectError.message
+        });
+
+        if (connectError.message === 'RUNTIME_NOT_FOUND') {
+          toast.error(t('messages.runtime_not_available'), { id: toastId });
+        } else {
+          // Server saved, but couldn't connect - user can try to connect manually
+          toast.warning(t('messages.added_not_connected', { name: registryEntry.name }), { id: toastId });
+        }
+      }
     } catch (error) {
       toast.error(t('messages.add_failed'));
     } finally {
@@ -210,6 +310,53 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
     } catch (error) {
       logger.mcp.error('Failed to delete server', { serverId, error });
       toast.error(t('messages.delete_failed'));
+    }
+  };
+
+  const handleRuntimeUseSystem = async () => {
+    if (!runtimeDialogState.serverConfig) return;
+
+    try {
+      // Modify server config to use system runtime explicitly
+      const modifiedConfig = {
+        ...runtimeDialogState.serverConfig,
+        runtime: {
+          ...runtimeDialogState.serverConfig.runtime!,
+          source: 'system' as const
+        }
+      };
+
+      await connectServer(modifiedConfig);
+      toast.success(`Connected ${runtimeDialogState.serverName} using system runtime`);
+    } catch (error: any) {
+      logger.mcp.error('Failed to connect with system runtime', { error: error.message });
+      toast.error('Failed to connect with system runtime');
+    }
+  };
+
+  const handleRuntimeInstallLevante = async () => {
+    if (!runtimeDialogState.serverConfig) return;
+
+    try {
+      const toastId = toast.loading(`Installing runtime for ${runtimeDialogState.serverName}...`);
+
+      // Install runtime via IPC
+      const installResult = await window.levante.mcp.installRuntime(
+        runtimeDialogState.metadata.runtimeType!,
+        runtimeDialogState.metadata.runtimeVersion!
+      );
+
+      if (!installResult.success) {
+        throw new Error(installResult.error || 'Failed to install runtime');
+      }
+
+      // Now connect with the installed Levante runtime
+      await connectServer(runtimeDialogState.serverConfig);
+
+      toast.success(`Runtime installed and ${runtimeDialogState.serverName} connected!`, { id: toastId });
+    } catch (error: any) {
+      logger.mcp.error('Failed to install runtime', { error: error.message });
+      toast.error(`Failed to install runtime: ${error.message}`);
     }
   };
 
@@ -246,6 +393,20 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
     } finally {
       setIsRefreshing(false);
     }
+  };
+
+  const handleShowInfo = (entryId: string) => {
+    setInfoSheetState({
+      isOpen: true,
+      entryId,
+    });
+  };
+
+  const handleCloseInfo = () => {
+    setInfoSheetState({
+      isOpen: false,
+      entryId: null,
+    });
   };
 
   if (error) {
@@ -294,15 +455,40 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
       {/* Active Mode: Show only active servers */}
       {mode === 'active' && (
         <section>
-          {/* System Diagnostic Alert */}
-          <SystemDiagnosticAlert />
-
           {activeServers.length > 0 ? (
             <>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-2xl font-bold">{t('active.connected_servers')}</h2>
+                <div className="flex items-center gap-3">
+                  <h2 className="text-2xl font-bold">{t('active.connected_servers')}</h2>
+                  <div className="inline-flex items-center rounded-full bg-muted p-1">
+                    <button
+                      onClick={() => onModeChange('active')}
+                      className={cn(
+                        "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
+                        mode === 'active'
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                      title={t('active.title')}
+                    >
+                      <Wrench className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => onModeChange('store')}
+                      className={cn(
+                        "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
+                        mode === 'store'
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
+                      )}
+                      title={t('store.title')}
+                    >
+                      <Store className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
                 <Badge variant="secondary">
-                  {t('active.active_count', { count: activeServers.length })}
+                  {t('active.active_count', { count: activeServers.filter(s => s.enabled !== false).length })}
                 </Badge>
               </div>
 
@@ -321,7 +507,7 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
                   </div>
                 </Card>
                 {activeServers.map(server => {
-                  const registryEntry = registry.entries.find(entry => entry.id === server.id);
+                  const registryEntry = getRegistryEntryById(server.id);
                   const status = connectionStatus[server.id] || 'disconnected';
 
                   return (
@@ -342,6 +528,36 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
             </>
           ) : (
             <div className="space-y-6">
+              <div className="flex items-center gap-3 mb-4">
+                <h2 className="text-2xl font-bold">{t('active.connected_servers')}</h2>
+                <div className="inline-flex items-center rounded-full bg-muted p-1">
+                  <button
+                    onClick={() => onModeChange('active')}
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
+                      mode === 'active'
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    title={t('active.title')}
+                  >
+                    <Wrench className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => onModeChange('store')}
+                    className={cn(
+                      "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
+                      mode === 'store'
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                    title={t('store.title')}
+                  >
+                    <Store className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
               <div className="text-center py-8">
                 <p className="text-muted-foreground mb-2">{t('active.no_servers')}</p>
                 <p className="text-sm text-muted-foreground">
@@ -373,14 +589,74 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
       {mode === 'store' && (
         <section>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold">{t('store.available_integrations')}</h2>
-            <Badge variant="outline">
-              {t('store.available', { count: registry.entries.length })}
-            </Badge>
+            <div className="flex items-center gap-3">
+              <h2 className="text-2xl font-bold">{t('store.available_integrations')}</h2>
+              <div className="inline-flex items-center rounded-full bg-muted p-1">
+                <button
+                  onClick={() => onModeChange('active')}
+                  className={cn(
+                    "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
+                    mode === 'active'
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  title={t('active.title')}
+                >
+                  <Wrench className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => onModeChange('store')}
+                  className={cn(
+                    "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
+                    mode === 'store'
+                      ? "bg-background text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  title={t('store.title')}
+                >
+                  <Store className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <ProviderFilter
+                providers={providers}
+                selectedProvider={selectedProvider}
+                onSelectProvider={setSelectedProvider}
+              />
+              <Badge variant="outline">
+                {t('store.available', { count: getFilteredAndSearchedEntries().length })}
+              </Badge>
+            </div>
           </div>
+
+          {/* Search Bar */}
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder={t('store.search_placeholder')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+
+          {/* No Results Message */}
+          {getFilteredAndSearchedEntries().length === 0 && searchQuery.trim() && (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground mb-2">{t('store.no_results')}</p>
+              <p className="text-sm text-muted-foreground">
+                {t('store.no_results_description')}
+              </p>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {/* Registry Cards */}
-            {registry.entries.map(entry => {
+            {getFilteredAndSearchedEntries().map(entry => {
               const server = activeServers.find(s => s.id === entry.id);
               const status = connectionStatus[entry.id] || 'disconnected';
               const isActive = !!server;
@@ -398,6 +674,7 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
                   onToggle={() => handleToggleServer(entry.id)}
                   onConfigure={() => handleConfigureServer(entry.id)}
                   onAddToActive={() => handleAddToActive(entry.id)}
+                  onShowInfo={() => handleShowInfo(entry.id)}
                 />
               );
             })}
@@ -425,6 +702,31 @@ export function StoreLayout({ mode }: StoreLayoutProps) {
         onSubmit={handleApiKeysSubmit}
         serverName={apiKeysModalState.serverName}
         fields={apiKeysModalState.fields}
+      />
+
+      {/* Runtime Choice Dialog */}
+      <RuntimeChoiceDialog
+        open={runtimeDialogState.isOpen}
+        onClose={() => setRuntimeDialogState({ isOpen: false, errorType: null, serverName: '', serverConfig: null, metadata: {} })}
+        errorType={runtimeDialogState.errorType!}
+        serverName={runtimeDialogState.serverName}
+        metadata={runtimeDialogState.metadata}
+        onUseSystem={handleRuntimeUseSystem}
+        onInstallLevante={handleRuntimeInstallLevante}
+      />
+
+      {/* MCP Info Sheet */}
+      <MCPInfoSheet
+        entry={infoSheetState.entryId ? getRegistryEntryById(infoSheetState.entryId) : null}
+        isOpen={infoSheetState.isOpen}
+        isInstalled={infoSheetState.entryId ? activeServers.some(s => s.id === infoSheetState.entryId) : false}
+        onClose={handleCloseInfo}
+        onInstall={() => {
+          if (infoSheetState.entryId) {
+            handleAddToActive(infoSheetState.entryId);
+            handleCloseInfo();
+          }
+        }}
       />
     </div>
   );

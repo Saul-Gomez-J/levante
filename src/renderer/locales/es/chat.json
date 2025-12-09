@@ -41,6 +41,8 @@
     "loading": "Cargando chats...",
     "no_chats": "Aún no hay chats",
     "no_results": "No se encontraron chats",
+    "rename_chat": "Renombrar chat",
+    "delete_chat": "Eliminar chat",
     "groups": {
       "today": "Hoy",
       "yesterday": "Ayer",
@@ -68,5 +70,29 @@
     "description": "Este modelo consume tokens de OpenRouter. No hace falta que añadas créditos para poder probarlo, pero aún así descontará créditos (OpenRouter tiene unos créditos de prueba, no te los dan pero te dejan estar más o menos -1$)",
     "cancel": "Cancelar",
     "continue": "Continuar"
+  },
+  "add_context": {
+    "button_title": "Añadir contexto",
+    "add_from": "Añadir desde {{server}}",
+    "upload_file": "Subir archivo",
+    "loading": "Cargando...",
+    "no_resources": "No hay recursos disponibles",
+    "prompts": "Prompts",
+    "resources": "Recursos",
+    "search_mcp": "Buscar MCP...",
+    "no_results": "No hay servidores coincidentes"
+  },
+  "prompt_modal": {
+    "title": "Introduce los parámetros",
+    "no_arguments": "Este prompt no tiene argumentos",
+    "cancel": "Cancelar",
+    "add": "Añadir prompt"
+  },
+  "preview_modal": {
+    "loading": "Cargando...",
+    "error": "Error",
+    "loading_content": "Cargando contenido...",
+    "error_loading": "Error al cargar el contenido",
+    "no_content": "No hay contenido disponible"
   }
 }

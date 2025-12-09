@@ -4,7 +4,6 @@ import { Sparkles, Code, AlertCircle } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { AutomaticMCPConfig } from './AutomaticMCPConfig';
 import { CustomMCPConfig } from './CustomMCPConfig';
-import { SystemDiagnosticAlert } from '../SystemDiagnosticAlert';
 import { useTranslation } from 'react-i18next';
 
 interface AddMCPTabsProps {
@@ -30,9 +29,6 @@ export function AddMCPTabs({ serverId, onClose }: AddMCPTabsProps) {
 
   return (
     <div className="space-y-4">
-      {/* System Diagnostic Alert */}
-      <SystemDiagnosticAlert />
-
       <div className="grid grid-cols-2 gap-6">
         {/* Left Column: Tabs */}
         <div className="space-y-4">

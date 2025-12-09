@@ -1,18 +1,49 @@
+import { useEffect, useState } from 'react';
 import {
   PersonalizationSection,
   AppearanceSection,
   SecuritySection,
-  AIConfigSection
+  PrivacySection,
+  AIConfigSection,
+  DeveloperModeSection,
+  RuntimesSection,
+  MCPSection
 } from '@/components/settings';
 
 const SettingsPage = () => {
+  const [developerMode, setDeveloperMode] = useState(false);
+
+  useEffect(() => {
+    const loadMode = async () => {
+      const result = await window.levante.preferences.get('developerMode');
+      if (result.success) {
+        setDeveloperMode(result.data ?? false);
+      }
+    };
+    loadMode();
+
+    // Listen for changes in developer mode
+    const handlePreferenceChange = (event: CustomEvent) => {
+      if (event.detail?.key === 'developerMode') {
+        setDeveloperMode(event.detail.value);
+      }
+    };
+
+    window.addEventListener('preference-changed', handlePreferenceChange as EventListener);
+    return () => window.removeEventListener('preference-changed', handlePreferenceChange as EventListener);
+  }, []);
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-4xl mx-auto space-y-6 px-4 mb-10">
         <PersonalizationSection />
         <AppearanceSection />
         <SecuritySection />
+        <PrivacySection />
         <AIConfigSection />
+        <DeveloperModeSection />
+        {developerMode && <RuntimesSection />}
+        <MCPSection />
       </div>
     </div>
   );

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Search, MessageSquare, Plus, Trash2, MoreVertical } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Search, MessageSquare, Plus, Trash2, MoreVertical, Pencil } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -18,6 +18,7 @@ interface ChatListProps {
   onSessionSelect: (sessionId: string) => void;
   onNewChat: () => void;
   onDeleteChat: (sessionId: string) => void;
+  onRenameChat: (sessionId: string, newTitle: string) => void;
   loading?: boolean;
 }
 
@@ -27,11 +28,15 @@ export function ChatList({
   onSessionSelect,
   onNewChat,
   onDeleteChat,
+  onRenameChat,
   loading = false
 }: ChatListProps) {
   const { t } = useTranslation('chat');
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredSessions, setFilteredSessions] = useState<ChatSession[]>(sessions);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Filter sessions based on search query
   useEffect(() => {
@@ -90,6 +95,36 @@ export function ChatList({
     });
   };
 
+  // Handle rename start
+  const handleRenameStart = (session: ChatSession) => {
+    setEditingSessionId(session.id);
+    setEditingTitle(session.title || '');
+  };
+
+  // Handle rename save
+  const handleRenameSave = (sessionId: string) => {
+    const trimmedTitle = editingTitle.trim();
+    if (trimmedTitle && trimmedTitle.length > 0 && trimmedTitle.length <= 50) {
+      onRenameChat(sessionId, trimmedTitle);
+    }
+    setEditingSessionId(null);
+    setEditingTitle('');
+  };
+
+  // Handle rename cancel
+  const handleRenameCancel = () => {
+    setEditingSessionId(null);
+    setEditingTitle('');
+  };
+
+  // Auto-focus and select text when editing starts
+  useEffect(() => {
+    if (editingSessionId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingSessionId]);
+
   return (
     <div className="flex flex-col h-full">
       {/* Header with New Chat button */}
@@ -144,14 +179,35 @@ export function ChatList({
                       "hover:bg-accent/50",
                       currentSessionId === session.id && "bg-accent"
                     )}
-                    onClick={() => onSessionSelect(session.id)}
+                    onClick={() => editingSessionId !== session.id && onSessionSelect(session.id)}
                   >
                     <div className="flex items-center gap-2 p-1">
 
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">
-                          {session.title || 'Untitled Chat'}
-                        </div>
+                        {editingSessionId === session.id ? (
+                          <Input
+                            ref={inputRef}
+                            value={editingTitle}
+                            onChange={(e) => setEditingTitle(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleRenameSave(session.id);
+                              } else if (e.key === 'Escape') {
+                                e.preventDefault();
+                                handleRenameCancel();
+                              }
+                            }}
+                            onBlur={() => handleRenameSave(session.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-7 text-sm"
+                            maxLength={50}
+                          />
+                        ) : (
+                          <div className="text-sm font-medium truncate">
+                            {session.title || 'Untitled Chat'}
+                          </div>
+                        )}
                       </div>
 
                       <DropdownMenu>
@@ -167,14 +223,22 @@ export function ChatList({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
+                            onSelect={(e) => {
+                              e.preventDefault();
+                              handleRenameStart(session);
+                            }}
+                          >
+                            <Pencil size={14} className="mr-2" />
+                            {t('chat_list.rename_chat')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onSelect={(e) => {
                               onDeleteChat(session.id);
                             }}
                             className="text-destructive focus:text-destructive"
                           >
                             <Trash2 size={14} className="mr-2" />
-                            Delete Chat
+                            {t('chat_list.delete_chat')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>

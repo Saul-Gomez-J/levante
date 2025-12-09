@@ -168,6 +168,8 @@ export const Mermaid = ({ chart, className }: MermaidProps) => {
   const isDark = theme === 'dark';
 
   useEffect(() => {
+    let isMounted = true;
+
     if (chart.trim()) {
       setIsLoading(true);
       setError('');
@@ -183,14 +185,32 @@ export const Mermaid = ({ chart, className }: MermaidProps) => {
       });
 
       mermaid.render(mermaidId, chart).then((result) => {
-        setSvgContent(result.svg);
-        setIsLoading(false);
+        if (isMounted) {
+          setSvgContent(result.svg);
+          setIsLoading(false);
+        }
       }).catch((error) => {
-        console.error('Mermaid rendering error:', error);
-        setError(error.message || 'Failed to render diagram');
-        setIsLoading(false);
+        if (isMounted) {
+          // When Mermaid fails, it may create an error SVG in the DOM
+          // We need to clean it up to prevent it from being displayed
+          setTimeout(() => {
+            const errorElement = document.getElementById(`d${mermaidId}`);
+            if (errorElement) {
+              errorElement.remove();
+            }
+          }, 100);
+
+          console.error('Mermaid rendering error:', error);
+          setError(error.message || 'Failed to render diagram');
+          setIsLoading(false);
+        }
       });
     }
+
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
   }, [chart, mermaidId, isDark]);
 
   if (isLoading) {

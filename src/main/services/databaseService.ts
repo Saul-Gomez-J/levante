@@ -307,6 +307,31 @@ export class DatabaseService {
           // Re-enable foreign key constraints
           `PRAGMA foreign_keys = ON`
         ]
+      },
+      {
+        version: 3,
+        name: 'Add attachments support',
+        queries: [
+          // Add attachments column to messages table
+          // Stores JSON array of MessageAttachment objects
+          `ALTER TABLE messages ADD COLUMN attachments TEXT DEFAULT NULL`,
+
+          // Add index for messages with attachments (for faster queries)
+          `CREATE INDEX IF NOT EXISTS idx_messages_attachments
+           ON messages(session_id, attachments)
+           WHERE attachments IS NOT NULL`
+        ]
+      },
+      {
+        version: 4,
+        name: 'Add session type',
+        queries: [
+          // Add session_type column to distinguish between chat and inference sessions
+          `ALTER TABLE chat_sessions ADD COLUMN session_type TEXT DEFAULT 'chat' NOT NULL`,
+
+          // Create index for faster filtering by session type
+          `CREATE INDEX IF NOT EXISTS idx_chat_sessions_type ON chat_sessions(session_type)`
+        ]
       }
     ];
   }

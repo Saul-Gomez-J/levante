@@ -55,6 +55,16 @@ export async function getDefaultCloudProviders(): Promise<ProviderConfig[]> {
       settings: {},
       modelSource: 'dynamic',
       baseUrl: 'https://api.x.ai/v1'
+    },
+    {
+      id: 'huggingface',
+      name: 'Hugging Face',
+      type: 'huggingface',
+      models: [],
+      isActive: false,
+      settings: {},
+      modelSource: 'dynamic',
+      baseUrl: 'https://router.huggingface.co/v1'
     }
   ];
 }
@@ -109,8 +119,8 @@ export async function migrateCloudProvider(
 export async function migrateCloudProvidersToDynamic(
   providers: ProviderConfig[]
 ): Promise<{ migrated: boolean; providers: ProviderConfig[] }> {
-  const cloudProviderTypes: Array<'openai' | 'anthropic' | 'google' | 'groq' | 'xai'> =
-    ['openai', 'anthropic', 'google', 'groq', 'xai'];
+  const cloudProviderTypes: Array<'openai' | 'anthropic' | 'google' | 'groq' | 'xai' | 'huggingface'> =
+    ['openai', 'anthropic', 'google', 'groq', 'xai', 'huggingface'];
 
   let migrated = false;
   const updatedProviders = [...providers];

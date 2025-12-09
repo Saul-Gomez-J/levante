@@ -8,11 +8,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ExternalLink, AlertTriangle } from 'lucide-react';
+import { ExternalLink, AlertTriangle, Trash2 } from 'lucide-react';
 import type { Model } from '../../../types/models';
 import type { ProviderType } from '../../../types/models';
 import { useTranslation } from 'react-i18next';
 import { useState, useEffect } from 'react';
+import { useModelStore } from '@/stores/modelStore';
 
 interface ModelListProps {
   models: Model[];
@@ -27,6 +28,27 @@ const isFreeModel = (model: Model): boolean => {
   return model.pricing?.input === 0 && model.pricing?.output === 0;
 };
 
+// Helper functions for task badges
+const getTaskBadgeVariant = (task: string) => {
+  switch (task) {
+    case 'chat': return 'default'; // Blue
+    case 'text-to-image': return 'secondary'; // Purple
+    case 'image-to-text': return 'outline'; // Green
+    case 'automatic-speech-recognition': return 'destructive'; // Orange
+    default: return 'default';
+  }
+};
+
+const getTaskLabel = (task: string) => {
+  switch (task) {
+    case 'chat': return 'Chat';
+    case 'text-to-image': return 'Image Gen';
+    case 'image-to-text': return 'Vision';
+    case 'automatic-speech-recognition': return 'ASR';
+    default: return task;
+  }
+};
+
 export const ModelList = ({
   models,
   showSelection = false,
@@ -35,6 +57,7 @@ export const ModelList = ({
   providerType
 }: ModelListProps) => {
   const { t } = useTranslation('models');
+  const { removeUserModel, activeProvider } = useModelStore();
   const [showFreeModelWarning, setShowFreeModelWarning] = useState(false);
   const [pendingFreeModel, setPendingFreeModel] = useState<{ modelId: string; selected: boolean } | null>(null);
   const [hasAcceptedWarning, setHasAcceptedWarning] = useState(false);
@@ -128,6 +151,14 @@ export const ModelList = ({
     setPendingFreeModel(null);
   };
 
+  const handleDeleteModel = async (modelId: string) => {
+    if (!activeProvider) return;
+
+    if (confirm('Are you sure you want to delete this model?')) {
+      await removeUserModel(activeProvider.id, modelId);
+    }
+  };
+
   const renderModel = (model: Model) => (
       <div key={model.id} className="border rounded-lg p-3">
         <div className="flex items-center justify-between mb-2">
@@ -142,12 +173,32 @@ export const ModelList = ({
             )}
             <h4 className="font-medium">{model.name}</h4>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            {/* Task Badge */}
+            {model.taskType && (
+              <Badge variant={getTaskBadgeVariant(model.taskType) as any}>
+                {getTaskLabel(model.taskType)}
+              </Badge>
+            )}
+
+            {/* Capabilities */}
             {model.capabilities.map((cap) => (
               <Badge key={cap} variant="outline" className="text-xs">
                 {cap}
               </Badge>
             ))}
+
+            {/* Delete button for user-defined models */}
+            {model.userDefined && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteModel(model.id)}
+                className="h-8 w-8 p-0"
+              >
+                <Trash2 className="w-4 h-4 text-destructive" />
+              </Button>
+            )}
           </div>
         </div>
       <div className="text-sm text-muted-foreground space-y-1">

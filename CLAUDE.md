@@ -168,6 +168,43 @@ This allows Vite workers in development while maintaining security.
 4. Select which models appear in chat
 5. Models available across all chat sessions
 
+## MCP Configuration System
+
+Levante uses **mcp-use** as the default MCP (Model Context Protocol) client with support for Code Mode, which enables 40-60% token reduction for complex multi-tool workflows.
+
+**Settings > MCP Section:**
+- **SDK Selection**: Choose between `mcp-use` (default, recommended) or `official-sdk` (legacy)
+- **Code Mode**: Enable AI agents to write JavaScript to orchestrate multiple MCP tools
+- **Executor Options**:
+  - **VM (Local)**: Local execution with basic sandboxing (default)
+  - **E2B (Cloud)**: Cloud-based sandbox with full isolation (requires API key)
+- **Advanced Settings**: Timeout, memory limits, E2B API key configuration
+
+**Architecture:**
+```
+IMCPService ← MCPServiceFactory → MCPUseService (default)
+                                 → MCPLegacyService (fallback)
+```
+
+**Configuration Storage:**
+- Saved in `ui-preferences.json` under `mcp` key
+- Preferences include SDK choice, Code Mode defaults, executor settings
+- E2B API key encrypted using safeStorage
+
+**Key Files:**
+- `src/main/services/mcp/mcpServiceFactory.ts` - Runtime SDK selection
+- `src/main/services/mcp/mcpUseService.ts` - mcp-use implementation
+- `src/main/services/mcp/mcpLegacyService.ts` - Official SDK implementation
+- `src/renderer/components/settings/MCPSection.tsx` - UI configuration
+- `src/renderer/hooks/useMCPConfig.ts` - Settings state management
+
+**Usage in Settings:**
+1. Navigate to Settings > MCP Configuration
+2. Select SDK (mcp-use recommended for Code Mode)
+3. Toggle Code Mode and configure executor
+4. Adjust timeout/memory for VM or add E2B API key
+5. Save configuration - changes apply to new server connections
+
 ## Development Patterns
 
 **Renderer Alias:**

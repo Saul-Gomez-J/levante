@@ -40,28 +40,27 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
     <>
       <Sidebar>
         <SidebarHeader style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}>
-          <div className="flex flex-col gap-4 p-2 pt-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
-            {/* Sidebar toggle - only show when sidebar is open */}
-            {open && (
-              <div className="flex items-center justify-end pr-2 -pt-6">
+          <div className="flex flex-col gap-2 p-2 pt-0" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+            {/* Logo, title and toggle on the same row */}
+            <div className={`flex items-center justify-between ${platform === 'darwin' ? 'pt-8' : 'pt-2'}`}>
+              <button
+                onClick={onNewChat}
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
+                title={t('actions.new_chat')}
+              >
+                <img
+                  src={logoIcon}
+                  alt={t('app.logo_alt')}
+                  className="w-6 h-6 rounded-sm"
+                />
+                <h2 className="text-lg font-semibold">{t('app.name')}</h2>
+              </button>
+
+              {/* Sidebar toggle - only show when sidebar is open */}
+              {open && (
                 <SidebarTrigger className="h-7 w-7 shrink-0" />
-              </div>
-            )}
-
-            {/* Logo and title */}
-            <button
-              onClick={onNewChat}
-              className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
-              title={t('actions.new_chat')}
-            >
-              <img
-                src={logoIcon}
-                alt={t('app.logo_alt')}
-                className="w-6 h-6 rounded-sm"
-              />
-              <h2 className="text-lg font-semibold">{t('app.name')}</h2>
-            </button>
-
+              )}
+            </div>
           </div>
         </SidebarHeader>
         <SidebarContent>

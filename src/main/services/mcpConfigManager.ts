@@ -166,21 +166,44 @@ export class MCPConfigurationManager {
   async getServer(serverId: string): Promise<MCPServerConfig | null> {
     const config = await this.loadConfiguration();
     const serverConfig = config.mcpServers[serverId];
-    
+
     if (!serverConfig) {
       return null;
     }
-    
+
+    const normalized: any = { ...serverConfig };
+
+    // Normalize 'type' to 'transport' if needed
+    if (normalized.type && !normalized.transport) {
+      normalized.transport = normalized.type;
+      delete normalized.type;
+    }
+
+    // Normalize 'url' to 'baseUrl' if needed
+    if (normalized.url && !normalized.baseUrl) {
+      normalized.baseUrl = normalized.url;
+      delete normalized.url;
+    }
+
+    // Auto-detect transport if not provided
+    if (!normalized.transport) {
+      if (normalized.command) {
+        normalized.transport = 'stdio';
+      } else if (normalized.baseUrl) {
+        normalized.transport = 'http';
+      }
+    }
+
     return {
       id: serverId,
-      ...serverConfig
+      ...normalized
     };
   }
 
   async listServers(): Promise<MCPServerConfig[]> {
     const config = await this.loadConfiguration();
 
-    // Helper to normalize server config (convert 'type' field to 'transport' for TypeScript compatibility)
+    // Helper to normalize server config
     const normalizeServer = (id: string, serverConfig: any, enabled: boolean): MCPServerConfig => {
       const normalized: any = { ...serverConfig };
 
@@ -188,6 +211,21 @@ export class MCPConfigurationManager {
       if (normalized.type && !normalized.transport) {
         normalized.transport = normalized.type;
         delete normalized.type;
+      }
+
+      // Normalize 'url' to 'baseUrl' if needed
+      if (normalized.url && !normalized.baseUrl) {
+        normalized.baseUrl = normalized.url;
+        delete normalized.url;
+      }
+
+      // Auto-detect transport if not provided
+      if (!normalized.transport) {
+        if (normalized.command) {
+          normalized.transport = 'stdio';
+        } else if (normalized.baseUrl) {
+          normalized.transport = 'http';
+        }
       }
 
       return {
@@ -220,21 +258,27 @@ export class MCPConfigurationManager {
       throw new Error('Invalid configuration format');
     }
 
-    // Normalize imported servers (add missing 'type' field for Claude Desktop compatibility)
+    // Normalize imported servers
     const normalizedServers: Record<string, any> = {};
     for (const [serverId, serverConfig] of Object.entries(importedConfig.mcpServers)) {
       const normalized: any = { ...serverConfig };
 
+      // Normalize 'url' to 'baseUrl' if needed
+      if (normalized.url && !normalized.baseUrl) {
+        normalized.baseUrl = normalized.url;
+        delete normalized.url;
+        this.logger.mcp.debug('Normalized url to baseUrl for imported server', { serverId });
+      }
+
       // Auto-detect transport type if missing
-      // We use 'type' for compatibility
-      // mcpService.ts accepts both 'type' and 'transport'
+      // We use 'type' for compatibility with Claude Desktop
       if (!normalized.type && !normalized.transport) {
         if (normalized.command) {
           // Has command → stdio transport
           normalized.type = 'stdio';
           this.logger.mcp.debug('Auto-detected stdio transport for imported server', { serverId });
-        } else if (normalized.baseUrl || (normalized as any).url) {
-          // Has baseUrl/url → default to http (user can change to sse if needed)
+        } else if (normalized.baseUrl) {
+          // Has baseUrl → default to http (user can change to sse if needed)
           normalized.type = 'http';
           this.logger.mcp.debug('Auto-detected http transport for imported server', { serverId });
         } else {

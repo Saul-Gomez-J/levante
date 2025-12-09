@@ -14,10 +14,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { Check, ChevronsUpDown, Loader2, Filter, X } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import type { Model } from '../../../types/models';
+import type { ModelCategory } from '../../../types/modelCategories';
 import { useTranslation } from 'react-i18next';
 
 export interface ModelSearchableSelectProps {
@@ -40,6 +49,36 @@ export const ModelSearchableSelect = ({
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<ModelCategory | null>(null);
+
+  // Get category display name
+  const getCategoryDisplayName = (category: ModelCategory): string => {
+    const displayNames: Record<ModelCategory, string> = {
+      'chat': 'Chat',
+      'multimodal': 'Multimodal',
+      'image': 'Image Generation',
+      'audio': 'Audio',
+      'specialized': 'Specialized'
+    };
+    return displayNames[category] || category;
+  };
+
+  // Calculate available categories with counts
+  const availableCategories = useMemo(() => {
+    const counts = new Map<ModelCategory, number>();
+
+    models.forEach(model => {
+      if (model.category) {
+        counts.set(model.category, (counts.get(model.category) || 0) + 1);
+      }
+    });
+
+    return Array.from(counts.entries()).map(([category, count]) => ({
+      category,
+      count,
+      label: getCategoryDisplayName(category)
+    })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [models]);
 
   // Simple fuzzy search function
   const fuzzyMatch = (text: string, query: string): boolean => {
@@ -63,10 +102,19 @@ export const ModelSearchableSelect = ({
     return queryIndex === normalizedQuery.length;
   };
 
-  // Filter models based on search
-  const filteredModels = models.filter(model =>
-    fuzzyMatch(model.name, search) || fuzzyMatch(model.provider, search)
-  );
+  // Filter models based on category and search
+  const filteredModels = models
+    .filter(model => {
+      // Filter by category
+      if (selectedCategory && model.category !== selectedCategory) {
+        return false;
+      }
+      return true;
+    })
+    .filter(model =>
+      // Fuzzy search
+      fuzzyMatch(model.name, search) || fuzzyMatch(model.provider, search)
+    );
 
   // Group models by provider
   const groupedModels = filteredModels.reduce((groups, model) => {
@@ -109,13 +157,81 @@ export const ModelSearchableSelect = ({
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0" align="start">
         <Command>
-          <CommandInput
-            placeholder={t('model_selector.search_placeholder')}
-            value={search}
-            onValueChange={setSearch}
-          />
+          <div className="flex items-center border-b px-3">
+            <CommandInput
+              placeholder={t('model_selector.search_placeholder')}
+              value={search}
+              onValueChange={setSearch}
+              className="flex-1"
+            />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={cn(
+                    "h-8 w-8 p-0 ml-2",
+                    selectedCategory && "text-primary"
+                  )}
+                >
+                  <Filter className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[200px]">
+                <DropdownMenuLabel>Filter by Category</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+
+                <DropdownMenuItem
+                  onClick={() => setSelectedCategory(null)}
+                  className={cn(!selectedCategory && "bg-accent")}
+                >
+                  <Check className={cn("mr-2 h-4 w-4", !selectedCategory ? "opacity-100" : "opacity-0")} />
+                  All Categories
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {models.length}
+                  </span>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator />
+
+                {availableCategories.map(({ category, count, label }) => (
+                  <DropdownMenuItem
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
+                    className={cn(selectedCategory === category && "bg-accent")}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        selectedCategory === category ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {label}
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {count}
+                    </span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {selectedCategory && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 ml-1"
+                onClick={() => setSelectedCategory(null)}
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
           <CommandList>
-            <CommandEmpty>{t('model_selector.no_models_found')}</CommandEmpty>
+            <CommandEmpty>
+              {selectedCategory
+                ? `No models found in "${getCategoryDisplayName(selectedCategory)}" category`
+                : t('model_selector.no_models_found')
+              }
+            </CommandEmpty>
             {Object.entries(groupedModels).map(([provider, providerModels]) => (
               <CommandGroup key={provider} heading={provider.charAt(0).toUpperCase() + provider.slice(1)}>
                 {providerModels.map((model) => (

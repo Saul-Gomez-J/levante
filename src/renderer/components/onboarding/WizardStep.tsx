@@ -30,7 +30,7 @@ export function WizardStep({
   showProgress = true,
 }: WizardStepProps) {
   return (
-    <div className="relative flex min-h-screen items-center justify-center p-4 overflow-hidden">
+    <div className="relative flex min-h-screen items-center justify-center p-4 overflow-y-auto">
       {/* Background Video */}
       <video
         autoPlay
@@ -51,7 +51,7 @@ export function WizardStep({
         style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
       />
 
-      <Card className="w-full max-w-2xl border-none shadow-2xl">
+      <Card className="w-full max-w-2xl border-none shadow-2xl max-h-[calc(100vh-64px)] flex flex-col">
         {showProgress && (
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between">
@@ -76,11 +76,17 @@ export function WizardStep({
           </CardHeader>
         )}
 
-        <CardContent className="pt-6" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <CardContent
+          className="pt-6 flex-1 overflow-y-auto"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
           {children}
         </CardContent>
 
-        <CardFooter className="flex justify-between pt-6" style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}>
+        <CardFooter
+          className="flex justify-between pt-6 border-t"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
           <Button
             variant="outline"
             onClick={onBack}

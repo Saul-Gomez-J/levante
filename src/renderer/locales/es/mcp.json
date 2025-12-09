@@ -15,7 +15,17 @@
     "title": "Tienda",
     "description": "Descubre y configura nuevas integraciones MCP",
     "available": "{{count}} disponibles",
-    "available_integrations": "Integraciones Disponibles"
+    "available_integrations": "Integraciones Disponibles",
+    "filter_provider": "Filtrar por proveedor",
+    "all_providers": "Todos los proveedores",
+    "sync_provider": "Sincronizar",
+    "syncing": "Sincronizando...",
+    "last_synced": "Última sincronización: {{date}}",
+    "provider_settings": "Configuración de proveedores",
+    "from_provider": "De {{provider}}",
+    "search_placeholder": "Buscar integraciones...",
+    "no_results": "No se encontraron integraciones",
+    "no_results_description": "Prueba ajustar tu búsqueda o filtros"
   },
   "server": {
     "configure": "Configurar",
@@ -28,7 +38,8 @@
     "active": "Activo",
     "disabled": "Deshabilitado",
     "custom_description": "Integración de servidor MCP personalizada",
-    "unknown": "Desconocido"
+    "unknown": "Desconocido",
+    "view_info": "Ver información del servidor"
   },
   "connection": {
     "connected": "{{count}} conectados",
@@ -147,7 +158,10 @@
     "export": "Exportar"
   },
   "messages": {
-    "added": "{{name}} añadido a MCPs Activos",
+    "added": "{{name}} añadido y conectado",
+    "added_not_connected": "{{name}} añadido pero no se pudo conectar. Intenta conectar manualmente.",
+    "connecting": "Configurando {{name}}...",
+    "runtime_not_available": "Runtime no disponible. Comprueba tu conexión e inténtalo de nuevo.",
     "deleted": "Servidor eliminado exitosamente",
     "saved": "Configuración guardada y aplicada exitosamente",
     "refreshed": "Configuración actualizada exitosamente",
@@ -186,5 +200,25 @@
     "import_error": "Error al importar la configuración",
     "invalid_format": "Formato de configuración inválido: falta o es inválido mcpServers",
     "parse_error": "Error al analizar el archivo de configuración"
+  },
+  "info": {
+    "title": "Información del Servidor",
+    "description_title": "Descripción",
+    "transport_title": "Transporte",
+    "transport_type": "Tipo de Transporte",
+    "command_title": "Comando",
+    "url_title": "URL",
+    "args_title": "Argumentos",
+    "env_title": "Variables de Entorno",
+    "env_required": "Requerido",
+    "env_optional": "Opcional",
+    "metadata_title": "Información Adicional",
+    "author": "Autor",
+    "homepage": "Página Principal",
+    "repository": "Repositorio",
+    "use_count": "Descargas",
+    "no_env": "No requiere variables de entorno",
+    "install": "Instalar Este Servidor",
+    "already_installed": "Ya Instalado"
   }
 }

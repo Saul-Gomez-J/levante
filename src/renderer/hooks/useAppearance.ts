@@ -8,7 +8,12 @@ export const useAppearance = () => {
   const { i18n } = useTranslation();
   const [theme, setThemeState] = useState<'light' | 'dark' | 'system'>('system');
   const [language, setLanguage] = useState<'en' | 'es'>('en');
+  const [timezone, setTimezone] = useState<string>('auto');
   const [themeState, setThemeSaveState] = useState({
+    saving: false,
+    saved: false,
+  });
+  const [timezoneState, setTimezoneSaveState] = useState({
     saving: false,
     saved: false,
   });
@@ -29,6 +34,11 @@ export const useAppearance = () => {
         const lang = languageResult.data as 'en' | 'es';
         setLanguage(lang);
         i18n.changeLanguage(lang);
+      }
+
+      const timezoneResult = await window.levante.preferences.get('timezone');
+      if (timezoneResult?.data) {
+        setTimezone(timezoneResult.data);
       }
     } catch (error) {
       logger.preferences.error('Error loading appearance settings', {
@@ -74,11 +84,40 @@ export const useAppearance = () => {
     }
   };
 
+  const handleTimezoneChange = async (newTimezone: string) => {
+    setTimezoneSaveState({ saving: true, saved: false });
+    setTimezone(newTimezone);
+
+    try {
+      await window.levante.preferences.set('timezone', newTimezone);
+
+      setTimezoneSaveState({ saving: false, saved: true });
+
+      setTimeout(() => {
+        setTimezoneSaveState({ saving: false, saved: false });
+      }, 3000);
+
+      // Dispatch event for other parts of the app to react
+      window.dispatchEvent(new CustomEvent('timezone-changed', { detail: { timezone: newTimezone } }));
+
+      logger.preferences.info('Timezone changed', { timezone: newTimezone });
+    } catch (error) {
+      logger.preferences.error('Error saving timezone', {
+        timezone: newTimezone,
+        error: error instanceof Error ? error.message : error
+      });
+      setTimezoneSaveState({ saving: false, saved: false });
+    }
+  };
+
   return {
     theme,
     language,
+    timezone,
     themeState,
+    timezoneState,
     handleThemeChange,
-    handleLanguageChange
+    handleLanguageChange,
+    handleTimezoneChange
   };
 };

@@ -19,6 +19,7 @@ export async function createTransport(config: MCPServerConfig): Promise<{
   const baseUrl = config.baseUrl || (config as any).url;
 
   // Create client with capabilities
+  // Note: MCP SDK 1.17+ changed ClientCapabilities structure
   const client = new Client(
     {
       name: "Levante-MCP-Client",
@@ -26,9 +27,8 @@ export async function createTransport(config: MCPServerConfig): Promise<{
     },
     {
       capabilities: {
-        tools: {},
-        resources: {},
-        prompts: {},
+        sampling: {},
+        roots: { listChanged: true },
       },
     }
   );

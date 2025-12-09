@@ -5,15 +5,9 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import {
   Settings,
-  FolderOpen,
-  Search,
-  Github,
-  Database,
-  MessageSquare,
-  Globe,
-  Cloud,
   Trash2,
-  Loader2
+  Loader2,
+  Info
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -28,6 +22,7 @@ import {
 import { MCPRegistryEntry, MCPServerConfig, MCPConnectionStatus } from '@/types/mcp';
 import { ConnectionStatus } from '../connection/connection-status';
 import { useTranslation } from 'react-i18next';
+import { useMCPStore } from '@/stores/mcpStore';
 
 interface IntegrationCardProps {
   mode: 'active' | 'store';
@@ -40,17 +35,8 @@ interface IntegrationCardProps {
   onConfigure: () => void;
   onAddToActive?: () => void;
   onDelete?: () => void;
+  onShowInfo?: () => void;
 }
-
-const iconMap = {
-  folder: FolderOpen,
-  search: Search,
-  github: Github,
-  database: Database,
-  'message-square': MessageSquare,
-  globe: Globe,
-  cloud: Cloud,
-};
 
 export function IntegrationCard({
   mode,
@@ -62,15 +48,18 @@ export function IntegrationCard({
   onToggle,
   onConfigure,
   onAddToActive,
-  onDelete
+  onDelete,
+  onShowInfo
 }: IntegrationCardProps) {
   const { t } = useTranslation('mcp');
+  const { providers } = useMCPStore();
   const displayName = entry?.name || server?.name || server?.id || t('server.unknown');
   const description = entry?.description || t('server.custom_description');
   const category = entry?.category || 'custom';
-  const iconName = entry?.icon || 'folder';
 
-  const IconComponent = iconMap[iconName as keyof typeof iconMap] || FolderOpen;
+  // Get provider homepage if available
+  const provider = providers.find(p => p.id === entry?.source);
+  const providerHomepage = provider?.homepage;
 
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
 
@@ -83,25 +72,38 @@ export function IntegrationCard({
     onDelete?.();
   };
 
+  const handleSourceClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (providerHomepage) {
+      window.levante.openExternal(providerHomepage);
+    }
+  };
+
   return (
     <Card className="relative overflow-hidden border-none">
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-muted rounded-md">
-              <IconComponent className="w-5 h-5" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-lg">{displayName}</h3>
+          <div>
+            <h3 className="font-semibold text-lg">{displayName}</h3>
+            <div className="flex items-center gap-1.5">
               <Badge variant="secondary" className="text-xs">
                 {category}
               </Badge>
+              {entry?.source && entry.source !== 'levante' && (
+                <Badge
+                  variant="outline"
+                  className={`text-xs ${providerHomepage ? 'cursor-pointer hover:bg-accent transition-colors' : ''}`}
+                  onClick={providerHomepage ? handleSourceClick : undefined}
+                >
+                  {entry.source}
+                </Badge>
+              )}
             </div>
           </div>
           {/* Switch solo en modo Active */}
           {mode === 'active' && (
             <Switch
-              checked={status === 'connected'}
+              checked={server?.enabled !== false}
               disabled={status === 'connecting'}
               onCheckedChange={onToggle}
             />
@@ -112,18 +114,15 @@ export function IntegrationCard({
           {description}
         </p>
 
-        {/* Status indicator solo en modo Active */}
-        {mode === 'active' && (
-          <div className="flex items-center justify-between">
+        {/* Status indicator solo en modo Active y cuando está conectado/conectando */}
+        {mode === 'active' && (status === 'connected' || status === 'connecting') && (
+          <div className="flex items-center">
             <ConnectionStatus
               serverId={server?.id || entry?.id || 'unknown'}
               status={status}
               size="sm"
               variant="indicator"
             />
-            <Badge variant={server?.enabled !== false ? 'default' : 'secondary'}>
-              {server?.enabled !== false ? t('server.active') : t('server.disabled')}
-            </Badge>
           </div>
         )}
       </CardContent>
@@ -132,25 +131,38 @@ export function IntegrationCard({
         <div className="flex gap-2 w-full">
           {/* Botón diferente según modo */}
           {mode === 'store' ? (
-            // Store: Botón "Install" / "Installing" / "Installed"
-            <Button
-              variant={isActive ? 'secondary' : 'default'}
-              size="sm"
-              className="flex-1"
-              onClick={onAddToActive}
-              disabled={isActive || isInstalling}
-            >
-              {isInstalling ? (
-                <>
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  {t('server.installing')}
-                </>
-              ) : isActive ? (
-                t('server.installed')
-              ) : (
-                t('server.install')
+            // Store: Botón "Install" / "Installing" / "Installed" + Info button
+            <>
+              <Button
+                variant={isActive ? 'secondary' : 'default'}
+                size="sm"
+                className="flex-1"
+                onClick={onAddToActive}
+                disabled={isActive || isInstalling}
+              >
+                {isInstalling ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    {t('server.installing')}
+                  </>
+                ) : isActive ? (
+                  t('server.installed')
+                ) : (
+                  t('server.install')
+                )}
+              </Button>
+
+              {onShowInfo && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onShowInfo}
+                  title={t('server.view_info')}
+                >
+                  <Info className="w-4 h-4" />
+                </Button>
               )}
-            </Button>
+            </>
           ) : (
             // Active: Botones "Configure" y "Delete"
             <>

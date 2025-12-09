@@ -7,15 +7,138 @@ import type {
 } from "../../types/mcp.js";
 import { getLogger } from "../logging";
 import { createTransport, handleConnectionError } from "./transports.js";
-import { diagnoseSystem } from "./diagnostics.js";
 import { loadMCPRegistry } from "./registry.js";
 import type { MCPRegistry } from "./types";
+import { RuntimeManager } from "../runtime/runtimeManager";
+import { PreferencesService } from "../preferencesService";
+import { DEFAULT_NODE_VERSION, DEFAULT_PYTHON_VERSION } from '../runtime/constants';
+import * as path from 'path';
 
 export class MCPService {
   private logger = getLogger();
   private clients: Map<string, Client> = new Map();
+  private runtimeManager = new RuntimeManager();
+  private preferencesService = new PreferencesService();
 
   async connectServer(config: MCPServerConfig): Promise<Client> {
+    // Auto-detect runtime based on command if not specified
+    if (!config.runtime && config.command) {
+      const command = config.command.toLowerCase();
+
+      if (command === 'npx' || command === 'node') {
+        config.runtime = {
+          type: 'node',
+          version: DEFAULT_NODE_VERSION
+        };
+        this.logger.mcp.info("Auto-detected Node.js runtime for server", {
+          serverId: config.id,
+          command: config.command
+        });
+      } else if (command === 'uvx' || command === 'python' || command === 'python3') {
+        config.runtime = {
+          type: 'python',
+          version: DEFAULT_PYTHON_VERSION
+        };
+        this.logger.mcp.info("Auto-detected Python runtime for server", {
+          serverId: config.id,
+          command: config.command
+        });
+      }
+    }
+
+    // Ensure runtime if specified
+    if (config.runtime) {
+      // Load user preferences for runtime resolution
+      await this.preferencesService.initialize();
+      const runtimePrefs = await this.preferencesService.get('runtime');
+      const preferSystemRuntimes = runtimePrefs?.preferSystemRuntimes ?? false;
+
+      // NEW: Read developerMode global setting
+      const developerMode = (await this.preferencesService.get('developerMode')) ?? false;
+
+      try {
+
+        this.logger.mcp.info("Ensuring runtime for server", {
+          serverId: config.id,
+          runtime: config.runtime,
+          preferSystemRuntimes,
+          developerMode
+        });
+
+        const runtimeExecutable = await this.runtimeManager.ensureRuntime(
+          config.runtime,
+          preferSystemRuntimes,
+          developerMode
+        );
+
+        // Register runtime usage if it's a Levante runtime (not system)
+        const levanteRuntimesPath = this.runtimeManager.getRuntimesPath();
+        if (runtimeExecutable.includes(levanteRuntimesPath)) {
+          // Skip registration for temporary test servers
+          if (!config.id.startsWith('test-')) {
+            const runtimeKey = `${config.runtime.type}-${config.runtime.version}`;
+            await this.runtimeManager.registerServerUsage(config.id, runtimeKey);
+            this.logger.mcp.info("Registered runtime usage", { serverId: config.id, runtimeKey });
+          } else {
+            this.logger.mcp.debug("Skipping runtime registration for test server", { serverId: config.id });
+          }
+        } else {
+          this.logger.mcp.info("Using system runtime (not tracked)", { serverId: config.id, path: runtimeExecutable });
+        }
+
+        // Update config with absolute path to runtime
+        // We create a shallow copy to avoid mutating the persistent config object in memory if it's shared
+        config = { ...config };
+
+        const command = config.command || '';
+        const isRunner = ['node', 'python', 'python3'].includes(command);
+
+        if (isRunner) {
+          config.command = runtimeExecutable;
+        } else if (command === 'npx') {
+          // Attempt to find npx relative to node
+          const binDir = path.dirname(runtimeExecutable);
+          config.command = path.join(binDir, process.platform === 'win32' ? 'npx.cmd' : 'npx');
+        } else {
+          // Assume command is the script, prepend runtime
+          config.args = [command, ...(config.args || [])];
+          config.command = runtimeExecutable;
+        }
+
+        this.logger.mcp.info("Runtime resolved", { serverId: config.id, command: config.command });
+      } catch (error) {
+        // Handle runtime resolution errors based on mode
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
+        if (errorMessage === 'RUNTIME_CHOICE_REQUIRED') {
+          // Advanced Mode: System runtime exists but user prefers Levante
+          // UI should show dialog: "Download Levante runtime or use System?"
+          this.logger.mcp.info("Runtime choice required", {
+            serverId: config.id,
+            systemPath: (error as any).systemPath,
+            runtimeType: (error as any).runtimeType,
+            mode: 'advanced'
+          });
+        } else if (errorMessage === 'RUNTIME_NOT_FOUND') {
+          // Advanced Mode: No runtime found, UI should show install confirmation
+          this.logger.mcp.info("Runtime not found, prompting user", {
+            serverId: config.id,
+            runtime: config.runtime,
+            mode: 'advanced'
+          });
+        } else {
+          // Other errors (network, permissions, etc.)
+          this.logger.mcp.error("Failed to ensure runtime", {
+            serverId: config.id,
+            error: errorMessage,
+            mode: developerMode ? 'advanced' : 'simple'
+          });
+        }
+
+        throw error;
+      }
+    }
+
     const transportType = config.transport || (config as any).type;
     const baseUrl = config.baseUrl || (config as any).url;
 
@@ -219,9 +342,8 @@ export class MCPService {
         return {
           valid: true,
           status: "active",
-          message: `Package ${packageName} is available (v${
-            activeEntry.version || "latest"
-          })`,
+          message: `Package ${packageName} is available (v${activeEntry.version || "latest"
+            })`,
         };
       }
 
@@ -243,14 +365,5 @@ export class MCPService {
         message: "Unable to validate package due to registry loading error",
       };
     }
-  }
-
-  // Diagnose system for MCP compatibility
-  async diagnoseSystem(): Promise<{
-    success: boolean;
-    issues: string[];
-    recommendations: string[];
-  }> {
-    return await diagnoseSystem();
   }
 }

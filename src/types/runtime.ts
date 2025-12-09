@@ -1,0 +1,21 @@
+export type RuntimeType = 'node' | 'python';
+export type RuntimeSource = 'system' | 'shared';
+
+export interface RuntimeConfig {
+  type: RuntimeType;
+  version: string;
+  source?: RuntimeSource;
+}
+
+export interface RuntimeInfo {
+  type: RuntimeType;
+  version: string;
+  path: string;
+  source: RuntimeSource;
+  usedBy: string[]; // Server IDs
+  size?: string;
+}
+
+export interface RuntimeManifest {
+  runtimes: RuntimeInfo[];
+}

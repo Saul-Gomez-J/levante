@@ -1,8 +1,8 @@
-import type { 
-  LoggerService, 
-  CategoryLogger, 
-  LogCategory, 
-  LogLevel, 
+import type {
+  LoggerService,
+  CategoryLogger,
+  LogCategory,
+  LogLevel,
   LogContext,
   LogEntry,
   LogTransport,
@@ -15,7 +15,7 @@ class CategoryLoggerImpl implements CategoryLogger {
   constructor(
     private category: LogCategory,
     private logger: Logger
-  ) {}
+  ) { }
 
   debug(message: string, context?: LogContext): void {
     this.logger.log(this.category, 'debug', message, context);
@@ -46,11 +46,12 @@ export class Logger implements LoggerService {
   public readonly preferences: CategoryLogger;
   public readonly models: CategoryLogger;
   public readonly core: CategoryLogger;
+  public readonly analytics: CategoryLogger;
 
   constructor() {
     this.configService = new LoggerConfigService();
     this.setupTransports();
-    
+
     // Initialize category loggers
     this.aiSdk = new CategoryLoggerImpl('ai-sdk', this);
     this.mcp = new CategoryLoggerImpl('mcp', this);
@@ -59,15 +60,16 @@ export class Logger implements LoggerService {
     this.preferences = new CategoryLoggerImpl('preferences', this);
     this.models = new CategoryLoggerImpl('models', this);
     this.core = new CategoryLoggerImpl('core', this);
+    this.analytics = new CategoryLoggerImpl('analytics', this);
   }
 
   private setupTransports(): void {
     const config = this.configService.getConfig();
-    
+
     if (config.output.console) {
       this.transports.push(new ConsoleTransport());
     }
-    
+
     if (config.output.file && config.output.filePath) {
       this.transports.push(new FileTransport(config.output.filePath));
     }

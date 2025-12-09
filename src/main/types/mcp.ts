@@ -1,3 +1,15 @@
+import { RuntimeConfig } from '../../types/runtime';
+
+export interface CodeModeConfig {
+  enabled: boolean;
+  executor?: 'vm' | 'e2b';
+  executorOptions?: {
+    timeout?: number;
+    memoryLimit?: number;
+    apiKey?: string;  // E2B only
+  };
+}
+
 export interface MCPServerConfig {
   id: string;
   name?: string;
@@ -8,6 +20,9 @@ export interface MCPServerConfig {
   headers?: Record<string, string>;
   transport: 'stdio' | 'http' | 'sse';
   enabled?: boolean;  // Added by listServers(), not stored in JSON
+  runtime?: RuntimeConfig;
+  /** Per-server code mode override (only applies to mcp-use) */
+  codeMode?: boolean | CodeModeConfig;
 }
 
 export interface MCPConfiguration {
@@ -35,8 +50,31 @@ export interface ToolResult {
     type: string;
     text?: string;
     data?: any;
+    // For embedded resources (EmbeddedResource format)
+    resource?: {
+      uri: string;
+      mimeType?: string;
+      text?: string;
+      blob?: string;
+    };
   }>;
   isError?: boolean;
+  /** Metadata from mcp-use including widget information */
+  _meta?: {
+    'mcp-use/widget'?: {
+      name: string;
+      description?: string;
+      type: 'html' | 'remoteDom' | 'appsSdk';
+      props?: Record<string, any>;
+      /** HTML content for the widget (provided by mcp-use server) */
+      html?: string;
+      /** Whether widget is in development mode */
+      dev?: boolean;
+    };
+    [key: string]: any;
+  };
+  /** Structured content with widget data (from mcp-use) */
+  structuredContent?: Record<string, any>;
 }
 
 export interface MCPMetricsReport {
@@ -76,4 +114,55 @@ export interface MCPServerHealth {
 export interface MCPHealthReport {
   servers: Record<string, MCPServerHealth>;
   lastUpdated: number;
+}
+
+// MCP Resources types
+export interface MCPResource {
+  name: string;
+  uri: string;
+  description?: string;
+  mimeType?: string;
+  annotations?: {
+    audience?: ('user' | 'assistant')[];
+    priority?: number;
+    lastModified?: string;
+  };
+}
+
+export interface MCPResourceContent {
+  uri: string;
+  contents: Array<{
+    uri: string;
+    mimeType?: string;
+    text?: string;
+    blob?: ArrayBuffer;
+  }>;
+}
+
+// MCP Prompts types
+export interface MCPPromptArgument {
+  name: string;
+  description?: string;
+  required?: boolean;
+}
+
+export interface MCPPrompt {
+  name: string;
+  description?: string;
+  arguments?: MCPPromptArgument[];
+}
+
+export interface MCPPromptMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: {
+    type: 'text' | 'image';
+    text?: string;
+    data?: string;
+    mimeType?: string;
+  };
+}
+
+export interface MCPPromptResult {
+  description?: string;
+  messages: MCPPromptMessage[];
 }

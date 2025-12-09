@@ -39,6 +39,31 @@ export function registerConnectionHandlers(
           serverId: config.id,
           error: error.message,
         });
+
+        // Preserve runtime error metadata for UI dialogs
+        if (error.message === 'RUNTIME_CHOICE_REQUIRED') {
+          return {
+            success: false,
+            error: error.message,
+            errorCode: 'RUNTIME_CHOICE_REQUIRED',
+            metadata: {
+              systemPath: error.systemPath,
+              runtimeType: error.runtimeType,
+              runtimeVersion: error.runtimeVersion
+            }
+          };
+        } else if (error.message === 'RUNTIME_NOT_FOUND') {
+          return {
+            success: false,
+            error: error.message,
+            errorCode: 'RUNTIME_NOT_FOUND',
+            metadata: {
+              runtimeType: config.runtime?.type,
+              runtimeVersion: config.runtime?.version
+            }
+          };
+        }
+
         return { success: false, error: error.message };
       }
     }
@@ -169,6 +194,30 @@ export function registerConnectionHandlers(
           await mcpService.disconnectServer(testId);
         } catch {
           // Ignore cleanup errors
+        }
+
+        // Preserve runtime error metadata for UI dialogs (same as connect-server)
+        if (error.message === 'RUNTIME_CHOICE_REQUIRED') {
+          return {
+            success: false,
+            error: error.message,
+            errorCode: 'RUNTIME_CHOICE_REQUIRED',
+            metadata: {
+              systemPath: error.systemPath,
+              runtimeType: error.runtimeType,
+              runtimeVersion: error.runtimeVersion
+            }
+          };
+        } else if (error.message === 'RUNTIME_NOT_FOUND') {
+          return {
+            success: false,
+            error: error.message,
+            errorCode: 'RUNTIME_NOT_FOUND',
+            metadata: {
+              runtimeType: config.runtime?.type,
+              runtimeVersion: config.runtime?.version
+            }
+          };
         }
 
         return { success: false, error: error.message };

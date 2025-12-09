@@ -83,7 +83,39 @@ module.exports = {
         }
       }
 
-      console.log(`✅ Copied @libsql (${allDeps.size - 6} deps) and update-electron-app (${updateAppDeps.size} deps) successfully`);
+      // Copiar mcp-use y sus dependencias (marcado como external en vite)
+      console.log('  ✓ Finding mcp-use dependencies...');
+      const mcpUseDeps = await getAllDependencies('mcp-use');
+
+      for (const dep of mcpUseDeps) {
+        if (allDeps.has(dep) || updateAppDeps.has(dep)) continue; // Ya copiado
+
+        const srcPath = path.join(projectNodeModules, dep);
+        const destPath = path.join(packageNodeModules, dep);
+
+        if (await fs.pathExists(srcPath)) {
+          console.log(`    - ${dep}`);
+          await fs.copy(srcPath, destPath, { overwrite: true });
+        }
+      }
+
+      // Copiar winston (dependencia de mcp-use, marcado como external)
+      console.log('  ✓ Finding winston dependencies...');
+      const winstonDeps = await getAllDependencies('winston');
+
+      for (const dep of winstonDeps) {
+        if (allDeps.has(dep) || updateAppDeps.has(dep) || mcpUseDeps.has(dep)) continue;
+
+        const srcPath = path.join(projectNodeModules, dep);
+        const destPath = path.join(packageNodeModules, dep);
+
+        if (await fs.pathExists(srcPath)) {
+          console.log(`    - ${dep}`);
+          await fs.copy(srcPath, destPath, { overwrite: true });
+        }
+      }
+
+      console.log(`✅ Copied external dependencies successfully`);
     }
   },
 

@@ -59,9 +59,6 @@ export const mcpApi = {
   getConfigPath: () =>
     ipcRenderer.invoke('levante/mcp/get-config-path'),
 
-  diagnoseSystem: () =>
-    ipcRenderer.invoke('levante/mcp/diagnose-system'),
-
   getRegistry: () =>
     ipcRenderer.invoke('levante/mcp/get-registry'),
 
@@ -90,5 +87,47 @@ export const mcpApi = {
     ipcRenderer.invoke('levante/mcp/check-structured-output-support'),
 
   verifyPackage: (packageName: string) =>
-    ipcRenderer.invoke('levante/mcp/verify-package', packageName)
+    ipcRenderer.invoke('levante/mcp/verify-package', packageName),
+
+  // Runtime management
+  getRuntimes: () =>
+    ipcRenderer.invoke('levante/mcp/get-runtimes'),
+
+  cleanupRuntimes: () =>
+    ipcRenderer.invoke('levante/mcp/cleanup-runtimes'),
+
+  installRuntime: (type: string, version: string) =>
+    ipcRenderer.invoke('levante/mcp/install-runtime', { type, version }),
+
+  // Provider management
+  providers: {
+    list: () =>
+      ipcRenderer.invoke('levante/mcp/providers/list'),
+
+    sync: (providerId: string) =>
+      ipcRenderer.invoke('levante/mcp/providers/sync', providerId),
+
+    syncAll: () =>
+      ipcRenderer.invoke('levante/mcp/providers/sync-all'),
+
+    getEntries: (providerId: string) =>
+      ipcRenderer.invoke('levante/mcp/providers/get-entries', providerId),
+
+    getAllEntries: () =>
+      ipcRenderer.invoke('levante/mcp/providers/get-all-entries')
+  },
+
+  // Resource methods
+  listResources: (serverId: string) =>
+    ipcRenderer.invoke('levante/mcp/list-resources', serverId),
+
+  readResource: (serverId: string, uri: string) =>
+    ipcRenderer.invoke('levante/mcp/read-resource', serverId, uri),
+
+  // Prompt methods
+  listPrompts: (serverId: string) =>
+    ipcRenderer.invoke('levante/mcp/list-prompts', serverId),
+
+  getPrompt: (serverId: string, name: string, args?: Record<string, any>) =>
+    ipcRenderer.invoke('levante/mcp/get-prompt', serverId, name, args),
 };

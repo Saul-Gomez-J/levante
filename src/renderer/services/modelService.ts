@@ -1,4 +1,5 @@
 import type { Model, ProviderConfig } from '../../types/models';
+import type { ModelCategory, SessionType } from '../../types/modelCategories';
 import { getRendererLogger } from '@/services/logger';
 import { migrateCloudProvider, migrateCloudProvidersToDynamic } from './model/migrations';
 import { fetchOpenRouterModels } from './model/providers/openRouterProvider';
@@ -9,6 +10,8 @@ import { fetchGoogleModels } from './model/providers/googleProvider';
 import { fetchAnthropicModels } from './model/providers/anthropicProvider';
 import { fetchGroqModels } from './model/providers/groqProvider';
 import { fetchXAIModels } from './model/providers/xAIProvider';
+import { fetchHuggingFaceModels } from './model/providers/huggingfaceProvider';
+import { classifyModel, getCompatibleCategories, type ModelClassification } from '../../utils/modelClassification';
 
 const logger = getRendererLogger();
 
@@ -16,6 +19,9 @@ class ModelServiceImpl {
   private providers: ProviderConfig[] = [];
   private activeProviderId: string | null = null;
   private isInitialized = false;
+
+  // Classification cache for O(1) lookups
+  private classificationCache = new Map<string, ModelClassification>();
 
   // Initialize with default providers and load from storage
   async initialize(): Promise<void> {
@@ -142,6 +148,16 @@ class ModelServiceImpl {
         settings: {},
         modelSource: 'dynamic',
         baseUrl: 'https://api.x.ai/v1'
+      },
+      {
+        id: 'huggingface',
+        name: 'Hugging Face',
+        type: 'huggingface',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'dynamic',
+        baseUrl: 'https://router.huggingface.co/v1'
       }
     ];
 
@@ -252,6 +268,43 @@ class ModelServiceImpl {
     return provider?.models.filter(m => m.userDefined) || [];
   }
 
+  // Add user-defined model
+  async addUserModel(providerId: string, model: Omit<Model, 'isAvailable' | 'isSelected'>): Promise<void> {
+    const provider = this.providers.find(p => p.id === providerId);
+    if (!provider) throw new Error('Provider not found');
+
+    const newModel: Model = {
+      ...model,
+      isAvailable: true,
+      isSelected: true,
+      userDefined: true,
+    };
+
+    provider.models.push(newModel);
+
+    // Update selectedModelIds for dynamic providers
+    if (provider.modelSource === 'dynamic') {
+      provider.selectedModelIds = provider.models.filter(m => m.isSelected).map(m => m.id);
+    }
+
+    await this.saveProviders();
+  }
+
+  // Remove user-defined model
+  async removeUserModel(providerId: string, modelId: string): Promise<void> {
+    const provider = this.providers.find(p => p.id === providerId);
+    if (!provider) throw new Error('Provider not found');
+
+    provider.models = provider.models.filter(m => m.id !== modelId || !m.userDefined);
+
+    // Update selectedModelIds for dynamic providers
+    if (provider.modelSource === 'dynamic') {
+      provider.selectedModelIds = provider.models.filter(m => m.isSelected).map(m => m.id);
+    }
+
+    await this.saveProviders();
+  }
+
   // Sync provider models
   async syncProviderModels(providerId: string): Promise<Model[]> {
     const provider = this.providers.find(p => p.id === providerId);
@@ -299,6 +352,56 @@ class ModelServiceImpl {
             models = await fetchXAIModels(provider.apiKey);
           }
           break;
+        case 'huggingface':
+          if (provider.apiKey) {
+            models = await fetchHuggingFaceModels(provider.apiKey);
+          }
+          break;
+      }
+
+      // Classify and cache models (Phase 2: Model Classification)
+      logger.models.debug('Classifying models', {
+        providerId,
+        modelCount: models.length
+      });
+
+      for (const model of models) {
+        try {
+          const classification = classifyModel(model);
+
+          // Attach classification to model object
+          model.category = classification.category;
+          model.computedCapabilities = classification.capabilities;
+
+          // Cache for O(1) lookup
+          this.classificationCache.set(model.id, classification);
+
+          // Debug classification results for local models
+          if (provider.type === 'local') {
+            logger.models.debug(`Local model classified: ${model.name}`, {
+              category: model.category,
+              capabilities: model.computedCapabilities
+            });
+          }
+
+        } catch (error) {
+          logger.models.warn('Failed to classify model, using defaults', {
+            modelId: model.id,
+            error: error instanceof Error ? error.message : error
+          });
+          // Fallback to 'chat' category if classification fails
+          model.category = 'chat';
+          model.computedCapabilities = {
+            supportsTools: false,
+            supportsVision: false,
+            supportsStreaming: true,
+            requiresAttachment: false,
+            supportsAudioOut: false,
+            supportsAudioIn: false,
+            supportsSystemPrompt: true,
+            supportsMultiTurn: true,
+          };
+        }
       }
 
       // Restore selections from saved IDs or existing models
@@ -324,11 +427,46 @@ class ModelServiceImpl {
         });
       }
 
-      // Update provider models and sync selected IDs
-      provider.models = models;
-      provider.selectedModelIds = models.filter(m => m.isSelected).map(m => m.id);
+      // Preserve user-defined models (inference models)
+      const userDefinedModels = provider.models.filter(m => m.userDefined);
+
+      // Classify user-defined models if they don't have classification yet
+      for (const model of userDefinedModels) {
+        if (!model.category || !model.computedCapabilities) {
+          try {
+            const classification = classifyModel(model);
+            model.category = classification.category;
+            model.computedCapabilities = classification.capabilities;
+            this.classificationCache.set(model.id, classification);
+
+            logger.models.debug('User-defined model classified', {
+              modelId: model.id,
+              category: classification.category
+            });
+          } catch (error) {
+            logger.models.warn('Failed to classify user-defined model', {
+              modelId: model.id,
+              error: error instanceof Error ? error.message : error
+            });
+          }
+        } else {
+          // Already classified, just update cache
+          this.classificationCache.set(model.id, {
+            category: model.category,
+            capabilities: model.computedCapabilities
+          });
+        }
+      }
+
+      // Update provider models: combine synced models with user-defined models
+      provider.models = [...models, ...userDefinedModels];
+      provider.selectedModelIds = provider.models.filter(m => m.isSelected).map(m => m.id);
       provider.lastModelSync = Date.now();
       await this.saveProviders();
+
+      // Track provider stats (fire and forget)
+      const selectedCount = provider.selectedModelIds?.length || 0;
+      window.levante.analytics?.trackProvider?.(provider.name, selectedCount).catch(() => { });
 
       return models;
     } catch (error) {
@@ -344,7 +482,7 @@ class ModelServiceImpl {
   // Save providers to storage
   private async saveProviders(): Promise<void> {
     try {
-      // For dynamic providers, only save selected model IDs instead of full model data
+      // For dynamic providers, save selected model IDs + minimal model data with classification
       const providersToSave = this.providers.map(provider => {
         if (provider.modelSource === 'dynamic') {
           // Extract selected model IDs
@@ -352,10 +490,30 @@ class ModelServiceImpl {
             .filter(m => m.isSelected === true)
             .map(m => m.id);
 
+          // Save minimal model data for selected models (id + classification only)
+          // This allows main process to access classification without full sync
+          const selectedModelsMinimal = provider.models
+            .filter(m => m.isSelected === true && !m.userDefined)
+            .map(m => ({
+              id: m.id,
+              name: m.name,
+              provider: m.provider,
+              category: m.category,
+              computedCapabilities: m.computedCapabilities,
+              taskType: m.taskType,
+              userDefined: false,
+              isAvailable: true,
+              contextLength: 0,
+              capabilities: []
+            }));
+
+          // Also include user-defined models (full data)
+          const userDefinedModels = provider.models.filter(m => m.userDefined);
+
           return {
             ...provider,
             selectedModelIds,
-            models: [], // Don't save full model list for dynamic providers
+            models: [...selectedModelsMinimal, ...userDefinedModels],
           };
         }
         // For user-defined providers (cloud), save full model data
@@ -400,6 +558,93 @@ class ModelServiceImpl {
 
     this.providers[providerIndex] = { ...this.providers[providerIndex], ...updates };
     await this.saveProviders();
+  }
+
+  // ==========================================
+  // Model Classification Methods (Phase 2)
+  // ==========================================
+
+  /**
+   * Get classification for a model (O(1) cache lookup)
+   * @param modelId - Model ID to lookup
+   * @returns Classification or undefined if not found
+   */
+  getModelClassification(modelId: string): ModelClassification | undefined {
+    return this.classificationCache.get(modelId);
+  }
+
+  /**
+   * Get all models of a specific category from active provider
+   * @param category - Model category to filter by
+   * @returns Array of models matching the category
+   */
+  getModelsByCategory(category: ModelCategory): Model[] {
+    const activeProvider = this.providers.find(p => p.id === this.activeProviderId);
+    if (!activeProvider) return [];
+
+    return activeProvider.models.filter(m =>
+      m.isAvailable &&
+      m.isSelected !== false &&
+      m.category === category
+    );
+  }
+
+  /**
+   * Get all models compatible with a session type
+   * @param sessionType - 'chat' or 'inference'
+   * @returns Array of compatible models
+   */
+  getCompatibleModels(sessionType: SessionType): Model[] {
+    const activeProvider = this.providers.find(p => p.id === this.activeProviderId);
+    if (!activeProvider) return [];
+
+    const compatibleCategories = getCompatibleCategories(sessionType);
+
+    return activeProvider.models.filter(m =>
+      m.isAvailable &&
+      m.isSelected !== false &&
+      m.category &&
+      compatibleCategories.includes(m.category)
+    );
+  }
+
+  /**
+   * Get all models grouped by category
+   * @returns Map of category to models array
+   */
+  getModelsGroupedByCategory(): Map<ModelCategory, Model[]> {
+    const activeProvider = this.providers.find(p => p.id === this.activeProviderId);
+    if (!activeProvider) return new Map();
+
+    const grouped = new Map<ModelCategory, Model[]>();
+
+    for (const model of activeProvider.models) {
+      if (!model.isAvailable || model.isSelected === false) continue;
+
+      const category = model.category || 'chat' as ModelCategory; // Default to 'chat' if not classified
+      if (!grouped.has(category)) {
+        grouped.set(category, []);
+      }
+      grouped.get(category)!.push(model);
+    }
+
+    return grouped;
+  }
+
+  /**
+   * Get category display name for UI
+   * @param category - Model category
+   * @returns Human-readable category name
+   */
+  getCategoryDisplayName(category: ModelCategory): string {
+    const displayNames: Record<ModelCategory, string> = {
+      'chat': 'Chat',
+      'multimodal': 'Multimodal',
+      'image': 'Image Generation',
+      'audio': 'Audio',
+      'specialized': 'Specialized'
+    };
+    return displayNames[category] || category;
   }
 }
 

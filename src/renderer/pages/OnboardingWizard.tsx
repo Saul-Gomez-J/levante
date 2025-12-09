@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WizardStep } from '@/components/onboarding/WizardStep';
 import { WelcomeStep } from '@/components/onboarding/WelcomeStep';
@@ -38,6 +38,7 @@ interface OnboardingWizardProps {
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   const { updateProvider, setActiveProvider, syncProviderModels, providers } = useModelStore();
   const { i18n } = useTranslation();
+  const userChangedLanguageRef = useRef(false);
 
   // Language step state
   const [detectedLanguage, setDetectedLanguage] = useState<'en' | 'es'>('en');
@@ -59,12 +60,35 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   const [availableModels, setAvailableModels] = useState<any[]>([]);
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
 
-  // Detect system language on mount
+  // Analytics consent state (null = not selected yet)
+  const [analyticsConsent, setAnalyticsConsent] = useState<boolean | null>(null);
+
+  // Detect language on mount: prefer stored preference, else system
   useEffect(() => {
-    const detected = detectSystemLanguage();
-    setDetectedLanguage(detected);
-    setSelectedLanguage(detected);
-    i18n.changeLanguage(detected);
+    const initializeLanguage = async () => {
+      const detected = detectSystemLanguage();
+      setDetectedLanguage(detected);
+
+      try {
+        const prefResult = await window.levante.preferences.get('language');
+        const prefLanguage = prefResult?.data;
+        const initialLanguage = prefLanguage === 'es' || prefLanguage === 'en' ? prefLanguage : detected;
+
+        // Do not override if the user already interacted very quickly
+        if (!userChangedLanguageRef.current) {
+          setSelectedLanguage(initialLanguage);
+          i18n.changeLanguage(initialLanguage);
+        }
+      } catch (error) {
+        console.error('Failed to load preferred language, falling back to detected:', error);
+        if (!userChangedLanguageRef.current) {
+          setSelectedLanguage(detected);
+          i18n.changeLanguage(detected);
+        }
+      }
+    };
+
+    initializeLanguage();
   }, [i18n]);
 
   // Load models when providers change (after sync)
@@ -77,6 +101,25 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
       return () => clearTimeout(timer);
     }
   }, [providers, selectedProvider, validationStatus]);
+
+  // Load existing analytics consent on mount
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const profile = await window.levante.profile.get();
+        if (profile.success && profile.data?.analytics) {
+          // Only set if there's an existing value, otherwise keep null
+          if (profile.data.analytics.consentedAt) {
+            setAnalyticsConsent(profile.data.analytics.hasConsented);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      }
+    };
+
+    loadProfile();
+  }, []);
 
   const handleNext = async () => {
     // Step 1 (Welcome): Save language selection and start wizard
@@ -95,6 +138,45 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
       return;
     }
 
+    // Step 4 (Directory): Save analytics consent
+    if (currentStep === 4 && analyticsConsent !== null) {
+      try {
+        // Save analytics consent to user profile
+        if (analyticsConsent) {
+          // Generate UUID only if consenting and no UUID exists
+          const profile = await window.levante.profile.get();
+          const existingId = profile.data?.analytics?.anonymousUserId;
+
+          await window.levante.profile.update({
+            analytics: {
+              hasConsented: true,
+              consentedAt: new Date().toISOString(),
+              anonymousUserId: existingId || crypto.randomUUID(),
+            },
+          });
+
+          // Track user record creation (await to ensure it completes before reload)
+          console.log('[Onboarding] Tracking user...');
+          try {
+            await window.levante.analytics?.trackUser?.();
+            console.log('[Onboarding] User tracked successfully');
+          } catch (e) {
+            console.error('[Onboarding] Failed to track user', e);
+          }
+        } else {
+          // User declined - save that too (but don't generate UUID)
+          await window.levante.profile.update({
+            analytics: {
+              hasConsented: false,
+              consentedAt: new Date().toISOString(),
+            },
+          });
+        }
+      } catch (error) {
+        console.error('Failed to save analytics consent:', error);
+      }
+    }
+
     if (currentStep < TOTAL_STEPS) {
       setCurrentStep(currentStep + 1);
     } else {
@@ -104,6 +186,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   };
 
   const handleLanguageChange = (language: 'en' | 'es') => {
+    userChangedLanguageRef.current = true;
     setSelectedLanguage(language);
     i18n.changeLanguage(language);
   };
@@ -166,8 +249,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
         setValidationStatus('invalid');
         setValidationError(
           result.data?.error ||
-            result.error ||
-            'Validation failed. Please check your credentials.'
+          result.error ||
+          'Validation failed. Please check your credentials.'
         );
       }
     } catch (error) {
@@ -260,8 +343,8 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
         setValidationStatus('invalid');
         setValidationError(
           result.data?.error ||
-            result.error ||
-            'OAuth validation failed'
+          result.error ||
+          'OAuth validation failed'
         );
         console.error('OAuth validation failed', result);
         return;
@@ -379,6 +462,10 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
     if (currentStep === 3) {
       return !selectedProvider || validationStatus !== 'valid' || !selectedModel;
     }
+    // Step 4 (Directory) requires analytics consent selection
+    if (currentStep === 4) {
+      return analyticsConsent === null;
+    }
     return false;
   };
 
@@ -416,7 +503,12 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
           onOAuthSuccess={handleOAuthSuccess}
         />
       )}
-      {currentStep === 4 && <DirectoryStep />}
+      {currentStep === 4 && (
+        <DirectoryStep
+          analyticsConsent={analyticsConsent}
+          onAnalyticsConsentChange={setAnalyticsConsent}
+        />
+      )}
       {currentStep === 5 && (
         <CompletionStep
           providerName={PROVIDER_NAMES[selectedProvider] || selectedProvider}

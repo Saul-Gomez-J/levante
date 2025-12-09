@@ -7,6 +7,8 @@ import { Loader2, AlertCircle } from 'lucide-react';
 import { useMCPStore } from '@/stores/mcpStore';
 import { MCPServerConfig, MCPTool } from '@/types/mcp';
 import { MCPServerPreview } from './mcp-server-preview';
+import { RuntimeChoiceDialog, RuntimeErrorType } from '@/components/runtime/RuntimeChoiceDialog';
+import { toast } from 'sonner';
 
 interface JSONEditorPanelProps {
   serverId: string | null;
@@ -24,6 +26,24 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
   const [isSaving, setIsSaving] = useState(false);
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [isLoadingTools, setIsLoadingTools] = useState(false);
+
+  const [runtimeDialogState, setRuntimeDialogState] = useState<{
+    isOpen: boolean;
+    errorType: RuntimeErrorType | null;
+    serverName: string;
+    testConfig: MCPServerConfig | null;
+    metadata: {
+      systemPath?: string;
+      runtimeType?: 'node' | 'python';
+      runtimeVersion?: string;
+    };
+  }>({
+    isOpen: false,
+    errorType: null,
+    serverName: '',
+    testConfig: null,
+    metadata: {},
+  });
 
   const server = serverId ? getServerById(serverId) : null;
   const registryEntry = serverId ? getRegistryEntryById(serverId) : null;
@@ -116,6 +136,20 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
       // Call IPC directly to get tools
       const result = await window.levante.mcp.testConnection(testConfig);
 
+      // Handle runtime-specific errors
+      if (!result.success && ((result as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' || (result as any).errorCode === 'RUNTIME_NOT_FOUND')) {
+        setIsTestingConnection(false);
+        setIsLoadingTools(false);
+        setRuntimeDialogState({
+          isOpen: true,
+          errorType: (result as any).errorCode,
+          serverName: testConfig.name,
+          testConfig,
+          metadata: (result as any).metadata || {},
+        });
+        return;
+      }
+
       setTestResult({
         success: result.success,
         message: result.success
@@ -181,12 +215,95 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
     }
   };
 
+  const handleRuntimeUseSystem = async () => {
+    if (!runtimeDialogState.testConfig) return;
+
+    setIsTestingConnection(true);
+    setIsLoadingTools(true);
+
+    try {
+      const modifiedConfig = {
+        ...runtimeDialogState.testConfig,
+        runtime: {
+          ...runtimeDialogState.testConfig.runtime!,
+          source: 'system' as const
+        }
+      };
+
+      const result = await window.levante.mcp.testConnection(modifiedConfig);
+
+      setTestResult({
+        success: result.success,
+        message: result.success
+          ? 'Connection test successful using system runtime!'
+          : result.error || 'Connection test failed'
+      });
+
+      if (result.success && result.data) {
+        setTools(result.data);
+      }
+    } catch (error: any) {
+      setTestResult({
+        success: false,
+        message: error.message || 'Failed to test with system runtime'
+      });
+    } finally {
+      setIsTestingConnection(false);
+      setIsLoadingTools(false);
+    }
+  };
+
+  const handleRuntimeInstallLevante = async () => {
+    if (!runtimeDialogState.testConfig) return;
+
+    setIsTestingConnection(true);
+    setIsLoadingTools(true);
+
+    try {
+      const toastId = toast.loading(`Installing runtime...`);
+
+      const installResult = await window.levante.mcp.installRuntime(
+        runtimeDialogState.metadata.runtimeType!,
+        runtimeDialogState.metadata.runtimeVersion!
+      );
+
+      if (!installResult.success) {
+        throw new Error(installResult.error || 'Failed to install runtime');
+      }
+
+      // Test again after installation
+      const result = await window.levante.mcp.testConnection(runtimeDialogState.testConfig);
+
+      toast.success('Runtime installed successfully!', { id: toastId });
+
+      setTestResult({
+        success: result.success,
+        message: result.success
+          ? 'Connection test successful with new runtime!'
+          : result.error || 'Connection test failed'
+      });
+
+      if (result.success && result.data) {
+        setTools(result.data);
+      }
+    } catch (error: any) {
+      toast.error(`Failed to install runtime: ${error.message}`);
+      setTestResult({
+        success: false,
+        message: error.message || 'Failed to install runtime'
+      });
+    } finally {
+      setIsTestingConnection(false);
+      setIsLoadingTools(false);
+    }
+  };
+
   const validation = validateJSON(jsonText);
   const serverName = registryEntry?.name || serverId || 'MCP Server';
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent side="right" className="w-[900px] sm:max-w-[90vw] overflow-y-auto">
+      <SheetContent side="right" className="w-[900px] sm:max-w-[90vw] overflow-y-auto" showClose={false}>
         <SheetHeader>
           <SheetTitle>
             {isNewServer ? 'Configure' : 'Edit'} {serverName}
@@ -259,6 +376,17 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
           </Button>
         </SheetFooter>
       </SheetContent>
+
+      {/* Runtime Choice Dialog */}
+      <RuntimeChoiceDialog
+        open={runtimeDialogState.isOpen}
+        onClose={() => setRuntimeDialogState({ isOpen: false, errorType: null, serverName: '', testConfig: null, metadata: {} })}
+        errorType={runtimeDialogState.errorType!}
+        serverName={runtimeDialogState.serverName}
+        metadata={runtimeDialogState.metadata}
+        onUseSystem={handleRuntimeUseSystem}
+        onInstallLevante={handleRuntimeInstallLevante}
+      />
     </Sheet>
   );
 }

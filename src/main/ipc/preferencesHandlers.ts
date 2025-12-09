@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { preferencesService } from '../services/preferencesService';
 import { PreferenceKey, UIPreferences } from '../../types/preferences';
-import { getLogger } from '../services/logging';
+import { getLogger, setLogTimezone } from '../services/logging';
 
 const logger = getLogger();
 
@@ -29,6 +29,13 @@ export function setupPreferencesHandlers() {
   ipcMain.handle('levante/preferences/set', (_, key: PreferenceKey, value: any) => {
     try {
       preferencesService.set(key, value);
+
+      // Update log timezone when timezone preference changes
+      if (key === 'timezone' && typeof value === 'string') {
+        setLogTimezone(value);
+        logger.preferences.info('Log timezone updated', { timezone: value });
+      }
+
       return {
         success: true,
         data: value

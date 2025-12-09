@@ -1,13 +1,7 @@
 import { create } from 'zustand';
-import { MCPRegistry, MCPServerConfig, MCPConnectionStatus } from '../types/mcp';
+import { MCPRegistry, MCPServerConfig, MCPConnectionStatus, MCPProvider, MCPRegistryEntry } from '../types/mcp';
 import mcpRegistryData from '../data/mcpRegistry.json';
-
-interface SystemDiagnosis {
-  success: boolean;
-  issues: string[];
-  recommendations: string[];
-  lastChecked: number | null;
-}
+import mcpProvidersData from '../data/mcpProviders.json';
 
 interface MCPStore {
   // State
@@ -16,7 +10,12 @@ interface MCPStore {
   connectionStatus: Record<string, MCPConnectionStatus>;
   isLoading: boolean;
   error: string | null;
-  systemDiagnosis: SystemDiagnosis;
+
+  // Provider state
+  providers: MCPProvider[];
+  selectedProvider: string | 'all';
+  loadingProviders: Record<string, boolean>;
+  providerEntries: Record<string, MCPRegistryEntry[]>;
 
   // Actions
   loadRegistry: () => void;
@@ -30,12 +29,18 @@ interface MCPStore {
   removeServer: (serverId: string) => Promise<void>;
   importConfiguration: (config: any) => Promise<void>;
   exportConfiguration: () => Promise<any>;
-  diagnoseSystem: () => Promise<void>;
+
+  // Provider actions
+  loadProviders: () => Promise<void>;
+  syncProvider: (providerId: string) => Promise<void>;
+  syncAllProviders: () => Promise<void>;
+  setSelectedProvider: (providerId: string | 'all') => void;
 
   // Helper methods
   isServerActive: (serverId: string) => boolean;
   getServerById: (serverId: string) => MCPServerConfig | undefined;
   getRegistryEntryById: (entryId: string) => any;
+  getFilteredEntries: () => MCPRegistryEntry[];
 }
 
 export const useMCPStore = create<MCPStore>((set, get) => ({
@@ -45,12 +50,12 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   connectionStatus: {},
   isLoading: false,
   error: null,
-  systemDiagnosis: {
-    success: true,
-    issues: [],
-    recommendations: [],
-    lastChecked: null,
-  },
+
+  // Provider initial state
+  providers: mcpProvidersData.providers as MCPProvider[],
+  selectedProvider: 'all',
+  loadingProviders: {},
+  providerEntries: {},
 
   // Load curated registry from JSON
   loadRegistry: () => {
@@ -65,10 +70,10 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   // Load active servers from configuration
   loadActiveServers: async () => {
     set({ isLoading: true, error: null });
-    
+
     try {
       const result = await window.levante.mcp.listServers();
-      
+
       if (result.success && result.data) {
         set({ activeServers: result.data });
         // Also refresh connection status
@@ -88,7 +93,7 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   refreshConnectionStatus: async () => {
     try {
       const result = await window.levante.mcp.connectionStatus();
-      
+
       if (result.success && result.data) {
         set({ connectionStatus: result.data });
       }
@@ -140,7 +145,20 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
             };
           }
         });
+
+        // Track MCP activation
+        window.levante.analytics?.trackMCP?.(config.name || config.id, 'active').catch(() => { });
       } else {
+        // Check for runtime-specific errors that need UI intervention
+        if ((result as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' || (result as any).errorCode === 'RUNTIME_NOT_FOUND') {
+          // Throw enriched error for UI to catch and show dialog
+          const enrichedError = new Error(result.error || 'Runtime error');
+          (enrichedError as any).errorCode = (result as any).errorCode;
+          (enrichedError as any).metadata = (result as any).metadata;
+          (enrichedError as any).serverConfig = config;
+          throw enrichedError;
+        }
+
         set(state => ({
           connectionStatus: {
             ...state.connectionStatus,
@@ -150,6 +168,11 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
         }));
       }
     } catch (error) {
+      // Re-throw runtime errors for UI handling
+      if ((error as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' || (error as any).errorCode === 'RUNTIME_NOT_FOUND') {
+        throw error;
+      }
+
       console.error('Failed to connect server:', error);
       set(state => ({
         connectionStatus: {
@@ -208,13 +231,16 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   // Add a new server
   addServer: async (config: MCPServerConfig) => {
     set({ isLoading: true, error: null });
-    
+
     try {
       const result = await window.levante.mcp.addServer(config);
-      
+
       if (result.success) {
         // Reload active servers
         await get().loadActiveServers();
+
+        // Track MCP installation/activation
+        window.levante.analytics?.trackMCP?.(config.name || config.id, 'active').catch(() => { });
       } else {
         set({ error: result.error || 'Failed to add server' });
       }
@@ -229,15 +255,15 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   // Update a server configuration
   updateServer: async (serverId: string, config: Partial<Omit<MCPServerConfig, 'id'>>) => {
     set({ isLoading: true, error: null });
-    
+
     try {
       const result = await window.levante.mcp.updateServer(serverId, config);
-      
+
       if (result.success) {
         // Update local state
         set(state => ({
-          activeServers: state.activeServers.map(server => 
-            server.id === serverId 
+          activeServers: state.activeServers.map(server =>
+            server.id === serverId
               ? { ...server, ...config }
               : server
           )
@@ -256,14 +282,22 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   // Remove a server
   removeServer: async (serverId: string) => {
     set({ isLoading: true, error: null });
-    
+
     try {
       // First disconnect if connected
       await get().disconnectServer(serverId);
-      
+
+      // Get server info for analytics before removal
+      const server = get().getServerById(serverId);
+
       const result = await window.levante.mcp.removeServer(serverId);
-      
+
       if (result.success) {
+        // Track MCP removal
+        if (server) {
+          window.levante.analytics?.trackMCP?.(server.name || server.id, 'removed').catch(() => { });
+        }
+
         set(state => ({
           activeServers: state.activeServers.filter(s => s.id !== serverId),
           connectionStatus: {
@@ -285,10 +319,10 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   // Import configuration
   importConfiguration: async (config: any) => {
     set({ isLoading: true, error: null });
-    
+
     try {
       const result = await window.levante.mcp.importConfiguration(config);
-      
+
       if (result.success) {
         // Reload everything
         await get().loadActiveServers();
@@ -307,7 +341,7 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   exportConfiguration: async () => {
     try {
       const result = await window.levante.mcp.exportConfiguration();
-      
+
       if (result.success) {
         return result.data;
       } else {
@@ -333,31 +367,113 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
     return activeServers.find(server => server.id === serverId);
   },
 
-  // Helper: Get registry entry by ID
+  // Helper: Get registry entry by ID (searches all sources)
   getRegistryEntryById: (entryId: string) => {
-    const { registry } = get();
-    return registry.entries.find(entry => entry.id === entryId);
+    const { registry, providerEntries } = get();
+
+    // First check local registry
+    const localEntry = registry.entries.find(entry => entry.id === entryId);
+    if (localEntry) return localEntry;
+
+    // Then check provider entries
+    for (const entries of Object.values(providerEntries)) {
+      const providerEntry = entries.find(entry => entry.id === entryId);
+      if (providerEntry) return providerEntry;
+    }
+
+    return undefined;
   },
 
-  // Diagnose system for MCP compatibility
-  diagnoseSystem: async () => {
+  // Load providers from IPC
+  loadProviders: async () => {
     try {
-      const result = await window.levante.mcp.diagnoseSystem();
+      const result = await window.levante.mcp.providers.list();
 
       if (result.success && result.data) {
-        set({
-          systemDiagnosis: {
-            success: result.data.success,
-            issues: result.data.issues,
-            recommendations: result.data.recommendations,
-            lastChecked: Date.now(),
-          }
-        });
-      } else {
-        console.error('Failed to diagnose system:', result.error);
+        set({ providers: result.data });
       }
     } catch (error) {
-      console.error('Failed to diagnose system:', error);
+      console.error('Failed to load providers:', error);
     }
+  },
+
+  // Sync a specific provider
+  syncProvider: async (providerId: string) => {
+    set(state => ({
+      loadingProviders: { ...state.loadingProviders, [providerId]: true }
+    }));
+
+    try {
+      const result = await window.levante.mcp.providers.sync(providerId);
+
+      if (result.success && result.data) {
+        const entries = result.data.entries;
+        set(state => ({
+          providerEntries: {
+            ...state.providerEntries,
+            [providerId]: entries
+          },
+          loadingProviders: { ...state.loadingProviders, [providerId]: false }
+        }));
+
+        // Reload providers to get updated serverCount
+        await get().loadProviders();
+      } else {
+        set(state => ({
+          loadingProviders: { ...state.loadingProviders, [providerId]: false },
+          error: result.error || 'Failed to sync provider'
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to sync provider:', error);
+      set(state => ({
+        loadingProviders: { ...state.loadingProviders, [providerId]: false },
+        error: 'Failed to sync provider'
+      }));
+    }
+  },
+
+  // Sync all enabled providers (excluding local providers which are already loaded via static imports)
+  syncAllProviders: async () => {
+    const { providers } = get();
+    // Only sync external providers (api/github), not local ones
+    const enabledProviders = providers.filter(p => p.enabled && p.type !== 'local');
+
+    for (const provider of enabledProviders) {
+      await get().syncProvider(provider.id);
+    }
+  },
+
+  // Set selected provider filter
+  setSelectedProvider: (providerId: string | 'all') => {
+    set({ selectedProvider: providerId });
+  },
+
+  // Get filtered entries based on selected provider
+  getFilteredEntries: () => {
+    const { registry, selectedProvider, providerEntries } = get();
+
+    if (selectedProvider === 'all') {
+      // Combine all entries from registry and provider entries
+      const allEntries: MCPRegistryEntry[] = [
+        ...registry.entries.map(entry => ({ ...entry, source: entry.source || 'levante' }))
+      ];
+
+      // Add entries from other providers
+      for (const [providerId, entries] of Object.entries(providerEntries)) {
+        if (providerId !== 'levante') {
+          allEntries.push(...entries);
+        }
+      }
+
+      return allEntries;
+    }
+
+    // Return entries for specific provider
+    if (selectedProvider === 'levante') {
+      return registry.entries.map(entry => ({ ...entry, source: 'levante' }));
+    }
+
+    return providerEntries[selectedProvider] || [];
   }
 }));

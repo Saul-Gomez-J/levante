@@ -6,6 +6,8 @@ import { Loader2, AlertCircle } from 'lucide-react';
 import { useMCPStore } from '@/stores/mcpStore';
 import { MCPServerConfig, MCPTool } from '@/types/mcp';
 import { MCPServerPreview } from './mcp-server-preview';
+import { RuntimeChoiceDialog, RuntimeErrorType } from '@/components/runtime/RuntimeChoiceDialog';
+import { toast } from 'sonner';
 import { useTranslation } from 'react-i18next';
 
 interface CustomMCPConfigProps {
@@ -27,6 +29,24 @@ export function CustomMCPConfig({ serverId, onClose, initialConfig, onConfigChan
   const [tools, setTools] = useState<MCPTool[]>([]);
   const [isLoadingTools, setIsLoadingTools] = useState(false);
   const [hasUserEdits, setHasUserEdits] = useState(false);
+
+  const [runtimeDialogState, setRuntimeDialogState] = useState<{
+    isOpen: boolean;
+    errorType: RuntimeErrorType | null;
+    serverName: string;
+    testConfig: MCPServerConfig | null;
+    metadata: {
+      systemPath?: string;
+      runtimeType?: 'node' | 'python';
+      runtimeVersion?: string;
+    };
+  }>({
+    isOpen: false,
+    errorType: null,
+    serverName: '',
+    testConfig: null,
+    metadata: {},
+  });
 
   const isCustomNewServer = serverId === 'new-custom-server';
   const server = serverId && !isCustomNewServer ? getServerById(serverId) : null;
@@ -54,12 +74,15 @@ export function CustomMCPConfig({ serverId, onClose, initialConfig, onConfigChan
           env: {}
         }, null, 2));
       } else if (server) {
+        // Normalize url → baseUrl for compatibility
+        const baseUrl = server.baseUrl || (server as any).url;
+
         const config = {
           type: server.transport,
           command: server.command,
           args: server.args || [],
           env: server.env || {},
-          ...(server.baseUrl && { baseUrl: server.baseUrl }),
+          ...(baseUrl && { baseUrl }),
           ...(server.headers && { headers: server.headers })
         };
         setJsonText(JSON.stringify(config, null, 2));
@@ -117,15 +140,31 @@ export function CustomMCPConfig({ serverId, onClose, initialConfig, onConfigChan
         return { valid: false, error: t('config.validation.missing_name') };
       }
 
-      if (!parsed.type) {
+      // Auto-detect transport type if not provided
+      let transportType = parsed.type || parsed.transport;
+
+      if (!transportType) {
+        // Auto-detect based on configuration
+        if (parsed.command) {
+          transportType = 'stdio';
+        } else if (parsed.url || parsed.baseUrl) {
+          transportType = 'http';
+        }
+      }
+
+      if (!transportType) {
         return { valid: false, error: t('config.validation.missing_type') };
       }
 
-      if (parsed.type === 'stdio' && !parsed.command) {
+      if (!['stdio', 'http', 'sse'].includes(transportType)) {
+        return { valid: false, error: t('config.validation.invalid_transport') };
+      }
+
+      if (transportType === 'stdio' && !parsed.command) {
         return { valid: false, error: t('config.validation.missing_command') };
       }
 
-      if ((parsed.type === 'http' || parsed.type === 'sse') && !parsed.baseUrl) {
+      if ((transportType === 'http' || transportType === 'sse') && !parsed.baseUrl && !parsed.url) {
         return { valid: false, error: t('config.validation.missing_baseurl') };
       }
 
@@ -179,6 +218,20 @@ export function CustomMCPConfig({ serverId, onClose, initialConfig, onConfigChan
       };
 
       const result = await window.levante.mcp.testConnection(testConfig);
+
+      // Handle runtime-specific errors
+      if (!result.success && ((result as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' || (result as any).errorCode === 'RUNTIME_NOT_FOUND')) {
+        setIsTestingConnection(false);
+        setIsLoadingTools(false);
+        setRuntimeDialogState({
+          isOpen: true,
+          errorType: (result as any).errorCode,
+          serverName: testConfig.name,
+          testConfig,
+          metadata: (result as any).metadata || {},
+        });
+        return;
+      }
 
       setTestResult({
         success: result.success,
@@ -248,6 +301,88 @@ export function CustomMCPConfig({ serverId, onClose, initialConfig, onConfigChan
     }
   };
 
+  const handleRuntimeUseSystem = async () => {
+    if (!runtimeDialogState.testConfig) return;
+
+    setIsTestingConnection(true);
+    setIsLoadingTools(true);
+
+    try {
+      const modifiedConfig = {
+        ...runtimeDialogState.testConfig,
+        runtime: {
+          ...runtimeDialogState.testConfig.runtime!,
+          source: 'system' as const
+        }
+      };
+
+      const result = await window.levante.mcp.testConnection(modifiedConfig);
+
+      setTestResult({
+        success: result.success,
+        message: result.success
+          ? t('config.test.success_with_system_runtime')
+          : result.error || t('config.test.failed_message')
+      });
+
+      if (result.success && result.data) {
+        setTools(result.data);
+      }
+    } catch (error: any) {
+      setTestResult({
+        success: false,
+        message: error.message || t('config.test.error_message')
+      });
+    } finally {
+      setIsTestingConnection(false);
+      setIsLoadingTools(false);
+    }
+  };
+
+  const handleRuntimeInstallLevante = async () => {
+    if (!runtimeDialogState.testConfig) return;
+
+    setIsTestingConnection(true);
+    setIsLoadingTools(true);
+
+    try {
+      const toastId = toast.loading(t('config.runtime.installing'));
+
+      const installResult = await window.levante.mcp.installRuntime(
+        runtimeDialogState.metadata.runtimeType!,
+        runtimeDialogState.metadata.runtimeVersion!
+      );
+
+      if (!installResult.success) {
+        throw new Error(installResult.error || 'Failed to install runtime');
+      }
+
+      const result = await window.levante.mcp.testConnection(runtimeDialogState.testConfig);
+
+      toast.success(t('config.runtime.installed'), { id: toastId });
+
+      setTestResult({
+        success: result.success,
+        message: result.success
+          ? t('config.test.success_with_new_runtime')
+          : result.error || t('config.test.failed_message')
+      });
+
+      if (result.success && result.data) {
+        setTools(result.data);
+      }
+    } catch (error: any) {
+      toast.error(`${t('config.runtime.install_failed')}: ${error.message}`);
+      setTestResult({
+        success: false,
+        message: error.message || t('config.test.error_message')
+      });
+    } finally {
+      setIsTestingConnection(false);
+      setIsLoadingTools(false);
+    }
+  };
+
   const validation = validateJSON(jsonText);
   const serverName = isCustomNewServer
     ? (validation.valid && validation.data?.name ? validation.data.name : t('config.new_server_name'))
@@ -301,6 +436,17 @@ export function CustomMCPConfig({ serverId, onClose, initialConfig, onConfigChan
           )}
         </Button>
       </div>
+
+      {/* Runtime Choice Dialog */}
+      <RuntimeChoiceDialog
+        open={runtimeDialogState.isOpen}
+        onClose={() => setRuntimeDialogState({ isOpen: false, errorType: null, serverName: '', testConfig: null, metadata: {} })}
+        errorType={runtimeDialogState.errorType!}
+        serverName={runtimeDialogState.serverName}
+        metadata={runtimeDialogState.metadata}
+        onUseSystem={handleRuntimeUseSystem}
+        onInstallLevante={handleRuntimeInstallLevante}
+      />
     </div>
   );
 }

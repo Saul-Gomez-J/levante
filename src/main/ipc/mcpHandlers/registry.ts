@@ -4,16 +4,6 @@ import { getLogger } from "../../services/logging";
 const logger = getLogger();
 
 export function registerRegistryHandlers(mcpService: any, configManager: any) {
-  // Diagnose system for MCP compatibility
-  ipcMain.handle("levante/mcp/diagnose-system", async () => {
-    try {
-      const diagnosis = await mcpService.diagnoseSystem();
-      return { success: true, data: diagnosis };
-    } catch (error: any) {
-      return { success: false, error: error.message };
-    }
-  });
-
   // Get MCP registry information
   ipcMain.handle("levante/mcp/get-registry", async () => {
     try {

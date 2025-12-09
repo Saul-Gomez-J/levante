@@ -18,12 +18,13 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, CheckCircle, XCircle, RefreshCw, Search } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, RefreshCw, Search, Plus } from 'lucide-react';
 import { useModelStore } from '@/stores/modelStore';
 import type { ProviderConfig } from '../../types/models';
 import { useTranslation } from 'react-i18next';
 import { OpenRouterConfig, GatewayConfig, LocalConfig, CloudConfig } from './ModelPage/ProviderConfigs';
 import { ModelList } from './ModelPage/ModelList';
+import { AddInferenceModelDialog } from '@/components/dialogs/AddInferenceModelDialog';
 
 const ModelPage = () => {
   const { t } = useTranslation('models');
@@ -43,6 +44,7 @@ const ModelPage = () => {
   } = useModelStore();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAddDialog, setShowAddDialog] = useState(false);
 
   useEffect(() => {
     initialize();
@@ -93,6 +95,7 @@ const ModelPage = () => {
       case 'google':
       case 'groq':
       case 'xai':
+      case 'huggingface':
         return <CloudConfig provider={provider} />;
       default:
         return <div>Unknown provider type</div>;
@@ -217,7 +220,7 @@ const ModelPage = () => {
                   </CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
-                  {activeProvider.modelSource === 'dynamic' && (
+                  {(activeProvider.modelSource === 'dynamic' || activeProvider.type === 'local') && (
                     <>
                       <Button
                         variant="ghost"
@@ -236,6 +239,17 @@ const ModelPage = () => {
                         {t('models.deselect_all')}
                       </Button>
                     </>
+                  )}
+                  {activeProvider.type === 'huggingface' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowAddDialog(true)}
+                      disabled={syncing}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Inference Model
+                    </Button>
                   )}
                   {activeProvider.modelSource === 'dynamic' && (
                     <Button
@@ -305,7 +319,7 @@ const ModelPage = () => {
 
                   <ModelList
                     models={activeProvider.models.filter((m) => m.isAvailable)}
-                    showSelection={activeProvider.modelSource === 'dynamic'}
+                    showSelection={activeProvider.modelSource === 'dynamic' || activeProvider.type === 'local'}
                     onModelToggle={handleModelToggle}
                     searchQuery={searchQuery}
                     providerType={activeProvider.type}
@@ -314,6 +328,15 @@ const ModelPage = () => {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Add Inference Model Dialog */}
+        {activeProvider && (
+          <AddInferenceModelDialog
+            providerId={activeProvider.id}
+            open={showAddDialog}
+            onClose={() => setShowAddDialog(false)}
+          />
         )}
       </div>
     </div>

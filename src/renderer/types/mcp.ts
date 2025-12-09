@@ -20,6 +20,36 @@ export interface MCPRegistryEntry {
       headers?: Record<string, string>;
     };
   };
+  // Provider source
+  source?: string; // 'levante' | 'smithery' | 'mcp-so' | 'awesome-mcp' | etc.
+  // Additional metadata from external providers
+  metadata?: {
+    useCount?: number;
+    homepage?: string;
+    author?: string;
+    repository?: string;
+    path?: string;
+  };
+}
+
+export interface MCPProvider {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+  type: 'local' | 'github' | 'api';
+  endpoint: string;
+  enabled: boolean;
+  homepage?: string;
+  lastSynced?: string;
+  serverCount?: number;
+  // Type-specific configuration
+  config?: {
+    branch?: string;        // For GitHub
+    path?: string;          // Path to registry file
+    authRequired?: boolean;
+    authToken?: string;
+  };
 }
 
 export interface MCPConfigField {

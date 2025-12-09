@@ -1,12 +1,12 @@
 /**
  * MessageAttachments Component
  *
- * Renders file attachments (images, audio) in chat messages.
+ * Renders file attachments (images, audio, video) in chat messages.
  * Loads attachment data URLs from storage and displays them.
  */
 
 import { useState, useEffect } from 'react';
-import { ImageIcon, MicIcon, Loader2Icon } from 'lucide-react';
+import { ImageIcon, MicIcon, VideoIcon, Loader2Icon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ImageViewer } from '@/components/ImageViewer';
 import type { MessageAttachment } from '../../../types/database';
@@ -108,6 +108,7 @@ interface AttachmentItemProps {
 function AttachmentItem({ attachment }: AttachmentItemProps) {
   const isImage = attachment.type === 'image';
   const isAudio = attachment.type === 'audio';
+  const isVideo = attachment.type === 'video';
 
   if (isImage && attachment.dataUrl) {
     return (
@@ -140,6 +141,25 @@ function AttachmentItem({ attachment }: AttachmentItemProps) {
           <source src={attachment.dataUrl} type={attachment.mimeType} />
           Your browser does not support the audio element.
         </audio>
+      </div>
+    );
+  }
+
+  if (isVideo && attachment.dataUrl) {
+    return (
+      <div className="rounded-lg border bg-card overflow-hidden max-w-md">
+        <video controls className="w-full max-h-80 bg-black">
+          <source src={attachment.dataUrl} type={attachment.mimeType} />
+          Your browser does not support the video element.
+        </video>
+        <div className="p-2 border-t bg-muted/50">
+          <div className="flex items-center gap-2">
+            <VideoIcon className="size-3 text-muted-foreground" />
+            <p className="text-xs text-muted-foreground truncate">
+              {attachment.filename}
+            </p>
+          </div>
+        </div>
       </div>
     );
   }

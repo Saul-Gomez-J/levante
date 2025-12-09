@@ -49,11 +49,17 @@ import {
 } from '@/components/ai-elements/reasoning';
 import { BreathingLogo } from '@/components/ai-elements/breathing-logo';
 import { ToolCall } from '@/components/ai-elements/tool-call';
+import { UIResourceMessage } from '@/components/chat/UIResourceMessage';
+import { isUIResource } from '@mcp-ui/client';
+import { extractUIResources } from '@/types/ui-resource';
 import { modelService } from '@/services/modelService';
 import type { Model } from '../../types/models';
 import { getRendererLogger } from '@/services/logger';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { useMCPResources } from '@/hooks/useMCPResources';
+import type { SelectedResource, SelectedPrompt, MCPResource, MCPPrompt } from '@/hooks/useMCPResources';
+import { usePreference } from '@/hooks/usePreferences';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
@@ -65,8 +71,7 @@ const ChatPage = () => {
   const { t } = useTranslation('chat');
   const [input, setInput] = useState('');
   const [model, setModel] = useState<string>('');
-  const [webSearch, setWebSearch] = useState(false);
-  const [enableMCP, setEnableMCP] = useState(false);
+  const [enableMCP, setEnableMCP] = usePreference('enableMCP');
   const [availableModels, setAvailableModels] = useState<Model[]>([]);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [userName, setUserName] = useState<string>(t('welcome.default_user_name'));
@@ -76,6 +81,18 @@ const ChatPage = () => {
   const [pendingMessageAfterStop, setPendingMessageAfterStop] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+
+  // MCP Resources hook
+  const {
+    selectedResources,
+    selectResource,
+    removeResource,
+    selectedPrompts,
+    selectPrompt,
+    removePrompt,
+    clearResources,
+    getContextString,
+  } = useMCPResources();
 
   // Chat store
   const currentSession = useChatStore((state) => state.currentSession);
@@ -107,23 +124,39 @@ const ChatPage = () => {
     }
 
     const sessionType = currentSession.session_type;
+    let filtered: Model[] = [];
 
     if (sessionType === 'chat') {
       // Chat session - only show chat and multimodal chat models
-      return availableModels.filter(m => {
+      filtered = availableModels.filter(m => {
         const taskType = m.taskType;
         return !taskType || taskType === 'chat' || taskType === 'image-text-to-text';
       });
     } else if (sessionType === 'inference') {
       // Inference session - only show inference models
-      return availableModels.filter(m => {
+      filtered = availableModels.filter(m => {
         const taskType = m.taskType;
         return taskType && taskType !== 'chat' && taskType !== 'image-text-to-text';
       });
+    } else {
+      // Fallback - show all models
+      filtered = availableModels;
     }
 
-    // Fallback - show all models
-    return availableModels;
+    // ALWAYS include the session's current model, even if not in filtered list
+    // This allows continuing conversations with the same model
+    if (currentSession.model) {
+      const currentModel = availableModels.find(m => m.id === currentSession.model);
+      if (currentModel && !filtered.find(m => m.id === currentModel.id)) {
+        logger.core.info('Adding session model to filtered list', {
+          model: currentSession.model,
+          sessionType
+        });
+        filtered = [currentModel, ...filtered];
+      }
+    }
+
+    return filtered;
   }, [availableModels, currentSession]);
 
   // Enable file attachments for models that support or require visual inputs
@@ -158,7 +191,7 @@ const ChatPage = () => {
     filename: string;
     mimeType: string;
     size: number;
-    path: string;
+    storagePath: string;
   }>) => {
     if (!attachments || attachments.length === 0) {
       return;
@@ -201,8 +234,7 @@ const ChatPage = () => {
     () =>
       createElectronChatTransport({
         model: model || 'openai/gpt-4o',
-        webSearch,
-        enableMCP,
+        enableMCP: enableMCP ?? true,
       }),
     [] // Keep same transport instance
   );
@@ -211,10 +243,9 @@ const ChatPage = () => {
   useEffect(() => {
     transport.updateOptions({
       model: model || 'openai/gpt-4o',
-      webSearch,
-      enableMCP,
+      enableMCP: enableMCP ?? true,
     });
-  }, [model, webSearch, enableMCP, transport]);
+  }, [model, enableMCP, transport]);
 
   // Use AI SDK native useChat hook
   const {
@@ -246,7 +277,7 @@ const ChatPage = () => {
           filename: string;
           mimeType: string;
           size: number;
-          path: string;
+          storagePath: string;
         }> = [];
         if (message.parts) {
           for (const part of message.parts) {
@@ -272,7 +303,10 @@ const ChatPage = () => {
                 );
 
                 if (result.success && result.data) {
-                  generatedAttachments.push(result.data);
+                  generatedAttachments.push({
+                    ...result.data,
+                    storagePath: result.data.path
+                  });
                   logger.core.info('Generated attachment saved', {
                     attachmentId: result.data.id,
                     filename: attachmentData.filename,
@@ -364,8 +398,9 @@ const ChatPage = () => {
     // Update ref
     previousSessionIdRef.current = currentSessionId;
 
-    // Clear attachments when changing sessions
+    // Clear attachments and MCP resources when changing sessions
     setAttachedFiles([]);
+    clearResources();
 
     // If we just created this session, skip loading historical messages
     // (the messages are already in useChat state from sendMessageAI)
@@ -397,6 +432,17 @@ const ChatPage = () => {
       setMessages([]);
     }
   }, [currentSession?.id, loadHistoricalMessages, setMessages]);
+
+  // Sync model with current session when session changes
+  useEffect(() => {
+    if (currentSession?.model) {
+      logger.core.info('Syncing model from session', {
+        sessionId: currentSession.id,
+        model: currentSession.model
+      });
+      setModel(currentSession.model);
+    }
+  }, [currentSession?.id, currentSession?.model]);
 
   // Handle model change with session type validation
   const handleModelChange = (newModelId: string) => {
@@ -468,13 +514,19 @@ const ChatPage = () => {
     }
 
     // Otherwise, send a new message
-    if (input.trim() || attachedFiles.length > 0) {
-      const messageText = input;
+    if (input.trim() || attachedFiles.length > 0 || selectedResources.length > 0 || selectedPrompts.length > 0) {
+      // Build message text with MCP resource context if any
+      const resourceContext = getContextString();
+      const messageText = resourceContext
+        ? `${resourceContext}\n\n${input}`
+        : input;
       const filesToAttach = [...attachedFiles];
+      const resourcesToInclude = [...selectedResources];
 
       try {
         setInput('');
         setAttachedFiles([]); // Clear attachments immediately
+        clearResources(); // Clear MCP resources immediately
 
         // If no session exists, create one and save message for later
         if (!currentSession) {
@@ -527,7 +579,7 @@ const ChatPage = () => {
           filename: string;
           mimeType: string;
           size: number;
-          path: string;
+          storagePath: string;
         }> = [];
         let attachmentDataForInference: any[] = [];
 
@@ -546,7 +598,7 @@ const ChatPage = () => {
             const dataUrl = `data:${file.type};base64,${base64}`;
 
             attachmentDataForInference.push({
-              type: file.type.startsWith('image/') ? 'image' : 'audio',
+              type: file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'video',
               data: dataUrl,
               mime: file.type,
               filename: file.name
@@ -554,11 +606,17 @@ const ChatPage = () => {
           }
 
           // Save attachments to disk
-          savedAttachments = await processAttachments(
+          const processedAttachments = await processAttachments(
             filesToAttach,
             currentSession.id,
             messageId
           );
+
+          // Add storagePath (which comes from 'path' in DB result)
+          savedAttachments = processedAttachments.map(att => ({
+            ...att,
+            storagePath: att.path
+          }));
         }
 
         // Send the message with attachments passed in the body
@@ -630,7 +688,7 @@ const ChatPage = () => {
       try {
         const messageId = `user-${Date.now()}`;
         let attachmentDataForInference: Array<{
-          type: 'image' | 'audio';
+          type: 'image' | 'audio' | 'video';
           data: string;
           mime: string;
           filename: string;
@@ -641,7 +699,7 @@ const ChatPage = () => {
           filename: string;
           mimeType: string;
           size: number;
-          path: string;
+          storagePath: string;
         }> = [];
 
         if (attachmentFiles.length > 0) {
@@ -661,18 +719,24 @@ const ChatPage = () => {
             const dataUrl = `data:${file.type};base64,${base64}`;
 
             attachmentDataForInference.push({
-              type: file.type.startsWith('image/') ? 'image' : 'audio',
+              type: file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'video',
               data: dataUrl,
               mime: file.type,
               filename: file.name
             });
           }
 
-          savedAttachments = await processAttachments(
+          const processedAttachments = await processAttachments(
             attachmentFiles,
             currentSession.id,
             messageId
           );
+
+          // Add storagePath (which comes from 'path' in DB result)
+          savedAttachments = processedAttachments.map(att => ({
+            ...att,
+            storagePath: att.path
+          }));
         }
 
         // Persist user message to database BEFORE sending to AI (to ensure correct order)
@@ -735,7 +799,31 @@ const ChatPage = () => {
 
   // Load available models on component mount
   useEffect(() => {
-    loadAvailableModels();
+    const loadModels = async () => {
+      setModelsLoading(true);
+      try {
+        // Ensure model service is initialized
+        await modelService.initialize();
+        const models = await modelService.getAvailableModels();
+        setAvailableModels(models);
+
+        // Log available models for debugging
+        logger.models.debug(`ChatPage loaded ${models.length} available models`, {
+          models: models.map(m => ({ id: m.id, name: m.name, provider: m.provider }))
+        });
+      } catch (error) {
+        logger.models.error('Failed to load models in ChatPage', {
+          error: error instanceof Error ? error.message : error
+        });
+      } finally {
+        setModelsLoading(false);
+      }
+    };
+
+    loadModels();
+
+    // Subscribe to model store changes if needed, or just reload when provider changes
+    // For now, we'll just rely on this initial load and maybe reload when active provider changes?
     loadUserName();
   }, []);
 
@@ -746,29 +834,7 @@ const ChatPage = () => {
         setUserName(profile.data.personalization.nickname);
       }
     } catch (error) {
-      logger.preferences.error('Error loading user name', {
-        error: error instanceof Error ? error.message : error,
-      });
-    }
-  };
-
-  const loadAvailableModels = async () => {
-    try {
-      setModelsLoading(true);
-      await modelService.initialize();
-      const models = await modelService.getAvailableModels();
-      setAvailableModels(models);
-
-      // Set default model if none selected
-      if (!model && models.length > 0) {
-        setModel(models[0].id);
-      }
-    } catch (error) {
-      logger.core.error('Failed to load models in ChatPage', {
-        error: error instanceof Error ? error.message : error,
-      });
-    } finally {
-      setModelsLoading(false);
+      console.error('Failed to load user name:', error);
     }
   };
 
@@ -1035,9 +1101,7 @@ const ChatPage = () => {
                 input={input}
                 onInputChange={setInput}
                 onSubmit={handleSubmit}
-                webSearch={webSearch}
-                enableMCP={enableMCP}
-                onWebSearchChange={setWebSearch}
+                enableMCP={enableMCP ?? true}
                 onMCPChange={setEnableMCP}
                 model={model}
                 onModelChange={handleModelChange}
@@ -1049,7 +1113,12 @@ const ChatPage = () => {
                 onFileRemove={handleFileRemove}
                 enableFileAttachment={enableFileAttachment}
                 fileAccept={getFileAccept()}
-                fileAttachmentTitle={getAttachmentTitle()}
+                selectedResources={selectedResources}
+                onResourceSelected={selectResource}
+                onResourceRemove={removeResource}
+                selectedPrompts={selectedPrompts}
+                onPromptSelected={selectPrompt}
+                onPromptRemove={removePrompt}
               />
             </div>
           </div>
@@ -1060,77 +1129,77 @@ const ChatPage = () => {
           <Conversation className="flex-1">
             <ConversationContent className="max-w-3xl mx-auto p-0 pl-4 pr-2 py-4">
               {messages.map((message) => (
-                  <div key={message.id}>
-                    {/* Sources (web search results) */}
-                    {message.role === 'assistant' && message.parts && (
-                      <Sources>
-                        {message.parts
-                          .filter((part: any) => part?.value?.type === 'source-url')
-                          .map((part: any, i: number) => (
-                            <>
-                              <SourcesTrigger
-                                key={`trigger-${message.id}-${i}`}
-                                count={
-                                  message.parts.filter((p: any) => p.value?.type === 'source-url')
-                                    .length
-                                }
-                              />
-                              <SourcesContent key={`content-${message.id}-${i}`}>
-                                <Source href={part.value.url} title={part.value.title || part.value.url} />
-                              </SourcesContent>
-                            </>
-                          ))}
-                      </Sources>
-                    )}
+                <div key={message.id}>
+                  {/* Sources (web search results) */}
+                  {message.role === 'assistant' && message.parts && (
+                    <Sources>
+                      {message.parts
+                        .filter((part: any) => part?.value?.type === 'source-url')
+                        .map((part: any, i: number) => (
+                          <>
+                            <SourcesTrigger
+                              key={`trigger-${message.id}-${i}`}
+                              count={
+                                message.parts.filter((p: any) => p.value?.type === 'source-url')
+                                  .length
+                              }
+                            />
+                            <SourcesContent key={`content-${message.id}-${i}`}>
+                              <Source href={part.value.url} title={part.value.title || part.value.url} />
+                            </SourcesContent>
+                          </>
+                        ))}
+                    </Sources>
+                  )}
 
-                    {/* Message */}
-                    <Message
+                  {/* Message */}
+                  <Message
+                    from={message.role}
+                    key={message.id}
+                    className={cn(
+                      'p-0',
+                      message.role === 'user' ? 'is-user my-6' : 'is-assistant'
+                    )}
+                  >
+                    <MessageContent
                       from={message.role}
-                      key={message.id}
                       className={cn(
-                        'p-0',
-                        message.role === 'user' ? 'is-user my-6' : 'is-assistant'
+                        '',
+                        message.role === 'user' ? 'p-2 mb-0 dark:text-white' : 'px-2 py-0'
                       )}
                     >
-                      <MessageContent
-                        from={message.role}
-                        className={cn(
-                          '',
-                          message.role === 'user' ? 'p-2 mb-0 dark:text-white' : 'px-2 py-0'
-                        )}
-                      >
-                        {/* Render attachments if present */}
-                        {(message as any).attachments && (message as any).attachments.length > 0 && (
-                          <MessageAttachments attachments={(message as any).attachments} />
-                        )}
+                      {/* Render attachments if present */}
+                      {(message as any).attachments && (message as any).attachments.length > 0 && (
+                        <MessageAttachments attachments={(message as any).attachments} />
+                      )}
 
-                        {/* Debug: Log message structure */}
-                        {(() => {
-                          if ((message as any).attachments?.length > 0) {
-                            logger.core.debug('Rendering message with attachments', {
-                              messageId: message.id,
-                              role: message.role,
-                              attachmentCount: (message as any).attachments.length,
-                              attachments: (message as any).attachments,
-                              partsCount: message.parts?.length || 0,
-                            });
+                      {/* Debug: Log message structure */}
+                      {(() => {
+                        if ((message as any).attachments?.length > 0) {
+                          logger.core.debug('Rendering message with attachments', {
+                            messageId: message.id,
+                            role: message.role,
+                            attachmentCount: (message as any).attachments.length,
+                            attachments: (message as any).attachments,
+                            partsCount: message.parts?.length || 0,
+                          });
+                        }
+                        return null;
+                      })()}
+
+                      {message.parts?.map((part: any, i: number) => {
+                        try {
+                          // Text content
+                          if (part?.type === 'text' && part?.text) {
+                            return (
+                              <Response key={`${message.id}-${i}`}>
+                                {part.text}
+                              </Response>
+                            );
                           }
-                          return null;
-                        })()}
 
-                        {message.parts?.map((part: any, i: number) => {
-                          try {
-                            // Text content
-                            if (part?.type === 'text' && part?.text) {
-                              return (
-                                <Response key={`${message.id}-${i}`}>
-                                  {part.text}
-                                </Response>
-                              );
-                            }
-
-                            // Reasoning (data part)
-                            if (part?.value?.type === 'reasoning') {
+                          // Reasoning (data part)
+                          if (part?.value?.type === 'reasoning') {
                             return (
                               <Reasoning
                                 key={`${message.id}-${i}`}
@@ -1147,45 +1216,95 @@ const ChatPage = () => {
 
                           // Tool calls (MCP)
                           if (part?.type?.startsWith('tool-')) {
-                            // Only show if output is available or there's an error
-                            if (part.state === 'output-available' || part.state === 'output-error') {
-                              const toolCall = {
-                                id: part.toolCallId,
-                                name: part.toolName,
-                                arguments: part.input || {},
-                                result: part.state === 'output-available' ? {
-                                  success: true,
-                                  content: JSON.stringify(part.output),
-                                } : {
-                                  success: false,
-                                  error: part.errorText,
-                                },
-                                status: part.state === 'output-available' ? 'success' as const : 'error' as const,
-                              };
+                            // Extract tool name from type if toolName field is not available
+                            // During streaming, AI SDK v5 doesn't include toolName field
+                            // Format: "tool-{toolName}" -> extract toolName
+                            const toolName = part.toolName || part.type.replace(/^tool-/, '');
 
-                              return (
+                            // Map part states to ToolCall status
+                            let status: 'pending' | 'running' | 'success' | 'error' = 'pending';
+                            if (part.state === 'input-start') {
+                              status = 'pending';
+                            } else if (part.state === 'input-available') {
+                              status = 'running';
+                            } else if (part.state === 'output-available') {
+                              status = 'success';
+                            } else if (part.state === 'output-error') {
+                              status = 'error';
+                            }
+
+                            const toolCall = {
+                              id: part.toolCallId,
+                              name: toolName,
+                              arguments: part.input || {},
+                              result: part.state === 'output-available' ? {
+                                success: true,
+                                content: JSON.stringify(part.output),
+                              } : part.state === 'output-error' ? {
+                                success: false,
+                                error: part.errorText,
+                              } : undefined,
+                              status,
+                            };
+
+                            // Check if tool output contains UI resources
+                            const uiResources = part.state === 'output-available'
+                              ? extractUIResources(part.output)
+                              : [];
+
+                            // Extract serverId from toolName (format: serverId_toolName)
+                            const toolNameParts = toolName.split('_');
+                            const serverId = toolNameParts.length > 1 ? toolNameParts[0] : undefined;
+
+                            return (
+                              <div key={`${message.id}-${i}`} className="w-full">
                                 <ToolCall
-                                  key={`${message.id}-${i}`}
                                   toolCall={toolCall}
                                   className="w-full"
                                 />
-                              );
-                            }
+                                {/* Render UI Resources from tool output */}
+                                {uiResources.map((resource, resourceIdx) => (
+                                  <UIResourceMessage
+                                    key={`${message.id}-${i}-ui-${resourceIdx}`}
+                                    resource={resource}
+                                    serverId={serverId}
+                                    className="mt-2"
+                                    onPrompt={(prompt) => {
+                                      setInput(prompt);
+                                    }}
+                                  />
+                                ))}
+                              </div>
+                            );
                           }
 
-                            return null;
-                          } catch (error) {
-                            console.error('[ChatPage] Error rendering part:', error, {
-                              messageId: message.id,
-                              partIndex: i,
-                              part,
-                            });
-                            return null;
+                          // Check for standalone UI resource parts (data parts)
+                          if (part?.value?.type === 'ui-resource' && part?.value?.resource) {
+                            return (
+                              <UIResourceMessage
+                                key={`${message.id}-${i}`}
+                                resource={part.value.resource}
+                                className="w-full"
+                                onPrompt={(prompt) => {
+                                  setInput(prompt);
+                                }}
+                              />
+                            );
                           }
-                        })}
-                      </MessageContent>
-                    </Message>
-                  </div>
+
+                          return null;
+                        } catch (error) {
+                          console.error('[ChatPage] Error rendering part:', error, {
+                            messageId: message.id,
+                            partIndex: i,
+                            part,
+                          });
+                          return null;
+                        }
+                      })}
+                    </MessageContent>
+                  </Message>
+                </div>
               ))}
 
               {/* Streaming indicator */}
@@ -1206,9 +1325,7 @@ const ChatPage = () => {
               input={input}
               onInputChange={setInput}
               onSubmit={handleSubmit}
-              webSearch={webSearch}
-              enableMCP={enableMCP}
-              onWebSearchChange={setWebSearch}
+              enableMCP={enableMCP ?? true}
               onMCPChange={setEnableMCP}
               model={model}
               onModelChange={handleModelChange}
@@ -1220,7 +1337,12 @@ const ChatPage = () => {
               onFileRemove={handleFileRemove}
               enableFileAttachment={enableFileAttachment}
               fileAccept={getFileAccept()}
-              fileAttachmentTitle={getAttachmentTitle()}
+              selectedResources={selectedResources}
+              onResourceSelected={selectResource}
+              onResourceRemove={removeResource}
+              selectedPrompts={selectedPrompts}
+              onPromptSelected={selectPrompt}
+              onPromptRemove={removePrompt}
             />
           </div>
         </>

@@ -3,12 +3,9 @@ import { validateLocalEndpoint, validatePublicUrl, logBlockedUrl, safeFetch } fr
 
 interface ModelResponse {
   object: string;
-  data: Array<{
-    id: string;
-    object: string;
-    created: number;
-    owned_by: string;
-  }>;
+  data: Array<Record<string, any>>;
+  has_more?: boolean;
+  next_offset?: string | null;
 }
 
 const logger = getLogger();
@@ -20,12 +17,12 @@ export class ModelFetchService {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       };
-      
+
       // Add authorization header only if API key is provided
       if (apiKey) {
         headers['Authorization'] = `Bearer ${apiKey}`;
       }
-      
+
       const response = await fetch('https://openrouter.ai/api/v1/models', {
         headers
       });
@@ -37,9 +34,9 @@ export class ModelFetchService {
       const data = await response.json();
       return data.data || [];
     } catch (error) {
-      logger.models.error("Failed to fetch OpenRouter models", { 
+      logger.models.error("Failed to fetch OpenRouter models", {
         error: error instanceof Error ? error.message : error,
-        hasApiKey: !!apiKey 
+        hasApiKey: !!apiKey
       });
       throw error;
     }
@@ -83,7 +80,7 @@ export class ModelFetchService {
     }
   }
 
-  // Fetch local models (Ollama)
+  // Fetch local models (Ollama or OpenAI-compatible)
   static async fetchLocalModels(endpoint: string): Promise<any[]> {
     try {
       // Security: Validate endpoint URL to prevent SSRF attacks
@@ -93,21 +90,66 @@ export class ModelFetchService {
         throw new Error(validation.error || 'Invalid endpoint URL');
       }
 
-      const url = `${endpoint}/api/tags`;
+      // 1. Try Ollama endpoint (/api/tags)
+      try {
+        const ollamaUrl = `${endpoint}/api/tags`;
+        logger.models.debug(`Trying Ollama endpoint: ${ollamaUrl}`);
+        // Use shorter timeout for first attempt
+        const response = await safeFetch(ollamaUrl, {
+          headers: { 'Content-Type': 'application/json' }
+        }, 2000);
 
-      // Security: Use safeFetch with 30s timeout to prevent hanging on malicious endpoints
+        logger.models.debug(`Ollama endpoint response: ${response.status} ${response.statusText}`);
+
+        if (response.ok) {
+          const data = await response.json();
+          logger.models.debug(`Ollama models found: ${data.models?.length || 0}`);
+
+          // Only return if we actually found models, otherwise try OpenAI endpoint
+          // LM Studio might return 200 OK for /api/tags but with empty/different structure
+          if (data.models && data.models.length > 0) {
+            return data.models;
+          }
+          logger.models.debug(`Ollama endpoint returned valid response but 0 models, falling back to OpenAI endpoint`);
+        }
+      } catch (e) {
+        // Prepare to try next method
+        logger.models.debug(`Ollama endpoint failed for ${endpoint}, trying OpenAI-compatible endpoint`, { error: e });
+      }
+
+      // 2. Try OpenAI-compatible endpoint (/v1/models)
+      // This is used by LM Studio, LocalAI, etc.
+      const url = `${endpoint}/v1/models`;
+      logger.models.debug(`Trying OpenAI endpoint: ${url}`);
+
       const response = await safeFetch(url, {
         headers: {
           'Content-Type': 'application/json'
         }
       });
 
+      logger.models.debug(`OpenAI endpoint response: ${response.status} ${response.statusText}`);
+
       if (!response.ok) {
         throw new Error(`Local API error: ${response.statusText}`);
       }
 
       const data = await response.json();
-      return data.models || [];
+      logger.models.debug(`Raw OpenAI data received:`, { data });
+
+      const models = data.data || [];
+      logger.models.debug(`OpenAI models found: ${models.length}`);
+
+      // Normalize OpenAI models to match Ollama format (expecting 'name')
+      const normalized = models.map((m: any) => ({
+        ...m,
+        name: m.name || m.id, // Ensure name exists
+        details: m.details || { family: 'unknown' }
+      }));
+
+      logger.models.debug(`Normalized models:`, { normalized });
+      return normalized;
+
     } catch (error) {
       logger.models.error("Failed to fetch local models", {
         error: error instanceof Error ? error.message : error,
@@ -235,6 +277,60 @@ export class ModelFetchService {
     } catch (error) {
       logger.models.error("Failed to fetch xAI models", {
         error: error instanceof Error ? error.message : error
+      });
+      throw error;
+    }
+  }
+
+  // Fetch Hugging Face models
+  static async fetchHuggingFaceModels(apiKey: string): Promise<any[]> {
+    try {
+      const allModels: any[] = [];
+      let nextOffset: string | null | undefined = undefined;
+      let page = 0;
+
+      do {
+        const url = new URL('https://router.huggingface.co/v1/models');
+        if (nextOffset) {
+          url.searchParams.set('after', nextOffset);
+        }
+
+        const response = await safeFetch(url.toString(), {
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Hugging Face API error: ${response.statusText}`);
+        }
+
+        const data: ModelResponse = await response.json();
+        const models = data.data || [];
+        allModels.push(...models);
+
+        logger.models.debug('Fetched Hugging Face models page', {
+          page,
+          fetched: models.length,
+          total: allModels.length,
+          hasMore: data.has_more,
+          nextOffset: data.next_offset
+        });
+
+        if (data.has_more && data.next_offset) {
+          nextOffset = data.next_offset;
+          page += 1;
+        } else {
+          nextOffset = null;
+        }
+      } while (nextOffset);
+
+      return allModels;
+    } catch (error) {
+      logger.models.error("Failed to fetch Hugging Face models", {
+        error: error instanceof Error ? error.message : error,
+        hasApiKey: !!apiKey
       });
       throw error;
     }

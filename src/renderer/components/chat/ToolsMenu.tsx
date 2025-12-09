@@ -10,22 +10,18 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { GlobeIcon, Wrench, ChevronDown, Search } from 'lucide-react';
+import { Wrench, ChevronDown, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 
 interface ToolsMenuProps {
-  webSearch: boolean;
   enableMCP: boolean;
-  onWebSearchChange: (enabled: boolean) => void;
   onMCPChange: (enabled: boolean) => void;
   className?: string;
 }
 
 export function ToolsMenu({
-  webSearch,
   enableMCP,
-  onWebSearchChange,
   onMCPChange,
   className
 }: ToolsMenuProps) {
@@ -35,14 +31,6 @@ export function ToolsMenu({
 
   // Filter tools based on search
   const tools = [
-    {
-      id: 'web-search',
-      label: t('tools_menu.web_search.label'),
-      icon: GlobeIcon,
-      enabled: webSearch,
-      onChange: onWebSearchChange,
-      keywords: t('tools_menu.web_search.keywords', { returnObjects: true }) as string[]
-    },
     {
       id: 'mcp-tools',
       label: t('tools_menu.mcp_tools.label'),
