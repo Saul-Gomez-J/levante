@@ -2,6 +2,7 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
+  DialogDescription,
   DialogTrigger,
   DialogClose,
 } from '@/components/ui/dialog';
@@ -121,6 +122,9 @@ export function ImageViewer({ src, alt, className, children }: ImageViewerProps)
         }}
       >
         <DialogTitle className="sr-only">Image Viewer</DialogTitle>
+        <DialogDescription className="sr-only">
+          Zoom and pan controls for viewing the image in full size
+        </DialogDescription>
 
         {/* Controls */}
         <div className="absolute top-4 left-1/2 transform -translate-x-1/2 z-50 flex items-center gap-2 bg-black/50 backdrop-blur-sm p-2 rounded-full">
