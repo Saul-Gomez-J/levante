@@ -116,7 +116,13 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
           </SidebarMenu>
           <div className="border-t pt-2">
             <p className="text-xs text-muted-foreground text-center p-2">
-              v{version} • {platform}
+              v{version} • {platform} •{' '}
+              <button
+                onClick={() => window.levante.openExternal('https://www.levanteapp.com/feedback')}
+                className="hover:text-foreground transition-colors underline cursor-pointer"
+              >
+                feedback
+              </button>
             </p>
           </div>
         </SidebarFooter>
