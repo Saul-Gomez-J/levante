@@ -45,17 +45,20 @@ export class ModelFetchService {
   // Fetch Vercel AI Gateway models
   static async fetchGatewayModels(apiKey: string, baseUrl: string = 'https://ai-gateway.vercel.sh/v1'): Promise<any[]> {
     try {
-      // Security: Validate baseUrl to prevent SSRF if user provides custom gateway
-      const validation = validatePublicUrl(baseUrl);
+      // Normalize endpoint (add http:// if missing)
+      const normalizedBaseUrl = normalizeEndpoint(baseUrl);
+
+      // Validate baseUrl format and protocol
+      const validation = validateLocalEndpoint(normalizedBaseUrl);
       if (!validation.valid) {
-        logBlockedUrl(baseUrl, validation.error || 'Invalid URL', 'fetchGatewayModels');
+        logBlockedUrl(normalizedBaseUrl, validation.error || 'Invalid URL', 'fetchGatewayModels');
         throw new Error(validation.error || 'Invalid gateway URL');
       }
 
       // For model listing, always use /v1 endpoint (not /v1/ai)
-      const modelsEndpoint = baseUrl.includes('/v1/ai')
-        ? baseUrl.replace('/v1/ai', '/v1')
-        : baseUrl;
+      const modelsEndpoint = normalizedBaseUrl.includes('/v1/ai')
+        ? normalizedBaseUrl.replace('/v1/ai', '/v1')
+        : normalizedBaseUrl;
 
       const response = await safeFetch(`${modelsEndpoint}/models`, {
         headers: {
@@ -73,8 +76,8 @@ export class ModelFetchService {
     } catch (error) {
       logger.models.error("Failed to fetch Gateway models", {
         error: error instanceof Error ? error.message : error,
-        baseUrl,
-        modelsEndpoint: baseUrl.includes('/v1/ai') ? baseUrl.replace('/v1/ai', '/v1') : baseUrl
+        baseUrl: normalizedBaseUrl,
+        modelsEndpoint: normalizedBaseUrl.includes('/v1/ai') ? normalizedBaseUrl.replace('/v1/ai', '/v1') : normalizedBaseUrl
       });
       throw error;
     }

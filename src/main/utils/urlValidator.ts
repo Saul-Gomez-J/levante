@@ -191,9 +191,16 @@ export function normalizeEndpoint(endpoint: string): string {
 }
 
 /**
- * Validates a local endpoint URL (Ollama, custom AI endpoints)
+ * Validates a user-configured endpoint URL (Local providers, Gateway, etc.)
  *
- * Allows localhost connections and private network IPs
+ * Permissive validation for endpoints explicitly configured by the user:
+ * - Only validates protocol (http/https) and URL format
+ * - No IP address restrictions (allows localhost, private IPs, public IPs, metadata endpoints)
+ * - No port restrictions
+ *
+ * Rationale: This is an open-source desktop app where users have full control.
+ * Since endpoints are manually configured (not from external sources), SSRF
+ * protection is unnecessary and overly restrictive.
  *
  * @param endpoint - Endpoint URL to validate
  * @returns Validation result with success status and error message
@@ -201,12 +208,25 @@ export function normalizeEndpoint(endpoint: string): string {
 export function validateLocalEndpoint(
   endpoint: string
 ): { valid: boolean; error?: string; parsedUrl?: URL } {
-  return validateUrl(endpoint, {
-    allowLocalhost: true,
-    allowPrivateNetworks: true,
-    allowedPorts: [11434, 1234, 8080, 8000, 5000, 3000], // Common AI endpoint ports
-    maxPort: 65535
-  });
+  try {
+    const parsedUrl = new URL(endpoint);
+
+    // Only validate protocol - allow http and https
+    if (!ALLOWED_PROTOCOLS.includes(parsedUrl.protocol as any)) {
+      return {
+        valid: false,
+        error: `Protocol "${parsedUrl.protocol}" is not allowed. Only HTTP and HTTPS are permitted.`
+      };
+    }
+
+    return { valid: true, parsedUrl };
+
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Invalid URL format'
+    };
+  }
 }
 
 /**
