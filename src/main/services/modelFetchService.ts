@@ -1,5 +1,5 @@
 import { getLogger } from './logging';
-import { validateLocalEndpoint, validatePublicUrl, logBlockedUrl, safeFetch } from '../utils/urlValidator';
+import { validateLocalEndpoint, validatePublicUrl, logBlockedUrl, safeFetch, normalizeEndpoint } from '../utils/urlValidator';
 
 interface ModelResponse {
   object: string;
@@ -45,17 +45,20 @@ export class ModelFetchService {
   // Fetch Vercel AI Gateway models
   static async fetchGatewayModels(apiKey: string, baseUrl: string = 'https://ai-gateway.vercel.sh/v1'): Promise<any[]> {
     try {
-      // Security: Validate baseUrl to prevent SSRF if user provides custom gateway
-      const validation = validatePublicUrl(baseUrl);
+      // Normalize endpoint (add http:// if missing)
+      const normalizedBaseUrl = normalizeEndpoint(baseUrl);
+
+      // Validate baseUrl format and protocol
+      const validation = validateLocalEndpoint(normalizedBaseUrl);
       if (!validation.valid) {
-        logBlockedUrl(baseUrl, validation.error || 'Invalid URL', 'fetchGatewayModels');
+        logBlockedUrl(normalizedBaseUrl, validation.error || 'Invalid URL', 'fetchGatewayModels');
         throw new Error(validation.error || 'Invalid gateway URL');
       }
 
       // For model listing, always use /v1 endpoint (not /v1/ai)
-      const modelsEndpoint = baseUrl.includes('/v1/ai')
-        ? baseUrl.replace('/v1/ai', '/v1')
-        : baseUrl;
+      const modelsEndpoint = normalizedBaseUrl.includes('/v1/ai')
+        ? normalizedBaseUrl.replace('/v1/ai', '/v1')
+        : normalizedBaseUrl;
 
       const response = await safeFetch(`${modelsEndpoint}/models`, {
         headers: {
@@ -73,8 +76,8 @@ export class ModelFetchService {
     } catch (error) {
       logger.models.error("Failed to fetch Gateway models", {
         error: error instanceof Error ? error.message : error,
-        baseUrl,
-        modelsEndpoint: baseUrl.includes('/v1/ai') ? baseUrl.replace('/v1/ai', '/v1') : baseUrl
+        baseUrl: normalizedBaseUrl,
+        modelsEndpoint: normalizedBaseUrl.includes('/v1/ai') ? normalizedBaseUrl.replace('/v1/ai', '/v1') : normalizedBaseUrl
       });
       throw error;
     }
@@ -83,16 +86,19 @@ export class ModelFetchService {
   // Fetch local models (Ollama or OpenAI-compatible)
   static async fetchLocalModels(endpoint: string): Promise<any[]> {
     try {
+      // Normalize endpoint (add http:// if missing)
+      const normalizedEndpoint = normalizeEndpoint(endpoint);
+
       // Security: Validate endpoint URL to prevent SSRF attacks
-      const validation = validateLocalEndpoint(endpoint);
+      const validation = validateLocalEndpoint(normalizedEndpoint);
       if (!validation.valid) {
-        logBlockedUrl(endpoint, validation.error || 'Invalid URL', 'fetchLocalModels');
+        logBlockedUrl(normalizedEndpoint, validation.error || 'Invalid URL', 'fetchLocalModels');
         throw new Error(validation.error || 'Invalid endpoint URL');
       }
 
       // 1. Try Ollama endpoint (/api/tags)
       try {
-        const ollamaUrl = `${endpoint}/api/tags`;
+        const ollamaUrl = `${normalizedEndpoint}/api/tags`;
         logger.models.debug(`Trying Ollama endpoint: ${ollamaUrl}`);
         // Use shorter timeout for first attempt
         const response = await safeFetch(ollamaUrl, {
@@ -114,12 +120,12 @@ export class ModelFetchService {
         }
       } catch (e) {
         // Prepare to try next method
-        logger.models.debug(`Ollama endpoint failed for ${endpoint}, trying OpenAI-compatible endpoint`, { error: e });
+        logger.models.debug(`Ollama endpoint failed for ${normalizedEndpoint}, trying OpenAI-compatible endpoint`, { error: e });
       }
 
       // 2. Try OpenAI-compatible endpoint (/v1/models)
       // This is used by LM Studio, LocalAI, etc.
-      const url = `${endpoint}/v1/models`;
+      const url = `${normalizedEndpoint}/v1/models`;
       logger.models.debug(`Trying OpenAI endpoint: ${url}`);
 
       const response = await safeFetch(url, {
@@ -153,7 +159,7 @@ export class ModelFetchService {
     } catch (error) {
       logger.models.error("Failed to fetch local models", {
         error: error instanceof Error ? error.message : error,
-        endpoint
+        endpoint: normalizeEndpoint(endpoint)
       });
       throw error;
     }
