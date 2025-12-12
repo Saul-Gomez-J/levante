@@ -31,12 +31,10 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
   const { t } = useTranslation('mcp');
   const hasSyncedProviders = useRef(false);
   const {
-    registry,
     activeServers,
     connectionStatus,
     isLoading,
     error,
-    loadRegistry,
     loadActiveServers,
     refreshConnectionStatus,
     connectServer,
@@ -53,7 +51,8 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
     setSelectedProvider,
     clearProviderError, // ✅ NUEVO
     getFilteredEntries,
-    getRegistryEntryById
+    getRegistryEntryById,
+    getAvailableProviders // ✅ NUEVO
   } = useMCPStore();
 
   const [configServerId, setConfigServerId] = useState<string | null>(null);
@@ -117,7 +116,6 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
 
   useEffect(() => {
     // Load initial data (solo instalados, NO sincronizar proveedores)
-    loadRegistry();
     loadActiveServers();
 
     // ✅ ELIMINADO: syncAllProviders() - ahora es lazy (se ejecuta al cambiar de tab)
@@ -125,7 +123,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
     // Refresh connection status every 30 seconds
     const interval = setInterval(refreshConnectionStatus, 30000);
     return () => clearInterval(interval);
-  }, [loadRegistry, loadActiveServers, refreshConnectionStatus]);
+  }, [loadActiveServers, refreshConnectionStatus]);
 
   // ✅ NUEVO: Lazy loading de proveedores cuando se cambia a modo "store"
   useEffect(() => {
@@ -618,8 +616,8 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
             </div>
             <div className="flex items-center gap-2">
               <ProviderFilter
-                providers={providers}
                 selectedProvider={selectedProvider}
+                availableProviders={getAvailableProviders()} // ✅ CAMBIO
                 onSelectProvider={setSelectedProvider}
               />
               <Badge variant="outline">
@@ -716,6 +714,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
                   onConfigure={() => handleConfigureServer(entry.id)}
                   onAddToActive={() => handleAddToActive(entry.id)}
                   onShowInfo={() => handleShowInfo(entry.id)}
+                  providerBadge={entry.provider} // ✅ NUEVO
                 />
               );
             })}
@@ -758,7 +757,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
 
       {/* MCP Info Sheet */}
       <MCPInfoSheet
-        entry={infoSheetState.entryId ? getRegistryEntryById(infoSheetState.entryId) : null}
+        entry={infoSheetState.entryId ? (getRegistryEntryById(infoSheetState.entryId) || null) : null}
         isOpen={infoSheetState.isOpen}
         isInstalled={infoSheetState.entryId ? activeServers.some(s => s.id === infoSheetState.entryId) : false}
         onClose={handleCloseInfo}

@@ -31,6 +31,7 @@ interface IntegrationCardProps {
   status: MCPConnectionStatus;
   isActive: boolean;
   isInstalling?: boolean;
+  providerBadge?: string; // ✅ NUEVO
   onToggle: () => void;
   onConfigure: () => void;
   onAddToActive?: () => void;
@@ -45,6 +46,7 @@ export function IntegrationCard({
   status,
   isActive,
   isInstalling = false,
+  providerBadge,
   onToggle,
   onConfigure,
   onAddToActive,
@@ -89,13 +91,12 @@ export function IntegrationCard({
               <Badge variant="secondary" className="text-xs">
                 {category}
               </Badge>
-              {entry?.source && entry.source !== 'levante' && (
+              {providerBadge && (
                 <Badge
                   variant="outline"
-                  className={`text-xs ${providerHomepage ? 'cursor-pointer hover:bg-accent transition-colors' : ''}`}
-                  onClick={providerHomepage ? handleSourceClick : undefined}
+                  className="text-xs"
                 >
-                  {entry.source}
+                  {providerBadge}
                 </Badge>
               )}
             </div>
