@@ -1,11 +1,9 @@
 import { create } from 'zustand';
 import { MCPRegistry, MCPServerConfig, MCPConnectionStatus, MCPProvider, MCPRegistryEntry } from '../types/mcp';
-import mcpRegistryData from '../data/mcpRegistry.json';
 import mcpProvidersData from '../data/mcpProviders.json';
 
 interface MCPStore {
   // State
-  registry: MCPRegistry;
   activeServers: MCPServerConfig[];
   connectionStatus: Record<string, MCPConnectionStatus>;
   isLoading: boolean;
@@ -16,11 +14,10 @@ interface MCPStore {
   selectedProvider: string | 'all';
   loadingProviders: Record<string, boolean>;
   providerEntries: Record<string, MCPRegistryEntry[]>;
-  providerErrors: Record<string, string | null>; // ✅ NUEVO: Errores por proveedor
-  providersSynced: boolean; // ✅ NUEVO: Flag de sincronización
+  providerErrors: Record<string, string | null>;
+  providersSynced: boolean;
 
   // Actions
-  loadRegistry: () => void;
   loadActiveServers: () => Promise<void>;
   refreshConnectionStatus: () => Promise<void>;
   connectServer: (config: MCPServerConfig) => Promise<void>;
@@ -37,18 +34,18 @@ interface MCPStore {
   syncProvider: (providerId: string) => Promise<void>;
   syncAllProviders: () => Promise<void>;
   setSelectedProvider: (providerId: string | 'all') => void;
-  clearProviderError: (providerId: string) => void; // ✅ NUEVO: Limpiar error individual
+  clearProviderError: (providerId: string) => void;
+  getFilteredEntries: () => MCPRegistryEntry[];
+  getAvailableProviders: () => string[];
 
   // Helper methods
   isServerActive: (serverId: string) => boolean;
   getServerById: (serverId: string) => MCPServerConfig | undefined;
-  getRegistryEntryById: (entryId: string) => any;
-  getFilteredEntries: () => MCPRegistryEntry[];
+  getRegistryEntryById: (entryId: string) => MCPRegistryEntry | undefined;
 }
 
 export const useMCPStore = create<MCPStore>((set, get) => ({
   // Initial state
-  registry: mcpRegistryData as MCPRegistry,
   activeServers: [],
   connectionStatus: {},
   isLoading: false,
@@ -59,18 +56,10 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   selectedProvider: 'all',
   loadingProviders: {},
   providerEntries: {},
-  providerErrors: {}, // ✅ NUEVO
-  providersSynced: false, // ✅ NUEVO
+  providerErrors: {},
+  providersSynced: false,
 
-  // Load curated registry from JSON
-  loadRegistry: () => {
-    try {
-      set({ registry: mcpRegistryData as MCPRegistry });
-    } catch (error) {
-      console.error('Failed to load MCP registry:', error);
-      set({ error: 'Failed to load MCP registry' });
-    }
-  },
+
 
   // Load active servers from configuration
   loadActiveServers: async () => {
@@ -374,13 +363,9 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
 
   // Helper: Get registry entry by ID (searches all sources)
   getRegistryEntryById: (entryId: string) => {
-    const { registry, providerEntries } = get();
+    const { providerEntries } = get();
 
-    // First check local registry
-    const localEntry = registry.entries.find(entry => entry.id === entryId);
-    if (localEntry) return localEntry;
-
-    // Then check provider entries
+    // Check provider entries
     for (const entries of Object.values(providerEntries)) {
       const providerEntry = entries.find(entry => entry.id === entryId);
       if (providerEntry) return providerEntry;
@@ -447,11 +432,11 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
     }
   },
 
-  // Sync all enabled providers (excluding local providers which are already loaded via static imports)
+  // Sync all enabled providers
   syncAllProviders: async () => {
     const { providers } = get();
-    // Only sync external providers (api/github), not local ones
-    const enabledProviders = providers.filter(p => p.enabled && p.type !== 'local');
+    // Sync all enabled providers
+    const enabledProviders = providers.filter(p => p.enabled);
 
     // ✅ Sincronizar todos los proveedores (incluso si algunos fallan)
     for (const provider of enabledProviders) {
@@ -476,30 +461,31 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   },
 
   // Get filtered entries based on selected provider
+  // Get filtered entries based on selected provider
   getFilteredEntries: () => {
-    const { registry, selectedProvider, providerEntries } = get();
+    const { selectedProvider, providerEntries } = get();
+    const allEntries = Object.values(providerEntries).flat();
 
     if (selectedProvider === 'all') {
-      // Combine all entries from registry and provider entries
-      const allEntries: MCPRegistryEntry[] = [
-        ...registry.entries.map(entry => ({ ...entry, source: entry.source || 'levante' }))
-      ];
-
-      // Add entries from other providers
-      for (const [providerId, entries] of Object.entries(providerEntries)) {
-        if (providerId !== 'levante') {
-          allEntries.push(...entries);
-        }
-      }
-
       return allEntries;
     }
 
-    // Return entries for specific provider
-    if (selectedProvider === 'levante') {
-      return registry.entries.map(entry => ({ ...entry, source: 'levante' }));
-    }
+    // ✅ CAMBIO: Filtrar por campo "provider" en lugar de "source"
+    return allEntries.filter(entry => entry.provider === selectedProvider);
+  },
 
-    return providerEntries[selectedProvider] || [];
+  // ✅ NUEVO: Obtener proveedores únicos
+  getAvailableProviders: () => {
+    const { providerEntries } = get();
+    const allEntries = Object.values(providerEntries).flat();
+    const providers = new Set<string>();
+
+    allEntries.forEach(entry => {
+      if (entry.provider) {
+        providers.add(entry.provider);
+      }
+    });
+
+    return Array.from(providers).sort();
   }
 }));
