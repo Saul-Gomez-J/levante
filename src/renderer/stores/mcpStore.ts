@@ -16,6 +16,8 @@ interface MCPStore {
   selectedProvider: string | 'all';
   loadingProviders: Record<string, boolean>;
   providerEntries: Record<string, MCPRegistryEntry[]>;
+  providerErrors: Record<string, string | null>; // ✅ NUEVO: Errores por proveedor
+  providersSynced: boolean; // ✅ NUEVO: Flag de sincronización
 
   // Actions
   loadRegistry: () => void;
@@ -35,6 +37,7 @@ interface MCPStore {
   syncProvider: (providerId: string) => Promise<void>;
   syncAllProviders: () => Promise<void>;
   setSelectedProvider: (providerId: string | 'all') => void;
+  clearProviderError: (providerId: string) => void; // ✅ NUEVO: Limpiar error individual
 
   // Helper methods
   isServerActive: (serverId: string) => boolean;
@@ -56,6 +59,8 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
   selectedProvider: 'all',
   loadingProviders: {},
   providerEntries: {},
+  providerErrors: {}, // ✅ NUEVO
+  providersSynced: false, // ✅ NUEVO
 
   // Load curated registry from JSON
   loadRegistry: () => {
@@ -413,22 +418,31 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
             ...state.providerEntries,
             [providerId]: entries
           },
-          loadingProviders: { ...state.loadingProviders, [providerId]: false }
+          loadingProviders: { ...state.loadingProviders, [providerId]: false },
+          providerErrors: { ...state.providerErrors, [providerId]: null } // ✅ Limpiar error
         }));
 
         // Reload providers to get updated serverCount
         await get().loadProviders();
       } else {
+        // ✅ Error no crítico: guardar en providerErrors en lugar de error global
         set(state => ({
           loadingProviders: { ...state.loadingProviders, [providerId]: false },
-          error: result.error || 'Failed to sync provider'
+          providerErrors: {
+            ...state.providerErrors,
+            [providerId]: result.error || 'Failed to sync provider'
+          }
         }));
       }
     } catch (error) {
       console.error('Failed to sync provider:', error);
+      // ✅ Error no crítico: guardar en providerErrors
       set(state => ({
         loadingProviders: { ...state.loadingProviders, [providerId]: false },
-        error: 'Failed to sync provider'
+        providerErrors: {
+          ...state.providerErrors,
+          [providerId]: error instanceof Error ? error.message : 'Failed to sync provider'
+        }
       }));
     }
   },
@@ -439,14 +453,26 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
     // Only sync external providers (api/github), not local ones
     const enabledProviders = providers.filter(p => p.enabled && p.type !== 'local');
 
+    // ✅ Sincronizar todos los proveedores (incluso si algunos fallan)
     for (const provider of enabledProviders) {
       await get().syncProvider(provider.id);
+      // Los errores se guardan en providerErrors, no se propagan
     }
+
+    // ✅ Marcar como sincronizados
+    set({ providersSynced: true });
   },
 
   // Set selected provider filter
   setSelectedProvider: (providerId: string | 'all') => {
     set({ selectedProvider: providerId });
+  },
+
+  // Clear provider error
+  clearProviderError: (providerId: string) => {
+    set(state => ({
+      providerErrors: { ...state.providerErrors, [providerId]: null }
+    }));
   },
 
   // Get filtered entries based on selected provider

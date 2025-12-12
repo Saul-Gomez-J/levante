@@ -5,12 +5,12 @@
     {
       "id": "levante",
       "name": "Levante",
-      "description": "Built-in curated MCP servers",
+      "description": "Official curated MCP servers",
       "icon": "home",
-      "type": "local",
-      "endpoint": "mcpRegistry.json",
+      "type": "api",
+      "endpoint": "http://localhost:5174/api/mcps.json",
       "enabled": true,
-      "homepage": "https://github.com/levante-hub/levante"
+      "homepage": "http://localhost:5174"
     },
     {
       "id": "aitempl",

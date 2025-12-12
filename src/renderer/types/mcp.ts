@@ -4,6 +4,7 @@ export interface MCPRegistryEntry {
   description: string;
   category: string;
   icon: string;
+  logoUrl?: string; // URL de logo, opcional
   transport: {
     type: 'stdio' | 'http' | 'sse';
     autoDetect: boolean;

@@ -47,8 +47,11 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
     providers,
     selectedProvider,
     loadingProviders,
+    providerErrors, // ✅ NUEVO
+    providersSynced, // ✅ NUEVO
     syncAllProviders,
     setSelectedProvider,
+    clearProviderError, // ✅ NUEVO
     getFilteredEntries,
     getRegistryEntryById
   } = useMCPStore();
@@ -113,20 +116,23 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
   };
 
   useEffect(() => {
-    // Load initial data
+    // Load initial data (solo instalados, NO sincronizar proveedores)
     loadRegistry();
     loadActiveServers();
 
-    // Sync all providers once per session
-    if (!hasSyncedProviders.current) {
-      hasSyncedProviders.current = true;
-      syncAllProviders();
-    }
+    // ✅ ELIMINADO: syncAllProviders() - ahora es lazy (se ejecuta al cambiar de tab)
 
     // Refresh connection status every 30 seconds
     const interval = setInterval(refreshConnectionStatus, 30000);
     return () => clearInterval(interval);
-  }, [loadRegistry, loadActiveServers, refreshConnectionStatus, syncAllProviders]);
+  }, [loadRegistry, loadActiveServers, refreshConnectionStatus]);
+
+  // ✅ NUEVO: Lazy loading de proveedores cuando se cambia a modo "store"
+  useEffect(() => {
+    if (mode === 'store' && !providersSynced) {
+      syncAllProviders();
+    }
+  }, [mode, providersSynced, syncAllProviders]);
 
   const handleToggleServer = async (serverId: string) => {
     const server = activeServers.find(s => s.id === serverId);
@@ -409,16 +415,8 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
     });
   };
 
-  if (error) {
-    return (
-      <div className="container mx-auto p-6">
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
+  // ✅ ELIMINADO: El error global ya no bloquea toda la UI
+  // Los errores de proveedores se muestran de forma granular más abajo
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 px-4">
@@ -644,12 +642,55 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
             </div>
           </div>
 
+          {/* Provider Error Alerts */}
+          {Object.entries(providerErrors).filter(([_, error]) => error !== null).length > 0 && (
+            <div className="space-y-2 mb-4">
+              {Object.entries(providerErrors)
+                .filter(([_, error]) => error !== null)
+                .map(([providerId, error]) => {
+                  const provider = providers.find(p => p.id === providerId);
+                  return (
+                    <div key={providerId} className="flex items-center justify-between py-2">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 text-foreground" />
+                        <span className="text-sm text-foreground">
+                          {t('store.provider_error', {
+                            name: provider?.name || providerId
+                          })}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => clearProviderError(providerId)}
+                        className="text-sm text-foreground/60 hover:text-foreground underline hover:no-underline ml-4"
+                      >
+                        {t('common:actions.dismiss')}
+                      </button>
+                    </div>
+                  );
+                })
+              }
+            </div>
+          )}
+
           {/* No Results Message */}
           {getFilteredAndSearchedEntries().length === 0 && searchQuery.trim() && (
             <div className="text-center py-12">
               <p className="text-muted-foreground mb-2">{t('store.no_results')}</p>
               <p className="text-sm text-muted-foreground">
                 {t('store.no_results_description')}
+              </p>
+            </div>
+          )}
+
+          {/* ✅ NUEVO: Empty State cuando todos los proveedores fallan */}
+          {getFilteredAndSearchedEntries().length === 0 && !searchQuery.trim() && providersSynced && (
+            <div className="text-center py-12">
+              <AlertCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <h3 className="text-lg font-semibold mb-2">
+                {t('store.no_providers_title')}
+              </h3>
+              <p className="text-muted-foreground">
+                {t('store.no_providers_description')}
               </p>
             </div>
           )}

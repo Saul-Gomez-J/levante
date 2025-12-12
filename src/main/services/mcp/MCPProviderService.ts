@@ -32,6 +32,7 @@ export interface MCPRegistryEntry {
   description: string;
   category: string;
   icon: string;
+  logoUrl?: string;
   transport: {
     type: 'stdio' | 'http' | 'sse';
     autoDetect: boolean;
@@ -80,6 +81,7 @@ interface AitemplMcpServer {
   category: string;
   content: string; // JSON string with mcpServers configuration
   downloads: number;
+  logoUrl?: string; // Optional logo URL
 }
 
 interface AitemplResponse {
@@ -120,13 +122,78 @@ export class MCPProviderService {
   }
 
   /**
-   * Normalize Levante (local) registry
+   * Normalize Levante (local/api) registry
    */
-  private normalizeLevante(data: MCPRegistry, source: string): MCPRegistryEntry[] {
-    return data.entries.map(entry => ({
-      ...entry,
-      source
-    }));
+  private normalizeLevante(data: any, source: string): MCPRegistryEntry[] {
+    // Standard format
+    if (data.entries) {
+      return data.entries.map((entry: MCPRegistryEntry) => ({
+        ...entry,
+        source
+      }));
+    }
+
+    // Custom API format
+    if (data.servers) {
+      return this.transformCustomFormat(data.servers, source);
+    }
+
+    throw new Error('Unknown Levante registry format');
+  }
+
+  private transformCustomFormat(servers: any[], source: string): MCPRegistryEntry[] {
+    return servers.map(server => {
+      // Generate fields from env
+      const fields = Object.entries(server.env || {}).map(
+        ([key, config]: [string, any]) => ({
+          key,
+          label: config.label || key,
+          type: config.type || 'string',
+          required: config.required !== false,
+          description: config.description || `Environment variable: ${key}`,
+          placeholder: config.default || '',
+          defaultValue: config.default,
+        })
+      );
+
+      // Extract defaults from env
+      const envDefaults: Record<string, string> = {};
+      Object.entries(server.env || {}).forEach(([key, config]: [string, any]) => {
+        if (config.default) {
+          envDefaults[key] = config.default;
+        }
+      });
+
+      return {
+        id: server.id,
+        name: server.name,
+        description: server.description,
+        category: server.category || 'general',
+        icon: server.icon || 'server',
+        logoUrl: server.logoUrl,
+        source,
+        transport: {
+          type: server.transport || 'stdio',
+          autoDetect: true,
+        },
+        configuration: {
+          fields,
+          defaults: {
+            command: server.command,
+            args: Array.isArray(server.args) ? server.args.join(' ') : server.args,
+          },
+          template: {
+            type: server.transport || 'stdio',
+            command: server.command,
+            args: server.args,
+            env: envDefaults,
+          },
+        },
+        metadata: {
+          ...server.metadata,
+        },
+      };
+    });
   }
 
   /**
@@ -165,6 +232,7 @@ export class MCPProviderService {
         description: server.description || '',
         category: server.category || 'general',
         icon: 'server',
+        logoUrl: server.logoUrl,
         transport: { type: 'stdio' as const, autoDetect: true },
         source,
         configuration: {
@@ -204,10 +272,13 @@ export class MCPProviderService {
         const rawData = await this.fetchFromLocal(provider.endpoint);
         entries = this.normalizeLevante(rawData, provider.id);
       } else if (provider.type === 'api') {
+        // ✅ ELIMINADO: try-catch interno con fallback
         const rawData = await this.fetchFromAPI(provider.endpoint);
 
         // Route to correct normalizer based on provider ID
-        if (provider.id === 'aitempl') {
+        if (provider.id === 'levante') {
+          entries = this.normalizeLevante(rawData, provider.id);
+        } else if (provider.id === 'aitempl') {
           entries = this.normalizeAitempl(rawData as AitemplResponse, provider.id);
         } else {
           logger.mcp.warn('No normalizer for API provider', { providerId: provider.id });
@@ -236,6 +307,7 @@ export class MCPProviderService {
         providerId: provider.id,
         error: error instanceof Error ? error.message : error
       });
+      // ✅ Error se propaga hacia arriba para ser capturado en el store
       throw error;
     }
   }
