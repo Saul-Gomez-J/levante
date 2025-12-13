@@ -125,8 +125,8 @@ const ChatPage = () => {
     clearAttachments,
   } = useFileAttachments({
     modelTaskType,
-    modelCapabilities: currentModelInfo?.capabilities,
-    isStreaming: false, // Will be updated after useChat
+    modelCapabilities: currentModelInfo?.computedCapabilities, // Use computedCapabilities, not capabilities
+    isStreaming: false, // Can't use status here due to declaration order
   });
 
   /* 140 */   const attachFilesToLatestUserMessage = (attachments: Array<{
@@ -137,7 +137,7 @@ const ChatPage = () => {
   /* 145 */     size: number;
   /* 146 */     storagePath: string;
     /* 147 */
-}>) => {
+  }>) => {
     if (!attachments || attachments.length === 0) {
       return;
     }
@@ -686,7 +686,7 @@ const ChatPage = () => {
     <div
       className={cn(
         "flex flex-col h-full relative",
-        isDragging && enableFileAttachment && "ring-2 ring-primary ring-inset"
+        isDragging && "ring-2 ring-primary ring-inset"
       )}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
@@ -694,7 +694,7 @@ const ChatPage = () => {
       onDrop={handleDrop}
     >
       {/* Drag overlay */}
-      {isDragging && enableFileAttachment && (
+      {isDragging && (
         <div className="absolute inset-0 z-50 bg-primary/10 backdrop-blur-sm flex items-center justify-center pointer-events-none">
           <div className="text-center">
             <p className="text-lg font-semibold text-primary">Drop images or PDFs here</p>

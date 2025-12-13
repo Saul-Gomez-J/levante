@@ -82,17 +82,45 @@ const {
 
 1. **Manual Selection** - File picker via attach button
 2. **Drag & Drop** - Dragging files into the chat window
+3. **Paste** - Pasting files from clipboard (Ctrl+V / Cmd+V)
 
 ```typescript
 // Lines 690-703 - Drag overlay with visual feedback
 {isDragging && enableFileAttachment && (
   <div className="absolute inset-0 z-50 bg-primary/10 backdrop-blur-sm">
     <div className="text-center">
-      <p className="text-lg font-semibold text-primary">Drop images here</p>
+      <p className="text-lg font-semibold text-primary">Drop images or PDFs here</p>
       <p className="text-sm text-muted-foreground mt-1">to attach them to your message</p>
     </div>
   </div>
 )}
+
+// ChatPromptInput.tsx - Paste handler
+const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+  if (!enableFileAttachment || !onFilesSelected || status === 'streaming') {
+    return;
+  }
+
+  const items = e.clipboardData?.items;
+  if (!items) return;
+
+  const files: File[] = [];
+  
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.kind === 'file') {
+      const file = item.getAsFile();
+      if (file) {
+        files.push(file);
+      }
+    }
+  }
+
+  if (files.length > 0) {
+    e.preventDefault();
+    await onFilesSelected(files);
+  }
+};
 ```
 
 ## File Validation

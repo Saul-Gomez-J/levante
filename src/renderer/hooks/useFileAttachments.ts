@@ -113,14 +113,17 @@ export function useFileAttachments(options: UseFileAttachmentsOptions = {}): Use
   const [isDragging, setIsDragging] = useState(false);
 
   // Check if model supports file attachments
-  // We allow attachments if:
-  // 1. Task indicates image input (image-text-to-text, image-to-image)
-  // 2. Model capabilities natively support vision
-  // 3. For standard chat, we now support PDF extraction (Hybrid mode), so we allow it there too
-  const supportsFileAttachment = !!(
-    (modelTaskType && ['image-text-to-text', 'image-to-image', 'chat', 'inference'].includes(modelTaskType)) ||
-    modelCapabilities?.supportsVision
-  );
+  // Always enabled - hybrid PDF support and validation happens at processing time
+  const supportsFileAttachment = true;
+
+  // Debug logging
+  logger.core.debug('File attachment support check', {
+    supportsFileAttachment,
+    modelTaskType,
+    hasModelCapabilities: !!modelCapabilities,
+    supportsVision: modelCapabilities?.supportsVision,
+    isStreaming,
+  });
 
   // Get allowed MIME types based on current model task type
   const getAllowedMimeTypes = useCallback((): string[] => {
@@ -273,12 +276,13 @@ export function useFileAttachments(options: UseFileAttachmentsOptions = {}): Use
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!supportsFileAttachment || isStreaming) return;
+    // Match AddContextMenu behavior: only disabled when streaming
+    if (isStreaming) return;
 
     if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
       setIsDragging(true);
     }
-  }, [supportsFileAttachment, isStreaming]);
+  }, [isStreaming]);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -300,13 +304,14 @@ export function useFileAttachments(options: UseFileAttachmentsOptions = {}): Use
     e.stopPropagation();
     setIsDragging(false);
 
-    if (!supportsFileAttachment || isStreaming) return;
+    // Match AddContextMenu behavior: only disabled when streaming
+    if (isStreaming) return;
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
       await handleFilesSelected(files);
     }
-  }, [supportsFileAttachment, isStreaming, handleFilesSelected]);
+  }, [isStreaming, handleFilesSelected]);
 
   // Process and save attachments to disk
   const processAttachments = useCallback(async (
