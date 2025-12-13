@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { ImageIcon, MicIcon, VideoIcon, Loader2Icon } from 'lucide-react';
+import { ImageIcon, MicIcon, VideoIcon, Loader2Icon, FileTextIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ImageViewer } from '@/components/ImageViewer';
 import type { MessageAttachment } from '../../../types/database';
@@ -160,6 +160,26 @@ function AttachmentItem({ attachment }: AttachmentItemProps) {
             </p>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  const isDocument = attachment.type === 'document';
+
+  if (isDocument && attachment.dataUrl) {
+    return (
+      <div className="rounded-lg border bg-card p-3 max-w-md">
+        <div className="flex items-center gap-2 mb-2">
+          <FileTextIcon className="size-4 text-muted-foreground" />
+          <p className="text-sm font-medium truncate">{attachment.filename}</p>
+        </div>
+        <a
+          href={attachment.dataUrl}
+          download={attachment.filename}
+          className="text-sm text-primary hover:underline block"
+        >
+          Download PDF ({formatFileSize(attachment.size)})
+        </a>
       </div>
     );
   }
