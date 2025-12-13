@@ -129,14 +129,15 @@ const ChatPage = () => {
     isStreaming: false, // Will be updated after useChat
   });
 
-  const attachFilesToLatestUserMessage = (attachments: Array<{
-    id: string;
-    type: 'image' | 'audio' | 'video';
-    filename: string;
-    mimeType: string;
-    size: number;
-    storagePath: string;
-  }>) => {
+  /* 140 */   const attachFilesToLatestUserMessage = (attachments: Array<{
+  /* 141 */     id: string;
+  /* 142 */     type: 'image' | 'audio' | 'video' | 'document';
+  /* 143 */     filename: string;
+  /* 144 */     mimeType: string;
+  /* 145 */     size: number;
+  /* 146 */     storagePath: string;
+    /* 147 */
+}>) => {
     if (!attachments || attachments.length === 0) {
       return;
     }
@@ -201,7 +202,7 @@ const ChatPage = () => {
         // Check for generated attachments in data parts
         const generatedAttachments: Array<{
           id: string;
-          type: 'image' | 'audio' | 'video';
+          type: 'image' | 'audio' | 'video' | 'document';
           filename: string;
           mimeType: string;
           size: number;
@@ -447,7 +448,7 @@ const ChatPage = () => {
         // Process and save attachments if any
         let savedAttachments: Array<{
           id: string;
-          type: 'image' | 'audio' | 'video';
+          type: 'image' | 'audio' | 'video' | 'document';
           filename: string;
           mimeType: string;
           size: number;
@@ -567,7 +568,7 @@ const ChatPage = () => {
         }> = [];
         let savedAttachments: Array<{
           id: string;
-          type: 'image' | 'audio' | 'video';
+          type: 'image' | 'audio' | 'video' | 'document';
           filename: string;
           mimeType: string;
           size: number;
@@ -696,7 +697,7 @@ const ChatPage = () => {
       {isDragging && enableFileAttachment && (
         <div className="absolute inset-0 z-50 bg-primary/10 backdrop-blur-sm flex items-center justify-center pointer-events-none">
           <div className="text-center">
-            <p className="text-lg font-semibold text-primary">Drop images here</p>
+            <p className="text-lg font-semibold text-primary">Drop images or PDFs here</p>
             <p className="text-sm text-muted-foreground mt-1">to attach them to your message</p>
           </div>
         </div>

@@ -13,7 +13,7 @@ export type SessionType = "chat" | "inference";
  */
 export interface MessageAttachment {
   id: string; // Unique attachment ID
-  type: "image" | "audio" | "video"; // Type of attachment
+  type: "image" | "audio" | "video" | "document"; // Type of attachment
   filename: string; // Original filename
   mimeType: string; // MIME type (e.g., "image/jpeg")
   size: number; // File size in bytes
