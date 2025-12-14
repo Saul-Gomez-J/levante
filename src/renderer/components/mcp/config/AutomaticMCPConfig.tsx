@@ -27,10 +27,11 @@ type ExtractionPhase = 'idle' | 'analyzing' | 'security' | 'extracting' | 'valid
 
 interface ExtractedConfig {
   name: string;
-  type: 'stdio' | 'http' | 'sse';
+  type: 'stdio' | 'http' | 'sse' | 'streamable-http';
   command?: string;
   args?: string[];
   env?: Record<string, string>;
+  url?: string;
   baseUrl?: string;
   headers?: Record<string, string>;
 }
@@ -194,8 +195,8 @@ export function AutomaticMCPConfig({ serverId, onClose, onSwitchToCustom, onConf
         if (!extractedConfig.command) {
           validationErrors.push(t('config.validation.missing_command'));
         }
-      } else if (extractedConfig.type === 'http' || extractedConfig.type === 'sse') {
-        if (!extractedConfig.baseUrl) {
+      } else if (extractedConfig.type === 'http' || extractedConfig.type === 'sse' || extractedConfig.type === 'streamable-http') {
+        if (!extractedConfig.baseUrl && !extractedConfig.url) {
           validationErrors.push(t('config.validation.missing_baseurl'));
         }
       }

@@ -61,13 +61,14 @@ export function useServerValidation(config: Partial<MCPServerConfig> | null): Va
       }
     }
 
-    // Validate http/sse-specific fields
-    if (config.transport === 'http' || config.transport === 'sse') {
-      if (!config.baseUrl) {
-        errors.push('Missing URL for HTTP/SSE transport');
+    // Validate http/sse/streamable-http-specific fields
+    if (config.transport === 'http' || config.transport === 'sse' || config.transport === 'streamable-http') {
+      const serverUrl = config.url || config.baseUrl;
+      if (!serverUrl) {
+        errors.push('Missing URL for HTTP/SSE/streamable-http transport');
       } else {
         try {
-          new URL(config.baseUrl);
+          new URL(serverUrl);
         } catch {
           errors.push('Invalid URL format');
         }

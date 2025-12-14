@@ -100,7 +100,7 @@ export function FullJSONEditor({ onClose, onConfigChange }: FullJSONEditorProps)
           return { valid: false, error: t('config.validation.missing_command', { serverId }) };
         }
 
-        if ((transportType === 'http' || transportType === 'sse') && !config.baseUrl && !config.url) {
+        if ((transportType === 'http' || transportType === 'sse' || transportType === 'streamable-http') && !config.baseUrl && !config.url) {
           return { valid: false, error: t('config.validation.missing_baseurl', { serverId }) };
         }
 

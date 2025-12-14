@@ -7,12 +7,15 @@ import type {
   MCPRegistryEntry,
   LevanteAPIResponse,
   LevanteAPIServer,
-  EnvFieldConfig,
+  InputDefinition,
   MCPConfigField
 } from '../../../renderer/types/mcp';
 import { mcpCacheService } from './MCPCacheService';
 
 const logger = getLogger();
+
+// Default production host for Levante services
+const DEFAULT_SERVICES_HOST = 'https://services.levanteapp.com';
 
 export class MCPProviderService {
   /**
@@ -22,11 +25,11 @@ export class MCPProviderService {
     logger.mcp.info(`[MCPProviderService] Syncing provider: ${provider.id}`);
 
     try {
-      // Fetch desde API
+      // Fetch from API
       const apiResponse = await this.fetchFromAPI(provider.endpoint);
 
-      // Transformar a formato interno
-      const entries = this.transformAPIResponse(apiResponse, provider.id);
+      // Transform to internal format
+      const entries = this.transformAPIResponse(apiResponse);
 
       // Cachear resultados
       await mcpCacheService.setCache(provider.id, entries);
@@ -49,12 +52,45 @@ export class MCPProviderService {
   }
 
   /**
-   * ✅ SIMPLIFICADO: Un solo método de fetch
+   * Gets the Levante services host from environment or uses default
+   */
+  private getServicesHost(): string {
+    const envHost = process.env.LEVANTE_SERVICES_HOST;
+    if (envHost) {
+      // Remove trailing slash if present
+      const host = envHost.replace(/\/$/, '');
+      logger.mcp.debug(`[MCPProviderService] Using env host: ${host}`);
+      return host;
+    }
+    return DEFAULT_SERVICES_HOST;
+  }
+
+  /**
+   * Resolves the API endpoint
+   * - If endpoint is a path (starts with /), combines with services host
+   * - If endpoint is a full URL, uses it directly (for external APIs)
+   */
+  private resolveEndpoint(endpoint: string): string {
+    // If endpoint is a path, combine with host
+    if (endpoint.startsWith('/')) {
+      const host = this.getServicesHost();
+      const fullUrl = `${host}${endpoint}`;
+      logger.mcp.debug(`[MCPProviderService] Resolved endpoint: ${fullUrl}`);
+      return fullUrl;
+    }
+
+    // If it's already a full URL, use it directly
+    return endpoint;
+  }
+
+  /**
+   * Fetches data from the API endpoint
    */
   private async fetchFromAPI(endpoint: string): Promise<LevanteAPIResponse> {
-    logger.mcp.debug(`[MCPProviderService] Fetching from API: ${endpoint}`);
+    const resolvedEndpoint = this.resolveEndpoint(endpoint);
+    logger.mcp.debug(`[MCPProviderService] Fetching from API: ${resolvedEndpoint}`);
 
-    const response = await fetch(endpoint, {
+    const response = await fetch(resolvedEndpoint, {
       headers: {
         'Accept': 'application/json',
         'User-Agent': 'Levante-MCP-Client/1.0'
@@ -70,25 +106,20 @@ export class MCPProviderService {
   }
 
   /**
-   * ✅ NUEVO: Transformador único de API a formato interno
+   * Transforms API response to internal registry format
    */
-  private transformAPIResponse(
-    apiResponse: LevanteAPIResponse,
-    source: string
-  ): MCPRegistryEntry[] {
-    return apiResponse.servers.map(server => this.transformServer(server, source));
+  private transformAPIResponse(apiResponse: LevanteAPIResponse): MCPRegistryEntry[] {
+    return apiResponse.servers.map(server => this.transformServer(server));
   }
 
   /**
-   * ✅ NUEVO: Transforma un servidor individual
+   * Transforms an individual server from API format to internal registry format
    */
-  private transformServer(server: LevanteAPIServer, source: string): MCPRegistryEntry {
-    const { env } = server;
+  private transformServer(server: LevanteAPIServer): MCPRegistryEntry {
+    // Generate configuration fields from inputs
+    const fields: MCPConfigField[] = this.generateFieldsFromInputs(server.inputs || {});
 
-    // Generar campos de configuración desde env
-    const fields: MCPConfigField[] = this.generateFieldsFromEnv(env || {});
-
-    // Construir template según el tipo de transporte
+    // Build template from server configuration or generate defaults
     const template = this.buildTemplate(server);
 
     return {
@@ -98,8 +129,10 @@ export class MCPProviderService {
       category: server.category,
       icon: server.icon,
       logoUrl: server.logoUrl,
-      source,  // "levante-store"
-      provider: server.provider,  // ✅ NUEVO: "levante", "aitempl", etc.
+      source: server.source,  // "official" | "community"
+      maintainer: server.maintainer,
+      status: server.status || 'active',
+      version: server.version,
       transport: {
         type: server.transport,
         autoDetect: true
@@ -107,67 +140,73 @@ export class MCPProviderService {
       configuration: {
         fields,
         defaults: this.extractDefaults(server),
-        template
+        template: template as MCPRegistryEntry['configuration']['template']
       },
-      metadata: server.metadata || {}
+      metadata: server.metadata
     };
   }
 
   /**
-   * ✅ NUEVO: Genera campos de configuración desde env
+   * Generates configuration fields from API inputs definition
    */
-  private generateFieldsFromEnv(env: Record<string, EnvFieldConfig | string>): MCPConfigField[] {
+  private generateFieldsFromInputs(inputs: Record<string, InputDefinition>): MCPConfigField[] {
     const fields: MCPConfigField[] = [];
 
-    for (const [key, value] of Object.entries(env)) {
-      if (typeof value === 'object') {
-        fields.push({
-          key,
-          label: value.label || key,
-          type: (value.type as any) || 'text',
-          required: value.required ?? true,
-          description: `Environment variable: ${key}`,
-          placeholder: value.default || '',
-          defaultValue: value.default
-        });
-      }
+    for (const [key, input] of Object.entries(inputs)) {
+      fields.push({
+        key,
+        label: input.label || key,
+        type: input.type || 'string',
+        required: input.required ?? true,
+        description: input.description,
+        placeholder: input.default || '',
+        defaultValue: input.default
+      });
     }
 
     return fields;
   }
 
   /**
-   * ✅ NUEVO: Construye template según tipo de transporte
+   * Builds configuration template from server data
+   * Uses API-provided template if available, otherwise generates from inputs
    */
-  private buildTemplate(server: LevanteAPIServer): any {
-    if (server.transport === 'stdio') {
+  private buildTemplate(server: LevanteAPIServer): Record<string, unknown> {
+    // If API provides a template, use it directly
+    if (server.configuration?.template) {
       return {
-        type: 'stdio',
-        command: server.command || 'npx',
-        args: server.args || [],
-        env: this.extractEnvDefaults(server.env || {})
+        type: server.transport,
+        ...server.configuration.template
       };
     }
 
-    // Para http/sse, construir desde metadata si existe
+    // Generate template based on transport type
+    if (server.transport === 'stdio') {
+      return {
+        type: 'stdio',
+        command: 'npx',
+        args: [],
+        env: this.extractInputDefaults(server.inputs || {})
+      };
+    }
+
+    // For sse/streamable-http
     return {
       type: server.transport,
-      baseUrl: server.metadata?.homepage || '',
+      url: server.metadata?.homepage || '',
       headers: {}
     };
   }
 
   /**
-   * ✅ NUEVO: Extrae valores default de env
+   * Extracts default values from inputs definition
    */
-  private extractEnvDefaults(env: Record<string, EnvFieldConfig | string>): Record<string, string> {
+  private extractInputDefaults(inputs: Record<string, InputDefinition>): Record<string, string> {
     const defaults: Record<string, string> = {};
 
-    for (const [key, value] of Object.entries(env)) {
-      if (typeof value === 'object' && value.default) {
-        defaults[key] = value.default;
-      } else if (typeof value === 'string') {
-        defaults[key] = value;
+    for (const [key, input] of Object.entries(inputs)) {
+      if (input.default) {
+        defaults[key] = input.default;
       }
     }
 
@@ -175,13 +214,21 @@ export class MCPProviderService {
   }
 
   /**
-   * ✅ NUEVO: Extrae defaults para la UI
+   * Extracts defaults for UI form population
    */
-  private extractDefaults(server: LevanteAPIServer): Record<string, any> {
-    return {
-      command: server.command || 'npx',
-      args: Array.isArray(server.args) ? server.args.join(' ') : ''
-    };
+  private extractDefaults(server: LevanteAPIServer): Record<string, unknown> {
+    const defaults: Record<string, unknown> = {};
+
+    // Extract defaults from inputs
+    if (server.inputs) {
+      for (const [key, input] of Object.entries(server.inputs)) {
+        if (input.default !== undefined) {
+          defaults[key] = input.default;
+        }
+      }
+    }
+
+    return defaults;
   }
 
   /**

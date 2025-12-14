@@ -7,7 +7,12 @@ import {
   Settings,
   Trash2,
   Loader2,
-  Info
+  Info,
+  CheckCircle,
+  Users,
+  AlertTriangle,
+  FlaskConical,
+  Server
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -31,13 +36,24 @@ interface IntegrationCardProps {
   status: MCPConnectionStatus;
   isActive: boolean;
   isInstalling?: boolean;
-  providerBadge?: string; // ✅ NUEVO
   onToggle: () => void;
   onConfigure: () => void;
   onAddToActive?: () => void;
   onDelete?: () => void;
   onShowInfo?: () => void;
 }
+
+// Source badge configuration
+const SOURCE_CONFIG = {
+  official: { icon: CheckCircle, label: 'Official', variant: 'default' as const },
+  community: { icon: Users, label: 'Community', variant: 'secondary' as const }
+};
+
+// Status badge configuration (only show non-active statuses)
+const STATUS_CONFIG = {
+  deprecated: { icon: AlertTriangle, label: 'Deprecated', className: 'bg-yellow-500/10 text-yellow-600 border-yellow-500/20' },
+  experimental: { icon: FlaskConical, label: 'Experimental', className: 'bg-purple-500/10 text-purple-600 border-purple-500/20' }
+};
 
 export function IntegrationCard({
   mode,
@@ -46,7 +62,6 @@ export function IntegrationCard({
   status,
   isActive,
   isInstalling = false,
-  providerBadge,
   onToggle,
   onConfigure,
   onAddToActive,
@@ -58,6 +73,9 @@ export function IntegrationCard({
   const displayName = entry?.name || server?.name || server?.id || t('server.unknown');
   const description = entry?.description || t('server.custom_description');
   const category = entry?.category || 'custom';
+  const logoUrl = entry?.logoUrl;
+  const icon = entry?.icon;
+  const [logoError, setLogoError] = React.useState(false);
 
   // Get provider homepage if available
   const provider = providers.find(p => p.id === entry?.source);
@@ -85,20 +103,24 @@ export function IntegrationCard({
     <Card className="relative overflow-hidden border border-border">
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-4">
-          <div>
-            <h3 className="font-semibold text-lg">{displayName}</h3>
-            <div className="flex items-center gap-1.5">
-              <Badge variant="secondary" className="text-xs">
-                {category}
-              </Badge>
-              {providerBadge && (
-                <Badge
-                  variant="outline"
-                  className="text-xs"
-                >
-                  {providerBadge}
-                </Badge>
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            {/* Logo */}
+            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-muted flex items-center justify-center overflow-hidden">
+              {logoUrl && !logoError ? (
+                <img
+                  src={logoUrl}
+                  alt={`${displayName} logo`}
+                  className="w-full h-full object-contain"
+                  onError={() => setLogoError(true)}
+                />
+              ) : icon ? (
+                <span className="text-xl">{icon}</span>
+              ) : (
+                <Server className="w-5 h-5 text-muted-foreground" />
               )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <h3 className="font-semibold text-lg truncate">{displayName}</h3>
             </div>
           </div>
           {/* Switch solo en modo Active */}
@@ -108,6 +130,33 @@ export function IntegrationCard({
               disabled={status === 'connecting'}
               onCheckedChange={onToggle}
             />
+          )}
+        </div>
+
+        {/* Badges row */}
+        <div className="flex flex-wrap items-center gap-1.5 mb-3">
+          <Badge variant="secondary" className="text-xs">
+            {category}
+          </Badge>
+          {/* Source badge (official/community) */}
+          {entry?.source && SOURCE_CONFIG[entry.source] && (
+            <Badge
+              variant={SOURCE_CONFIG[entry.source].variant}
+              className="text-xs gap-1"
+            >
+              {React.createElement(SOURCE_CONFIG[entry.source].icon, { className: 'h-3 w-3' })}
+              {SOURCE_CONFIG[entry.source].label}
+            </Badge>
+          )}
+          {/* Status badge (only for deprecated/experimental) */}
+          {entry?.status && entry.status !== 'active' && STATUS_CONFIG[entry.status as keyof typeof STATUS_CONFIG] && (
+            <Badge
+              variant="outline"
+              className={`text-xs gap-1 ${STATUS_CONFIG[entry.status as keyof typeof STATUS_CONFIG].className}`}
+            >
+              {React.createElement(STATUS_CONFIG[entry.status as keyof typeof STATUS_CONFIG].icon, { className: 'h-3 w-3' })}
+              {STATUS_CONFIG[entry.status as keyof typeof STATUS_CONFIG].label}
+            </Badge>
           )}
         </div>
 
