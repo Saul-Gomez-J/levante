@@ -25,7 +25,10 @@
     "from_provider": "De {{provider}}",
     "search_placeholder": "Buscar integraciones...",
     "no_results": "No se encontraron integraciones",
-    "no_results_description": "Prueba ajustar tu búsqueda o filtros"
+    "no_results_description": "Prueba ajustar tu búsqueda o filtros",
+    "provider_error": "No se pudo conectar con el proveedor {{name}}",
+    "no_providers_title": "No hay MCPs disponibles",
+    "no_providers_description": "No se ha podido recoger MCPs de ningún proveedor. Revisa tu conexión a internet."
   },
   "server": {
     "configure": "Configurar",

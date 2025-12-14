@@ -1,9 +1,49 @@
+export interface LevanteAPIResponse {
+  version: string;
+  provider: {
+    id: string;
+    name: string;
+    homepage: string;
+  };
+  servers: LevanteAPIServer[];
+}
+
+export interface LevanteAPIServer {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  icon: string;
+  logoUrl?: string;
+  provider: string;  // "levante" | "aitempl" | etc.
+  transport: 'stdio' | 'http' | 'sse';
+  command?: string;
+  args?: string[];
+  env?: Record<string, EnvFieldConfig | string>;
+  metadata?: {
+    useCount?: number;
+    homepage?: string;
+    author?: string;
+    repository?: string;
+  };
+}
+
+export interface EnvFieldConfig {
+  label: string;
+  required: boolean;
+  type: string;
+  default?: string;
+}
+
 export interface MCPRegistryEntry {
   id: string;
   name: string;
   description: string;
   category: string;
   icon: string;
+  logoUrl?: string; // URL de logo, opcional
+  source?: string; // Mantener para compatibilidad (será "levante-store")
+  provider?: string; // NUEVO: origen real del MCP ("levante", "aitempl", etc.)
   transport: {
     type: 'stdio' | 'http' | 'sse';
     autoDetect: boolean;
@@ -20,8 +60,6 @@ export interface MCPRegistryEntry {
       headers?: Record<string, string>;
     };
   };
-  // Provider source
-  source?: string; // 'levante' | 'smithery' | 'mcp-so' | 'awesome-mcp' | etc.
   // Additional metadata from external providers
   metadata?: {
     useCount?: number;
@@ -37,19 +75,12 @@ export interface MCPProvider {
   name: string;
   description: string;
   icon: string;
-  type: 'local' | 'github' | 'api';
+  type: 'api';  // Solo tipo API ahora
   endpoint: string;
   enabled: boolean;
   homepage?: string;
   lastSynced?: string;
   serverCount?: number;
-  // Type-specific configuration
-  config?: {
-    branch?: string;        // For GitHub
-    path?: string;          // Path to registry file
-    authRequired?: boolean;
-    authToken?: string;
-  };
 }
 
 export interface MCPConfigField {
@@ -80,9 +111,10 @@ export interface MCPServerConfig {
   transport: 'stdio' | 'http' | 'sse';
   enabled?: boolean;  // Added by listServers(), not stored in JSON
   runtime?: {
-    type?: 'node' | 'python';
+    type?: string;
     version?: string;
-    source?: 'system' | 'shared';
+    source?: 'system' | 'levante';
+    path?: string;
   };
 }
 
