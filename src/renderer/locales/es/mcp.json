@@ -268,6 +268,8 @@
     "repository": "Repositorio",
     "use_count": "Descargas",
     "no_env": "No requiere variables de entorno",
+    "configuration_title": "Configuración",
+    "no_config": "No requiere configuración",
     "install": "Instalar Este Servidor",
     "already_installed": "Ya Instalado"
   }
