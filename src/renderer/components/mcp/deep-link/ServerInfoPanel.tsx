@@ -10,8 +10,8 @@ export function ServerInfoPanel({ config }: ServerInfoPanelProps) {
       const args = config.args?.join(' ') || '';
       return `${config.command} ${args}`.trim();
     }
-    if (config.transport === 'http' || config.transport === 'sse') {
-      return config.baseUrl || 'N/A';
+    if (config.transport === 'http' || config.transport === 'sse' || config.transport === 'streamable-http') {
+      return config.url || config.baseUrl || 'N/A';
     }
     return 'N/A';
   };

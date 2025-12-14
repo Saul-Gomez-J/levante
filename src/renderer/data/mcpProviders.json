@@ -8,7 +8,7 @@
       "description": "Official curated MCP servers from multiple sources",
       "icon": "star",
       "type": "api",
-      "endpoint": "https://api.levante.dev/api/mcps.json",
+      "endpoint": "/api/mcps.json",
       "enabled": true,
       "homepage": "https://levante.dev"
     }

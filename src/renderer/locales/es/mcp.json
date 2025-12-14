@@ -16,8 +16,22 @@
     "description": "Descubre y configura nuevas integraciones MCP",
     "available": "{{count}} disponibles",
     "available_integrations": "Integraciones Disponibles",
-    "filter_provider": "Filtrar por proveedor",
-    "all_providers": "Todos los proveedores",
+    "all_sources": "Todos",
+    "all_categories": "Todas las Categorías",
+    "source": {
+      "official": "Oficial",
+      "community": "Comunidad"
+    },
+    "category": {
+      "documentation": "Documentación",
+      "development": "Desarrollo",
+      "database": "Base de Datos",
+      "automation": "Automatización",
+      "ai": "IA",
+      "communication": "Comunicación",
+      "productivity": "Productividad",
+      "other": "Otros"
+    },
     "sync_provider": "Sincronizar",
     "syncing": "Sincronizando...",
     "last_synced": "Última sincronización: {{date}}",
@@ -246,6 +260,8 @@
     "env_title": "Variables de Entorno",
     "env_required": "Requerido",
     "env_optional": "Opcional",
+    "required_inputs_title": "Inputs Requeridos",
+    "headers_title": "Cabeceras",
     "metadata_title": "Información Adicional",
     "author": "Autor",
     "homepage": "Página Principal",

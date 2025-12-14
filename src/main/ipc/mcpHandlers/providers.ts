@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron';
 import { getLogger } from '../../services/logging';
-import { mcpProviderService, MCPProvider } from '../../services/mcp/MCPProviderService';
+import { mcpProviderService } from '../../services/mcp/MCPProviderService';
+import type { MCPProvider } from '../../../renderer/types/mcp';
 import { mcpCacheService } from '../../services/mcp/MCPCacheService';
 import mcpProvidersData from '../../../renderer/data/mcpProviders.json';
 

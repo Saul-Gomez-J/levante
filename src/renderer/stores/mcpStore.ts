@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { MCPRegistry, MCPServerConfig, MCPConnectionStatus, MCPProvider, MCPRegistryEntry } from '../types/mcp';
+import { MCPServerConfig, MCPConnectionStatus, MCPProvider, MCPRegistryEntry, MCPSource, MCPCategory } from '../types/mcp';
 import mcpProvidersData from '../data/mcpProviders.json';
 
 interface MCPStore {
@@ -11,7 +11,8 @@ interface MCPStore {
 
   // Provider state
   providers: MCPProvider[];
-  selectedProvider: string | 'all';
+  selectedSource: MCPSource | 'all';
+  selectedCategory: MCPCategory | 'all';
   loadingProviders: Record<string, boolean>;
   providerEntries: Record<string, MCPRegistryEntry[]>;
   providerErrors: Record<string, string | null>;
@@ -33,10 +34,12 @@ interface MCPStore {
   loadProviders: () => Promise<void>;
   syncProvider: (providerId: string) => Promise<void>;
   syncAllProviders: () => Promise<void>;
-  setSelectedProvider: (providerId: string | 'all') => void;
+  setSelectedSource: (source: MCPSource | 'all') => void;
+  setSelectedCategory: (category: MCPCategory | 'all') => void;
   clearProviderError: (providerId: string) => void;
   getFilteredEntries: () => MCPRegistryEntry[];
-  getAvailableProviders: () => string[];
+  getAvailableSources: () => MCPSource[];
+  getAvailableCategories: () => MCPCategory[];
 
   // Helper methods
   isServerActive: (serverId: string) => boolean;
@@ -53,7 +56,8 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
 
   // Provider initial state
   providers: mcpProvidersData.providers as MCPProvider[],
-  selectedProvider: 'all',
+  selectedSource: 'all',
+  selectedCategory: 'all',
   loadingProviders: {},
   providerEntries: {},
   providerErrors: {},
@@ -448,9 +452,14 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
     set({ providersSynced: true });
   },
 
-  // Set selected provider filter
-  setSelectedProvider: (providerId: string | 'all') => {
-    set({ selectedProvider: providerId });
+  // Set selected source filter (official/community)
+  setSelectedSource: (source: MCPSource | 'all') => {
+    set({ selectedSource: source });
+  },
+
+  // Set selected category filter
+  setSelectedCategory: (category: MCPCategory | 'all') => {
+    set({ selectedCategory: category });
   },
 
   // Clear provider error
@@ -460,32 +469,51 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
     }));
   },
 
-  // Get filtered entries based on selected provider
-  // Get filtered entries based on selected provider
+  // Get filtered entries based on selected source and category
   getFilteredEntries: () => {
-    const { selectedProvider, providerEntries } = get();
-    const allEntries = Object.values(providerEntries).flat();
+    const { selectedSource, selectedCategory, providerEntries } = get();
+    let entries = Object.values(providerEntries).flat();
 
-    if (selectedProvider === 'all') {
-      return allEntries;
+    // Filter by source (official/community)
+    if (selectedSource !== 'all') {
+      entries = entries.filter(entry => entry.source === selectedSource);
     }
 
-    // ✅ CAMBIO: Filtrar por campo "provider" en lugar de "source"
-    return allEntries.filter(entry => entry.provider === selectedProvider);
+    // Filter by category
+    if (selectedCategory !== 'all') {
+      entries = entries.filter(entry => entry.category === selectedCategory);
+    }
+
+    return entries;
   },
 
-  // ✅ NUEVO: Obtener proveedores únicos
-  getAvailableProviders: () => {
+  // Get available sources from loaded entries
+  getAvailableSources: (): MCPSource[] => {
     const { providerEntries } = get();
     const allEntries = Object.values(providerEntries).flat();
-    const providers = new Set<string>();
+    const sources = new Set<MCPSource>();
 
     allEntries.forEach(entry => {
-      if (entry.provider) {
-        providers.add(entry.provider);
+      if (entry.source) {
+        sources.add(entry.source);
       }
     });
 
-    return Array.from(providers).sort();
+    return Array.from(sources).sort();
+  },
+
+  // Get available categories from loaded entries
+  getAvailableCategories: (): MCPCategory[] => {
+    const { providerEntries } = get();
+    const allEntries = Object.values(providerEntries).flat();
+    const categories = new Set<MCPCategory>();
+
+    allEntries.forEach(entry => {
+      if (entry.category) {
+        categories.add(entry.category);
+      }
+    });
+
+    return Array.from(categories).sort();
   }
 }));

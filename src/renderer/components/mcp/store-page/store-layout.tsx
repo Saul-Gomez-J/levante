@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Plus, Loader2, AlertCircle, Store, Wrench, Search } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { IntegrationCard } from './integration-card';
-import { ProviderFilter } from './provider-filter';
+import { SourceFilter, CategoryFilter } from './provider-filter';
 import { JSONEditorPanel } from '../config/json-editor-panel';
 import { FullJSONEditorPanel } from '../config/full-json-editor-panel';
 import { ImportExport } from '../config/import-export';
@@ -49,16 +49,19 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
     removeServer,
     // Provider state and actions
     providers,
-    selectedProvider,
+    selectedSource,
+    selectedCategory,
     loadingProviders,
-    providerErrors, // ✅ NUEVO
-    providersSynced, // ✅ NUEVO
+    providerErrors,
+    providersSynced,
     syncAllProviders,
-    setSelectedProvider,
-    clearProviderError, // ✅ NUEVO
+    setSelectedSource,
+    setSelectedCategory,
+    clearProviderError,
     getFilteredEntries,
     getRegistryEntryById,
-    getAvailableProviders // ✅ NUEVO
+    getAvailableSources,
+    getAvailableCategories
   } = useMCPStore();
 
   const [configServerId, setConfigServerId] = useState<string | null>(null);
@@ -233,15 +236,16 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
           });
         }
         serverConfig.env = env;
-      } else if (transportType === 'http' || transportType === 'sse') {
-        // Reemplazar placeholders en baseUrl con valores del usuario
-        let baseUrl = template?.baseUrl || '';
+      } else if (transportType === 'http' || transportType === 'sse' || transportType === 'streamable-http') {
+        // Reemplazar placeholders en url/baseUrl con valores del usuario
+        // Support both 'url' (new) and 'baseUrl' (legacy)
+        let serverUrl = template?.url || template?.baseUrl || '';
         if (apiKeyValues) {
           Object.entries(apiKeyValues).forEach(([key, value]) => {
-            baseUrl = baseUrl.replace(`\${${key}}`, value);
+            serverUrl = serverUrl.replace(`\${${key}}`, value);
           });
         }
-        serverConfig.baseUrl = baseUrl;
+        serverConfig.url = serverUrl;
 
         // Reemplazar placeholders en headers con valores del usuario
         const headers = { ...template?.headers };
@@ -609,10 +613,10 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <ProviderFilter
-                selectedProvider={selectedProvider}
-                availableProviders={getAvailableProviders()} // ✅ CAMBIO
-                onSelectProvider={setSelectedProvider}
+              <SourceFilter
+                selectedSource={selectedSource}
+                availableSources={getAvailableSources()}
+                onSelectSource={setSelectedSource}
               />
               <Badge variant="outline">
                 {t('store.available', { count: getFilteredAndSearchedEntries().length })}
@@ -633,6 +637,17 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
               />
             </div>
           </div>
+
+          {/* Category Filter */}
+          {getAvailableCategories().length > 1 && (
+            <div className="mb-4">
+              <CategoryFilter
+                selectedCategory={selectedCategory}
+                availableCategories={getAvailableCategories()}
+                onSelectCategory={setSelectedCategory}
+              />
+            </div>
+          )}
 
           {/* Provider Error Alerts */}
           {Object.entries(providerErrors).filter(([_, error]) => error !== null).length > 0 && (
@@ -708,7 +723,6 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
                   onConfigure={() => handleConfigureServer(entry.id)}
                   onAddToActive={() => handleAddToActive(entry.id)}
                   onShowInfo={() => handleShowInfo(entry.id)}
-                  providerBadge={entry.provider} // ✅ NUEVO
                 />
               );
             })}
