@@ -149,23 +149,36 @@ export class MCPConfigurationManager {
   async updateServer(serverId: string, config: Partial<Omit<MCPServerConfig, 'id'>>): Promise<void> {
     const currentConfig = await this.loadConfiguration();
 
-    if (currentConfig.mcpServers[serverId]) {
-      // Sanitize config to prevent prototype pollution
-      const sanitizedConfig = this.sanitizeServerConfig(config);
+    // Sanitize config to prevent prototype pollution
+    const sanitizedConfig = this.sanitizeServerConfig(config);
 
+    // Check in mcpServers (active)
+    if (currentConfig.mcpServers[serverId]) {
       currentConfig.mcpServers[serverId] = {
         ...currentConfig.mcpServers[serverId],
         ...sanitizedConfig
       };
       await this.saveConfiguration(currentConfig);
-    } else {
+    }
+    // Check in disabled
+    else if (currentConfig.disabled && currentConfig.disabled[serverId]) {
+      currentConfig.disabled[serverId] = {
+        ...currentConfig.disabled[serverId],
+        ...sanitizedConfig
+      };
+      await this.saveConfiguration(currentConfig);
+    }
+    else {
       throw new Error(`Server ${serverId} not found in configuration`);
     }
   }
 
   async getServer(serverId: string): Promise<MCPServerConfig | null> {
     const config = await this.loadConfiguration();
-    const serverConfig = config.mcpServers[serverId];
+
+    // Check in mcpServers (active) first, then in disabled
+    const serverConfig = config.mcpServers[serverId] ||
+      (config.disabled && config.disabled[serverId]);
 
     if (!serverConfig) {
       return null;

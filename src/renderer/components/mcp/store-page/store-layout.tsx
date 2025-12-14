@@ -27,6 +27,12 @@ interface StoreLayoutProps {
   onModeChange: (mode: 'active' | 'store') => void;
 }
 
+// Helper to get button style based on mode - avoids TypeScript narrowing issues
+const getModeButtonStyle = (currentMode: 'active' | 'store', buttonMode: 'active' | 'store') =>
+  currentMode === buttonMode
+    ? "bg-background text-foreground shadow-sm"
+    : "text-muted-foreground hover:text-foreground";
+
 export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
   const { t } = useTranslation('mcp');
   const hasSyncedProviders = useRef(false);
@@ -149,7 +155,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
           setRuntimeDialogState({
             isOpen: true,
             errorType: error.errorCode,
-            serverName: server.name,
+            serverName: server.name || server.id,
             serverConfig: error.serverConfig || server,
             metadata: error.metadata || {},
           });
@@ -178,7 +184,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
 
     // Detectar si hay campos que requieren input del usuario
     const fieldsNeedingInput = registryEntry.configuration?.fields?.filter(
-      field => field.key !== 'command' && field.key !== 'args' && field.key !== 'baseUrl'
+      (field: MCPConfigField) => field.key !== 'command' && field.key !== 'args' && field.key !== 'baseUrl'
     ) || [];
 
     // Si hay campos que necesitan input y no se han proporcionado valores, abrir modal
@@ -461,9 +467,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
                       onClick={() => onModeChange('active')}
                       className={cn(
                         "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
-                        mode === 'active'
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
+                        getModeButtonStyle(mode, 'active')
                       )}
                       title={t('active.title')}
                     >
@@ -473,9 +477,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
                       onClick={() => onModeChange('store')}
                       className={cn(
                         "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
-                        mode === 'store'
-                          ? "bg-background text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
+                        getModeButtonStyle(mode, 'store')
                       )}
                       title={t('store.title')}
                     >
@@ -531,9 +533,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
                     onClick={() => onModeChange('active')}
                     className={cn(
                       "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
-                      mode === 'active'
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
+                      getModeButtonStyle(mode, 'active')
                     )}
                     title={t('active.title')}
                   >
@@ -543,9 +543,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
                     onClick={() => onModeChange('store')}
                     className={cn(
                       "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
-                      mode === 'store'
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
+                      getModeButtonStyle(mode, 'store')
                     )}
                     title={t('store.title')}
                   >
@@ -592,9 +590,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
                   onClick={() => onModeChange('active')}
                   className={cn(
                     "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
-                    mode === 'active'
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                    getModeButtonStyle(mode, 'active')
                   )}
                   title={t('active.title')}
                 >
@@ -604,9 +600,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
                   onClick={() => onModeChange('store')}
                   className={cn(
                     "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
-                    mode === 'store'
-                      ? "bg-background text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                    getModeButtonStyle(mode, 'store')
                   )}
                   title={t('store.title')}
                 >

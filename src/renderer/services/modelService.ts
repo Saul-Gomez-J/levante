@@ -376,17 +376,31 @@ class ModelServiceImpl {
           // Cache for O(1) lookup
           this.classificationCache.set(model.id, classification);
 
-          // logger.models.debug('Model classified', {
-          //   modelId: model.id,
-          //   category: classification.category,
-          //   capabilities: classification.capabilities
-          // });
+          // Debug classification results for local models
+          if (provider.type === 'local') {
+            logger.models.debug(`Local model classified: ${model.name}`, {
+              category: model.category,
+              capabilities: model.computedCapabilities
+            });
+          }
+
         } catch (error) {
           logger.models.warn('Failed to classify model, using defaults', {
             modelId: model.id,
             error: error instanceof Error ? error.message : error
           });
-          // Classification failure is non-critical, continue without it
+          // Fallback to 'chat' category if classification fails
+          model.category = 'chat';
+          model.computedCapabilities = {
+            supportsTools: false,
+            supportsVision: false,
+            supportsStreaming: true,
+            requiresAttachment: false,
+            supportsAudioOut: false,
+            supportsAudioIn: false,
+            supportsSystemPrompt: true,
+            supportsMultiTurn: true,
+          };
         }
       }
 

@@ -43,7 +43,8 @@ export interface MCPServerConfig {
   command?: string;
   args?: string[];
   env?: Record<string, string>;
-  baseUrl?: string;
+  url?: string;
+  baseUrl?: string; // Legacy support, prefer 'url'
   headers?: Record<string, string>;
   transport: 'stdio' | 'http' | 'sse';
   enabled?: boolean; // Added by listServers(), not stored in JSON

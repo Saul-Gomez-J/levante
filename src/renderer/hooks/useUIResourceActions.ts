@@ -120,7 +120,12 @@ export function useUIResourceActions(
           }
 
           default: {
-            logger.mcp.warn('Unknown UI action type', { action });
+            // Ignore Skybridge bridge messages - handled directly by UIResourceMessage
+            const unknownAction = action as { type: string };
+            if (typeof unknownAction.type === 'string' && unknownAction.type.startsWith('openai-bridge-')) {
+              return { status: 'ignored' };
+            }
+            logger.mcp.warn('Unknown UI action type', { action: unknownAction });
             return { status: 'unknown_action' };
           }
         }

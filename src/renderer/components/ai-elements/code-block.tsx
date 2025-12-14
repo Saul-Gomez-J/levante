@@ -7,7 +7,7 @@ import type { ComponentProps, HTMLAttributes, ReactNode } from 'react';
 import { createContext, useContext, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import {
-  oneDark,
+  vscDarkPlus,
   oneLight,
 } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useThemeDetector } from '@/hooks/useThemeDetector';
@@ -42,7 +42,7 @@ export const CodeBlock = ({
     <CodeBlockContext.Provider value={{ code }}>
       <div
         className={cn(
-          'relative w-full overflow-hidden rounded-md border bg-background text-foreground dark:bg-secondary',
+          'relative w-full overflow-hidden rounded-md border',
           className
         )}
         {...props}
@@ -57,7 +57,6 @@ export const CodeBlock = ({
               margin: 0,
               padding: '1rem',
               fontSize: '0.875rem',
-              background: 'transparent',
             }}
             language={language}
             lineNumberStyle={{
@@ -65,7 +64,7 @@ export const CodeBlock = ({
               minWidth: '2.5rem',
             }}
             showLineNumbers={showLineNumbers}
-            style={isDark ? oneDark : oneLight}
+            style={isDark ? vscDarkPlus : oneLight}
           >
             {code}
           </SyntaxHighlighter>

@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, AlertCircle } from 'lucide-react';
+import CodeMirror from '@uiw/react-codemirror';
+import { json } from '@codemirror/lang-json';
+import { oneDark } from '@codemirror/theme-one-dark';
+import { useThemeDetector } from '@/hooks/useThemeDetector';
 import { useMCPStore } from '@/stores/mcpStore';
 import { MCPServerConfig, MCPTool } from '@/types/mcp';
 import { MCPServerPreview } from './mcp-server-preview';
@@ -18,6 +21,7 @@ interface JSONEditorPanelProps {
 
 export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelProps) {
   const { getServerById, getRegistryEntryById, updateServer, addServer } = useMCPStore();
+  const theme = useThemeDetector();
 
   const [jsonText, setJsonText] = useState('');
   const [jsonError, setJsonError] = useState<string | null>(null);
@@ -53,15 +57,36 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
     if (isOpen && serverId) {
       // Load initial JSON
       if (server) {
-        // Existing server - load current config
-        const config = {
-          type: server.transport,
-          command: server.command,
-          args: server.args || [],
-          env: server.env || {},
-          ...(server.baseUrl && { baseUrl: server.baseUrl }),
-          ...(server.headers && { headers: server.headers })
+        // Existing server - load current config (only include non-empty fields)
+        const config: Record<string, any> = {
+          transport: server.transport,
         };
+
+        // Include name if present
+        if (server.name) {
+          config.name = server.name;
+        }
+
+        // STDIO specific fields
+        if (server.command) {
+          config.command = server.command;
+        }
+        if (server.args && server.args.length > 0) {
+          config.args = server.args;
+        }
+        if (server.env && Object.keys(server.env).length > 0) {
+          config.env = server.env;
+        }
+
+        // HTTP specific fields (prefer url over baseUrl)
+        const serverUrl = server.url || server.baseUrl;
+        if (serverUrl) {
+          config.url = serverUrl;
+        }
+        if (server.headers && Object.keys(server.headers).length > 0) {
+          config.headers = server.headers;
+        }
+
         setJsonText(JSON.stringify(config, null, 2));
       } else if (registryEntry?.configuration?.template) {
         // New server - load template
@@ -69,10 +94,8 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
       } else {
         // Fallback empty template
         setJsonText(JSON.stringify({
-          type: 'stdio',
-          command: '',
-          args: [],
-          env: {}
+          transport: 'stdio',
+          command: ''
         }, null, 2));
       }
       setJsonError(null);
@@ -84,17 +107,22 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
     try {
       const parsed = JSON.parse(text);
 
+      // Support both 'transport' (new) and 'type' (legacy)
+      const transportType = parsed.transport || parsed.type;
+
       // Validate required fields
-      if (!parsed.type) {
-        return { valid: false, error: 'Missing required field: type' };
+      if (!transportType) {
+        return { valid: false, error: 'Missing required field: transport' };
       }
 
-      if (parsed.type === 'stdio' && !parsed.command) {
+      if (transportType === 'stdio' && !parsed.command) {
         return { valid: false, error: 'Missing required field: command (for stdio transport)' };
       }
 
-      if ((parsed.type === 'http' || parsed.type === 'sse') && !parsed.baseUrl) {
-        return { valid: false, error: 'Missing required field: baseUrl (for http/sse transport)' };
+      // Support both 'url' (new) and 'baseUrl' (legacy)
+      const serverUrl = parsed.url || parsed.baseUrl;
+      if ((transportType === 'http' || transportType === 'sse') && !serverUrl) {
+        return { valid: false, error: 'Missing required field: url (for http/sse transport)' };
       }
 
       return { valid: true, data: parsed };
@@ -122,14 +150,18 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
     setTools([]);
 
     try {
+      // Support both 'transport'/'type' and 'url'/'baseUrl' field names
+      const transportType = validation.data.transport || validation.data.type;
+      const serverUrl = validation.data.url || validation.data.baseUrl;
+
       const testConfig: MCPServerConfig = {
         id: `test-${Date.now()}`,
-        name: registryEntry?.name || 'Test Server',
-        transport: validation.data.type,
+        name: validation.data.name || registryEntry?.name || 'Test Server',
+        transport: transportType,
         command: validation.data.command,
-        args: validation.data.args || [],
-        env: validation.data.env || {},
-        baseUrl: validation.data.baseUrl,
+        args: validation.data.args,
+        env: validation.data.env,
+        url: serverUrl,
         headers: validation.data.headers
       };
 
@@ -143,7 +175,7 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
         setRuntimeDialogState({
           isOpen: true,
           errorType: (result as any).errorCode,
-          serverName: testConfig.name,
+          serverName: testConfig.name || 'Test Server',
           testConfig,
           metadata: (result as any).metadata || {},
         });
@@ -182,14 +214,18 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
     setIsSaving(true);
 
     try {
+      // Support both 'transport'/'type' and 'url'/'baseUrl' field names
+      const transportType = validation.data.transport || validation.data.type;
+      const serverUrl = validation.data.url || validation.data.baseUrl;
+
       const serverConfig: MCPServerConfig = {
         id: serverId,
-        name: registryEntry?.name || serverId,
-        transport: validation.data.type,
+        name: validation.data.name || registryEntry?.name || serverId,
+        transport: transportType,
         command: validation.data.command,
-        args: validation.data.args || [],
-        env: validation.data.env || {},
-        baseUrl: validation.data.baseUrl,
+        args: validation.data.args,
+        env: validation.data.env,
+        url: serverUrl,
         headers: validation.data.headers
       };
 
@@ -202,7 +238,7 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
           args: serverConfig.args,
           env: serverConfig.env,
           transport: serverConfig.transport,
-          baseUrl: serverConfig.baseUrl,
+          url: serverConfig.url,
           headers: serverConfig.headers
         });
       }
@@ -318,12 +354,24 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
                 <label className="text-sm font-medium mb-2 block">
                   Server Configuration (JSON)
                 </label>
-                <Textarea
-                  value={jsonText}
-                  onChange={(e) => handleJSONChange(e.target.value)}
-                  className="font-mono text-sm min-h-[500px]"
-                  placeholder="Enter JSON configuration..."
-                />
+                <div className="border rounded-md overflow-hidden">
+                  <CodeMirror
+                    value={jsonText}
+                    height="500px"
+                    extensions={[json()]}
+                    theme={theme === 'dark' ? oneDark : 'light'}
+                    onChange={(value) => handleJSONChange(value)}
+                    placeholder="Enter JSON configuration..."
+                    basicSetup={{
+                      lineNumbers: true,
+                      highlightActiveLineGutter: true,
+                      highlightActiveLine: true,
+                      foldGutter: true,
+                      bracketMatching: true,
+                      autocompletion: true,
+                    }}
+                  />
+                </div>
               </div>
 
               {/* Validation Error */}

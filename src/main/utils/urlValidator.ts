@@ -58,6 +58,7 @@ const ALLOWED_PROTOCOLS = ['http:', 'https:'] as const;
  */
 interface LocalEndpointConfig {
   allowLocalhost?: boolean;
+  allowPrivateNetworks?: boolean;
   allowedPorts?: number[];
   maxPort?: number;
 }
@@ -89,12 +90,16 @@ function isPrivateIP(hostname: string): boolean {
  *
  * Security checks:
  * - Protocol allowlist (HTTP/HTTPS only)
- * - Private IP range blocking
+ * - Private IP range blocking (with optional exceptions)
  * - Cloud metadata endpoint blocking
  * - Port range validation
  *
  * @param url - URL string to validate
  * @param config - Optional configuration for local endpoint exceptions
+ *   - allowLocalhost: Allow localhost (127.0.0.1, ::1, localhost)
+ *   - allowPrivateNetworks: Allow private network IPs (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+ *   - allowedPorts: Specific ports to allow
+ *   - maxPort: Maximum port number allowed
  * @returns Validation result with success status and error message
  */
 export function validateUrl(
@@ -112,17 +117,31 @@ export function validateUrl(
       };
     }
 
-    // 2. Check for private IPs (with localhost exception if configured)
+    // 2. Check for private IPs with granular exceptions
     const hostname = parsedUrl.hostname.toLowerCase();
 
-    if (config?.allowLocalhost && (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1')) {
-      // Localhost is explicitly allowed, continue validation
+    // Check if it's localhost
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+
+    // Check if it's a private network IP (but not localhost)
+    const isPrivateNetwork = !isLocalhost && isPrivateIP(hostname);
+
+    if (isLocalhost) {
+      if (!config?.allowLocalhost) {
+        return {
+          valid: false,
+          error: `Access to localhost is not allowed: ${hostname}`
+        };
+      }
       logger.core.debug('Allowing localhost endpoint', { hostname });
-    } else if (isPrivateIP(hostname)) {
-      return {
-        valid: false,
-        error: `Access to private IP addresses and internal networks is not allowed: ${hostname}`
-      };
+    } else if (isPrivateNetwork) {
+      if (!config?.allowPrivateNetworks) {
+        return {
+          valid: false,
+          error: `Access to private IP addresses and internal networks is not allowed: ${hostname}`
+        };
+      }
+      logger.core.debug('Allowing private network endpoint', { hostname });
     }
 
     // 3. Validate port if specified
@@ -155,9 +174,33 @@ export function validateUrl(
 }
 
 /**
- * Validates a local endpoint URL (Ollama, custom AI endpoints)
+ * Normalizes a user-provided endpoint URL
+ * Adds http:// protocol if missing (common for local endpoints)
  *
- * Allows localhost connections but blocks all other private IPs
+ * @param endpoint - User-provided endpoint string
+ * @returns Normalized URL string with protocol
+ */
+export function normalizeEndpoint(endpoint: string): string {
+  // Already has protocol
+  if (endpoint.match(/^https?:\/\//i)) {
+    return endpoint;
+  }
+
+  // Add http:// by default for local endpoints
+  return `http://${endpoint}`;
+}
+
+/**
+ * Validates a user-configured endpoint URL (Local providers, Gateway, etc.)
+ *
+ * Permissive validation for endpoints explicitly configured by the user:
+ * - Only validates protocol (http/https) and URL format
+ * - No IP address restrictions (allows localhost, private IPs, public IPs, metadata endpoints)
+ * - No port restrictions
+ *
+ * Rationale: This is an open-source desktop app where users have full control.
+ * Since endpoints are manually configured (not from external sources), SSRF
+ * protection is unnecessary and overly restrictive.
  *
  * @param endpoint - Endpoint URL to validate
  * @returns Validation result with success status and error message
@@ -165,11 +208,25 @@ export function validateUrl(
 export function validateLocalEndpoint(
   endpoint: string
 ): { valid: boolean; error?: string; parsedUrl?: URL } {
-  return validateUrl(endpoint, {
-    allowLocalhost: true,
-    allowedPorts: [11434, 8080, 8000, 5000, 3000], // Common AI endpoint ports
-    maxPort: 65535
-  });
+  try {
+    const parsedUrl = new URL(endpoint);
+
+    // Only validate protocol - allow http and https
+    if (!ALLOWED_PROTOCOLS.includes(parsedUrl.protocol as any)) {
+      return {
+        valid: false,
+        error: `Protocol "${parsedUrl.protocol}" is not allowed. Only HTTP and HTTPS are permitted.`
+      };
+    }
+
+    return { valid: true, parsedUrl };
+
+  } catch (error) {
+    return {
+      valid: false,
+      error: 'Invalid URL format'
+    };
+  }
 }
 
 /**

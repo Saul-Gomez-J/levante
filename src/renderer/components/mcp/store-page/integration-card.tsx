@@ -82,7 +82,7 @@ export function IntegrationCard({
   };
 
   return (
-    <Card className="relative overflow-hidden border-none">
+    <Card className="relative overflow-hidden border border-border">
       <CardContent className="p-6">
         <div className="flex items-start justify-between mb-4">
           <div>

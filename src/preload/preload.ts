@@ -592,6 +592,7 @@ export interface LevanteAPI {
     ) => Promise<{ success: boolean; error?: string }>;
     trackUser: () => Promise<{ success: boolean; error?: string }>;
     disableAnalytics: () => Promise<{ success: boolean; error?: string }>;
+    enableAnalytics: () => Promise<{ success: boolean; error?: string }>;
   };
 }
 

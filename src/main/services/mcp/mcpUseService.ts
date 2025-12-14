@@ -86,122 +86,157 @@ export class MCPUseService implements IMCPService {
       await this.initialize();
     }
 
-    try {
-      // Normalize transport for configs that still use `type` (Claude compatibility)
-      const transport = config.transport || (config as any).type;
-      const normalizedConfig = { ...config, transport };
+    // Normalize transport for configs that still use `type` (Claude compatibility)
+    const transport = config.transport || (config as any).type;
+    const normalizedConfig = { ...config, transport };
 
-      // Resolve runtime if needed (stdio transport only)
-      // This handles auto-detection, installation, and path resolution
-      if (transport === 'stdio' && this.runtimeResolver.needsRuntime(normalizedConfig)) {
-        config = await this.runtimeResolver.resolve(normalizedConfig);
-      } else {
-        config = normalizedConfig;
+    // Resolve runtime if needed (stdio transport only)
+    // This handles auto-detection, installation, and path resolution
+    if (transport === 'stdio' && this.runtimeResolver.needsRuntime(normalizedConfig)) {
+      config = await this.runtimeResolver.resolve(normalizedConfig);
+    } else {
+      config = normalizedConfig;
+    }
+
+    const codeModeConfig = this.resolveCodeModeConfig(config);
+
+    // Auto-detect transport type if not provided (already normalized above, but fallback)
+    const finalTransport = config.transport ||
+      (config.command ? 'stdio' : (config.baseUrl || (config as any).url) ? 'http' : null);
+
+    // Normalize url → baseUrl
+    const baseUrl = config.baseUrl || (config as any).url;
+
+    this.logger.mcp.info("Attempting to connect to server (mcp-use)", {
+      serverId: config.id,
+      transport: finalTransport,
+      codeMode: codeModeConfig.enabled,
+      executor: codeModeConfig.executor,
+    });
+
+    if (!finalTransport) {
+      throw new Error('Cannot determine transport type from config');
+    }
+
+    // Build server configuration for mcp-use
+    const serverConfig: Record<string, any> = {
+      transport: finalTransport,
+    };
+
+    // Add transport-specific configuration
+    if (finalTransport === 'stdio') {
+      serverConfig.command = config.command;
+      serverConfig.args = config.args;
+      serverConfig.env = config.env;
+    } else if (finalTransport === 'http' || finalTransport === 'sse') {
+      serverConfig.url = baseUrl;
+      if (config.headers) {
+        serverConfig.headers = config.headers;
       }
+    }
 
-      const codeModeConfig = this.resolveCodeModeConfig(config);
+    // Build MCP client options
+    const clientOptions: MCPClientOptions = {};
 
-      // Auto-detect transport type if not provided (already normalized above, but fallback)
-      const finalTransport = config.transport ||
-        (config.command ? 'stdio' : (config.baseUrl || (config as any).url) ? 'http' : null);
+    // Add code mode configuration if enabled
+    if (codeModeConfig.enabled) {
+      const executorOpts: any = {};
 
-      // Normalize url → baseUrl
-      const baseUrl = config.baseUrl || (config as any).url;
+      if (codeModeConfig.executor === 'vm' || !codeModeConfig.executor) {
+        // VM executor options
+        executorOpts.timeoutMs =
+          codeModeConfig.executorOptions?.timeout ||
+          this.globalPreferences.codeModeDefaults?.vmTimeout ||
+          30000;
 
-      this.logger.mcp.info("Attempting to connect to server (mcp-use)", {
-        serverId: config.id,
-        transport: finalTransport,
-        codeMode: codeModeConfig.enabled,
-        executor: codeModeConfig.executor,
-      });
+        executorOpts.memoryLimitMb =
+          (codeModeConfig.executorOptions?.memoryLimit ||
+          this.globalPreferences.codeModeDefaults?.vmMemoryLimit ||
+          134217728) / (1024 * 1024); // Convert bytes to MB
+      } else if (codeModeConfig.executor === 'e2b') {
+        // E2B executor options
+        executorOpts.apiKey =
+          codeModeConfig.executorOptions?.apiKey ||
+          this.globalPreferences.e2bApiKey;
 
-      if (!finalTransport) {
-        throw new Error('Cannot determine transport type from config');
-      }
+        if (!executorOpts.apiKey) {
+          throw new Error('E2B executor requires API key');
+        }
 
-      // Build server configuration for mcp-use
-      const serverConfig: Record<string, any> = {
-        transport: finalTransport,
-      };
-
-      // Add transport-specific configuration
-      if (finalTransport === 'stdio') {
-        serverConfig.command = config.command;
-        serverConfig.args = config.args;
-        serverConfig.env = config.env;
-      } else if (finalTransport === 'http' || finalTransport === 'sse') {
-        serverConfig.url = baseUrl;
-        if (config.headers) {
-          serverConfig.headers = config.headers;
+        if (codeModeConfig.executorOptions?.timeout) {
+          executorOpts.timeoutMs = codeModeConfig.executorOptions.timeout;
         }
       }
 
-      // Build MCP client options
-      const clientOptions: MCPClientOptions = {};
-
-      // Add code mode configuration if enabled
-      if (codeModeConfig.enabled) {
-        const executorOpts: any = {};
-
-        if (codeModeConfig.executor === 'vm' || !codeModeConfig.executor) {
-          // VM executor options
-          executorOpts.timeoutMs =
-            codeModeConfig.executorOptions?.timeout ||
-            this.globalPreferences.codeModeDefaults?.vmTimeout ||
-            30000;
-
-          executorOpts.memoryLimitMb =
-            (codeModeConfig.executorOptions?.memoryLimit ||
-            this.globalPreferences.codeModeDefaults?.vmMemoryLimit ||
-            134217728) / (1024 * 1024); // Convert bytes to MB
-        } else if (codeModeConfig.executor === 'e2b') {
-          // E2B executor options
-          executorOpts.apiKey =
-            codeModeConfig.executorOptions?.apiKey ||
-            this.globalPreferences.e2bApiKey;
-
-          if (!executorOpts.apiKey) {
-            throw new Error('E2B executor requires API key');
-          }
-
-          if (codeModeConfig.executorOptions?.timeout) {
-            executorOpts.timeoutMs = codeModeConfig.executorOptions.timeout;
-          }
-        }
-
-        clientOptions.codeMode = {
-          enabled: true,
-          executor: codeModeConfig.executor || 'vm',
-          executorOptions: executorOpts,
-        };
-      }
-
-      // Create client with server configuration
-      // mcp-use expects config wrapped in 'mcpServers' object
-      const clientConfig = {
-        mcpServers: {
-          [config.id]: serverConfig
-        }
-      };
-      const client = new MCPClient(clientConfig, clientOptions);
-
-      // Create and initialize session
-      const session = await client.createSession(config.id, true);
-
-      this.clients.set(config.id, client);
-      this.sessions.set(config.id, session);
-
-      this.logger.mcp.info("Successfully connected to MCP server (mcp-use)", {
-        serverId: config.id,
-        codeMode: codeModeConfig.enabled,
+      clientOptions.codeMode = {
+        enabled: true,
         executor: codeModeConfig.executor || 'vm',
-      });
-    } catch (error) {
-      this.logger.mcp.error("Failed to connect to MCP server (mcp-use)", {
-        serverId: config.id,
-        error: error instanceof Error ? error.message : error,
-      });
-      throw error;
+        executorOptions: executorOpts,
+      };
+    }
+
+    // Retry configuration for cold start handling
+    // mcp-use hardcodes initial connection timeout to 3 seconds, so we implement retry at service level
+    const maxRetries = (finalTransport === 'http' || finalTransport === 'sse') ? 3 : 1;
+    const retryDelayMs = 2000; // 2 second delay between retries
+    let lastError: Error | null = null;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        // Create client with server configuration
+        // mcp-use expects config wrapped in 'mcpServers' object
+        const clientConfig = {
+          mcpServers: {
+            [config.id]: serverConfig
+          }
+        };
+        const client = new MCPClient(clientConfig, clientOptions);
+
+        // Create and initialize session
+        const session = await client.createSession(config.id, true);
+
+        this.clients.set(config.id, client);
+        this.sessions.set(config.id, session);
+
+        this.logger.mcp.info("Successfully connected to MCP server (mcp-use)", {
+          serverId: config.id,
+          codeMode: codeModeConfig.enabled,
+          executor: codeModeConfig.executor || 'vm',
+          attempt,
+        });
+        return; // Success - exit the retry loop
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+        const errorMessage = lastError.message;
+
+        // Check if this is a retryable error (timeout or connection issues)
+        const isRetryable =
+          errorMessage.includes('timed out') ||
+          errorMessage.includes('timeout') ||
+          errorMessage.includes('Request timed out') ||
+          errorMessage.includes('ECONNREFUSED') ||
+          errorMessage.includes('Could not connect') ||
+          errorMessage.includes('404') ||
+          errorMessage.includes('503');
+
+        if (attempt < maxRetries && isRetryable) {
+          this.logger.mcp.warn(`Connection attempt ${attempt}/${maxRetries} failed, retrying in ${retryDelayMs}ms...`, {
+            serverId: config.id,
+            error: errorMessage,
+          });
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, retryDelayMs));
+        } else {
+          // Final attempt failed or non-retryable error
+          this.logger.mcp.error("Failed to connect to MCP server (mcp-use)", {
+            serverId: config.id,
+            error: errorMessage,
+            attempt,
+            maxRetries,
+          });
+          throw lastError;
+        }
+      }
     }
   }
 
@@ -220,6 +255,7 @@ export class MCPUseService implements IMCPService {
         name: tool.name,
         description: tool.description || "",
         inputSchema: tool.inputSchema,
+        _meta: tool._meta, // Preserve metadata (e.g., openai/outputTemplate for Skybridge)
       }));
     } catch (error) {
       this.logger.mcp.error("Failed to list tools from server (mcp-use)", {

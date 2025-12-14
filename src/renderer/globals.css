@@ -305,4 +305,18 @@
   .dark .shiki.github-dark {
     background-color: #0d1117 !important;
   }
+
+  /* Shiki dual-theme dark mode fix - override inline styles with CSS variables */
+  .dark [style*="--shiki-dark"] {
+    color: var(--shiki-dark) !important;
+  }
+
+  .dark [style*="--shiki-dark-bg"] {
+    background-color: var(--shiki-dark-bg) !important;
+  }
+
+  /* Code block container dark mode background */
+  .dark pre[data-language] {
+    background-color: #0d1117 !important;
+  }
 }

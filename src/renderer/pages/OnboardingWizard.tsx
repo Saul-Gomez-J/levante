@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WizardStep } from '@/components/onboarding/WizardStep';
 import { WelcomeStep } from '@/components/onboarding/WelcomeStep';
@@ -38,6 +38,7 @@ interface OnboardingWizardProps {
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   const { updateProvider, setActiveProvider, syncProviderModels, providers } = useModelStore();
   const { i18n } = useTranslation();
+  const userChangedLanguageRef = useRef(false);
 
   // Language step state
   const [detectedLanguage, setDetectedLanguage] = useState<'en' | 'es'>('en');
@@ -62,12 +63,32 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   // Analytics consent state (null = not selected yet)
   const [analyticsConsent, setAnalyticsConsent] = useState<boolean | null>(null);
 
-  // Detect system language on mount
+  // Detect language on mount: prefer stored preference, else system
   useEffect(() => {
-    const detected = detectSystemLanguage();
-    setDetectedLanguage(detected);
-    setSelectedLanguage(detected);
-    i18n.changeLanguage(detected);
+    const initializeLanguage = async () => {
+      const detected = detectSystemLanguage();
+      setDetectedLanguage(detected);
+
+      try {
+        const prefResult = await window.levante.preferences.get('language');
+        const prefLanguage = prefResult?.data;
+        const initialLanguage = prefLanguage === 'es' || prefLanguage === 'en' ? prefLanguage : detected;
+
+        // Do not override if the user already interacted very quickly
+        if (!userChangedLanguageRef.current) {
+          setSelectedLanguage(initialLanguage);
+          i18n.changeLanguage(initialLanguage);
+        }
+      } catch (error) {
+        console.error('Failed to load preferred language, falling back to detected:', error);
+        if (!userChangedLanguageRef.current) {
+          setSelectedLanguage(detected);
+          i18n.changeLanguage(detected);
+        }
+      }
+    };
+
+    initializeLanguage();
   }, [i18n]);
 
   // Load models when providers change (after sync)
@@ -165,6 +186,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   };
 
   const handleLanguageChange = (language: 'en' | 'es') => {
+    userChangedLanguageRef.current = true;
     setSelectedLanguage(language);
     i18n.changeLanguage(language);
   };

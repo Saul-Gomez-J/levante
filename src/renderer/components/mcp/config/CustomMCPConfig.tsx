@@ -226,7 +226,7 @@ export function CustomMCPConfig({ serverId, onClose, initialConfig, onConfigChan
         setRuntimeDialogState({
           isOpen: true,
           errorType: (result as any).errorCode,
-          serverName: testConfig.name,
+          serverName: testConfig.name || 'MCP Server',
           testConfig,
           metadata: (result as any).metadata || {},
         });
