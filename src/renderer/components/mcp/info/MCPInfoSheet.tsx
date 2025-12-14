@@ -241,14 +241,14 @@ export function MCPInfoSheet({
             </div>
           )}
 
-          {/* No configuration required message */}
-          {!hasRequiredFields && !hasEnvVars && !hasHeaders && (
+          {/* No configuration required message (only for HTTP-based transports without config) */}
+          {isHttpBased && !hasRequiredFields && !hasHeaders && (
             <div>
               <h3 className="text-sm font-semibold mb-3">
-                {t('info.env_title')}
+                {t('info.configuration_title', { defaultValue: 'Configuration' })}
               </h3>
               <p className="text-sm text-muted-foreground italic">
-                {t('info.no_env')}
+                {t('info.no_config', { defaultValue: 'No configuration required' })}
               </p>
             </div>
           )}
