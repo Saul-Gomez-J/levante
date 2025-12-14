@@ -265,6 +265,9 @@
     "no_env": "No environment variables required",
     "configuration_title": "Configuration",
     "no_config": "No configuration required",
+    "maintainer_title": "Maintainer",
+    "maintainer_name": "Name",
+    "maintainer_url": "Website",
     "install": "Install This Server",
     "already_installed": "Already Installed"
   }

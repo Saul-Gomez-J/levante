@@ -253,6 +253,51 @@ export function MCPInfoSheet({
             </div>
           )}
 
+          {/* Maintainer Section */}
+          {entry.maintainer && (
+            <div>
+              <h3 className="text-sm font-semibold mb-3">
+                {t('info.maintainer_title')}
+              </h3>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{t('info.maintainer_name')}</span>
+                  <span className="font-medium">{entry.maintainer.name}</span>
+                </div>
+
+                {entry.maintainer.url && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">{t('info.maintainer_url')}</span>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0"
+                      onClick={() => window.levante.openExternal(entry.maintainer!.url!)}
+                    >
+                      <ExternalLink className="w-3 h-3 mr-1" />
+                      Link
+                    </Button>
+                  </div>
+                )}
+
+                {entry.maintainer.github && (
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">GitHub</span>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      className="h-auto p-0"
+                      onClick={() => window.levante.openExternal(`https://github.com/${entry.maintainer!.github}`)}
+                    >
+                      <ExternalLink className="w-3 h-3 mr-1" />
+                      @{entry.maintainer.github}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Metadata Section */}
           {entry.metadata && (
             <div>

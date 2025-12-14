@@ -270,6 +270,9 @@
     "no_env": "No requiere variables de entorno",
     "configuration_title": "Configuración",
     "no_config": "No requiere configuración",
+    "maintainer_title": "Mantenedor",
+    "maintainer_name": "Nombre",
+    "maintainer_url": "Sitio Web",
     "install": "Instalar Este Servidor",
     "already_installed": "Ya Instalado"
   }
