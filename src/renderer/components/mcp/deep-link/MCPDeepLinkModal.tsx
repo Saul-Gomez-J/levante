@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link2, ExternalLink } from 'lucide-react';
 import {
   Dialog,
@@ -9,21 +9,169 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Label } from '@/components/ui/label';
-import type { MCPServerConfig } from '../../../types/mcp';
-import type { AISecurityAnalysis } from '@/constants/mcpSecurity';
-import { TrustBadge } from './TrustBadge';
+import type { MCPServerConfig, MCPConfigField } from '../../../types/mcp';
+import { ApiKeysModal } from '../config/api-keys-modal';
+
+/**
+ * Detect if a value contains placeholder patterns like ${VARIABLE_NAME}
+ */
+function hasPlaceholder(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  return /\$\{[A-Z_][A-Z0-9_]*\}/g.test(value);
+}
+
+/**
+ * Extract placeholder variable names from values
+ * E.g., "${API_KEY}" -> "API_KEY"
+ */
+function extractPlaceholder(value: string): string | null {
+  const match = value.match(/\$\{([A-Z_][A-Z0-9_]*)\}/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Generate MCPConfigField definitions from config with placeholders
+ */
+function detectRequiredFields(config: Partial<MCPServerConfig>): MCPConfigField[] {
+  const fields: MCPConfigField[] = [];
+  const seenKeys = new Set<string>();
+
+  // Check environment variables for placeholders
+  if (config.env && typeof config.env === 'object') {
+    Object.entries(config.env).forEach(([key, value]) => {
+      if (hasPlaceholder(value)) {
+        const placeholder = extractPlaceholder(value as string);
+        if (placeholder && !seenKeys.has(placeholder)) {
+          seenKeys.add(placeholder);
+          fields.push({
+            key: placeholder,
+            label: placeholder.replace(/_/g, ' ').toLowerCase()
+              .split(' ')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' '),
+            type: placeholder.toLowerCase().includes('password') ||
+              placeholder.toLowerCase().includes('secret') ||
+              placeholder.toLowerCase().includes('token') ||
+              placeholder.toLowerCase().includes('key')
+              ? 'password'
+              : 'string',
+            required: true,
+            placeholder: `Enter your ${placeholder.toLowerCase().replace(/_/g, ' ')}`,
+            description: `Required for ${config.name || 'this server'}`
+          });
+        }
+      }
+    });
+  }
+
+  // Check headers for placeholders (http/sse servers)
+  if (config.headers && typeof config.headers === 'object') {
+    Object.entries(config.headers).forEach(([headerKey, value]) => {
+      if (hasPlaceholder(value)) {
+        const placeholder = extractPlaceholder(value as string);
+        if (placeholder && !seenKeys.has(placeholder)) {
+          seenKeys.add(placeholder);
+          fields.push({
+            key: placeholder,
+            label: placeholder.replace(/_/g, ' ').toLowerCase()
+              .split(' ')
+              .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+              .join(' '),
+            type: 'password', // Headers often contain tokens
+            required: true,
+            placeholder: `Enter your ${placeholder.toLowerCase().replace(/_/g, ' ')}`,
+            description: `Used in ${headerKey} header`
+          });
+        }
+      }
+    });
+  }
+
+  // Check URL for placeholders
+  if (config.url && hasPlaceholder(config.url)) {
+    const placeholder = extractPlaceholder(config.url);
+    if (placeholder && !seenKeys.has(placeholder)) {
+      seenKeys.add(placeholder);
+      fields.push({
+        key: placeholder,
+        label: placeholder.replace(/_/g, ' ').toLowerCase()
+          .split(' ')
+          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+          .join(' '),
+        type: 'string',
+        required: true,
+        placeholder: `Enter ${placeholder.toLowerCase().replace(/_/g, ' ')}`,
+        description: 'Used in server URL'
+      });
+    }
+  }
+
+  return fields;
+}
+
+/**
+ * Replace all placeholders in a config object with actual values
+ */
+function replacePlaceholders(
+  config: Partial<MCPServerConfig>,
+  values: Record<string, string>
+): MCPServerConfig {
+  const result = { ...config } as MCPServerConfig;
+
+  // Replace in env
+  if (result.env) {
+    const newEnv: Record<string, string> = {};
+    Object.entries(result.env).forEach(([key, value]) => {
+      if (typeof value === 'string') {
+        let replaced = value;
+        Object.entries(values).forEach(([placeholder, actualValue]) => {
+          replaced = replaced.replace(`\${${placeholder}}`, actualValue);
+        });
+        newEnv[key] = replaced;
+      } else {
+        newEnv[key] = value;
+      }
+    });
+    result.env = newEnv;
+  }
+
+  // Replace in headers
+  if (result.headers) {
+    const newHeaders: Record<string, string> = {};
+    Object.entries(result.headers).forEach(([key, value]) => {
+      if (typeof value === 'string') {
+        let replaced = value;
+        Object.entries(values).forEach(([placeholder, actualValue]) => {
+          replaced = replaced.replace(`\${${placeholder}}`, actualValue);
+        });
+        newHeaders[key] = replaced;
+      } else {
+        newHeaders[key] = value;
+      }
+    });
+    result.headers = newHeaders;
+  }
+
+  // Replace in URL
+  if (result.url && typeof result.url === 'string') {
+    let replaced = result.url;
+    Object.entries(values).forEach(([placeholder, actualValue]) => {
+      replaced = replaced.replace(`\${${placeholder}}`, actualValue);
+    });
+    result.url = replaced;
+  }
+
+  return result;
+}
 import { ServerInfoPanel } from './ServerInfoPanel';
 import { JSONPreview } from './JSONPreview';
-import { ValidationPanel } from './ValidationPanel';
-import { AISecurityPanel } from './AISecurityPanel';
-import { SecurityWarnings } from './SecurityWarnings';
 import { useServerValidation } from '@/hooks/useServerValidation';
-import { usePackageVerification } from '@/hooks/usePackageVerification';
 import { useMCPStore } from '@/stores/mcpStore';
 import { logger } from '@/services/logger';
 import { toast } from 'sonner';
+import { RuntimeChoiceDialog } from '@/components/runtime/RuntimeChoiceDialog';
+import type { RuntimeType } from '../../../../types/runtime';
+import { useTranslation } from 'react-i18next';
 
 interface MCPDeepLinkModalProps {
   open: boolean;
@@ -40,177 +188,265 @@ export function MCPDeepLinkModal({
   serverName,
   sourceUrl
 }: MCPDeepLinkModalProps) {
-  const [addAsDisabled, setAddAsDisabled] = useState(false);
+  const { t } = useTranslation('mcp');
+
+  // State for runtime choice dialog (Advanced Mode only)
+  const [runtimeDialogState, setRuntimeDialogState] = useState<{
+    isOpen: boolean;
+    errorType: 'RUNTIME_NOT_FOUND' | 'RUNTIME_CHOICE_REQUIRED' | null;
+    serverName: string;
+    serverConfig: MCPServerConfig | null;
+    metadata: {
+      systemPath?: string;
+      runtimeType?: RuntimeType;
+      runtimeVersion?: string;
+    };
+  }>({
+    isOpen: false,
+    errorType: null,
+    serverName: '',
+    serverConfig: null,
+    metadata: {}
+  });
+
   const [isAdding, setIsAdding] = useState(false);
-  const [aiAnalysis, setAiAnalysis] = useState<AISecurityAnalysis>({
-    isAnalyzing: false,
-    isComplete: false
+
+  // State for API Keys Modal
+  const [apiKeysModalState, setApiKeysModalState] = useState<{
+    isOpen: boolean;
+    fields: MCPConfigField[];
+  }>({
+    isOpen: false,
+    fields: [],
   });
 
   // Get MCP store to refresh active servers list
-  const { loadActiveServers } = useMCPStore();
+  const { connectServer, loadActiveServers } = useMCPStore();
 
   // Validation hooks
   const validation = useServerValidation(config);
-  const packageName = config?.transport === 'stdio' && config.args?.[0] ? config.args[0] : undefined;
-  const packageVerification = usePackageVerification(packageName);
 
-  // Run AI security analysis when modal opens
-  useEffect(() => {
-    if (open && config && validation.structureValid) {
-      runAISecurityAnalysis();
-    }
-  }, [open, config, validation.structureValid]);
-
-  const runAISecurityAnalysis = async () => {
-    if (!config) return;
-
-    setAiAnalysis({ isAnalyzing: true, isComplete: false });
-
-    try {
-      // Check if structured output is supported
-      const supportCheck = await window.levante.mcp.checkStructuredOutputSupport();
-
-      if (!supportCheck.success || !supportCheck.data?.supported) {
-        setAiAnalysis({
-          isAnalyzing: false,
-          isComplete: false,
-          error: 'AI analysis requires a model with structured output support'
-        });
-        return;
-      }
-
-      // Prepare analysis prompt
-      const configJson = JSON.stringify(config, null, 2);
-      const prompt = `You are a security expert analyzing an MCP server configuration for potential security threats.
-
-CONFIGURATION TO ANALYZE:
-${configJson}
-
-CRITICAL SECURITY CHECKS:
-
-1. DANGEROUS NPX FLAGS (IMMEDIATE HIGH RISK):
-   - Check if args contain: -e, --eval, --call, -c, --shell-auto-fallback
-   - These flags allow ARBITRARY CODE EXECUTION
-   - Example attack: npx -e "require('child_process').exec('malicious command')"
-   - If ANY of these flags are present → HIGH RISK
-
-2. COMMAND INJECTION PATTERNS:
-   - Shell operators in args: &&, ||, ;, |, >, <, $(, \`
-   - Path traversal: ../,  ../../
-   - Environment variable injection: $HOME, $PATH, etc.
-   - If found → HIGH RISK
-
-3. PACKAGE VERIFICATION:
-   - Official MCP packages start with @modelcontextprotocol/
-   - Verify package name follows npm conventions (no special chars)
-   - Check if package name is randomly generated or suspicious
-   - Unknown packages from untrusted scopes → MEDIUM RISK
-
-4. NETWORK/URL VALIDATION (for http/sse):
-   - Check for localhost/private IPs (could be SSRF)
-   - Verify protocol is https (not http)
-   - Suspicious domains or IP addresses → MEDIUM RISK
-
-RESPONSE FORMAT:
-Provide a 2-3 sentence security assessment that:
-- Explicitly states if dangerous flags are present
-- Mentions specific security concerns found
-- Recommends whether to proceed or reject
-- Uses words "DANGEROUS", "HIGH RISK", "MALICIOUS" for serious threats
-- Uses "CAUTION", "SUSPICIOUS" for medium threats
-- Uses "SAFE", "LOW RISK" only if no threats found`;
-
-      // Use the extract config endpoint which uses AI
-      const result = await window.levante.mcp.extractConfig(prompt);
-
-      if (result.success) {
-        // Parse AI response for risk assessment
-        const analysis = result.suggestion || 'Configuration appears standard.';
-        const riskLevel = analysis.toLowerCase().includes('dangerous') || analysis.toLowerCase().includes('high risk')
-          ? 'high'
-          : analysis.toLowerCase().includes('caution') || analysis.toLowerCase().includes('suspicious')
-          ? 'medium'
-          : 'low';
-
-        setAiAnalysis({
-          isAnalyzing: false,
-          isComplete: true,
-          analysis,
-          riskLevel: riskLevel as any,
-          recommendations: riskLevel === 'low' ? [] : ['Verify source before proceeding', 'Test with disabled mode first']
-        });
-      } else {
-        setAiAnalysis({
-          isAnalyzing: false,
-          isComplete: false,
-          error: result.error || 'Analysis failed'
-        });
-      }
-    } catch (error) {
-      logger.mcp.error('AI security analysis failed', {
-        error: error instanceof Error ? error.message : error
-      });
-      setAiAnalysis({
-        isAnalyzing: false,
-        isComplete: false,
-        error: 'Analysis error'
-      });
-    }
-  };
-
-  const handleAddServer = async () => {
+  const handleAddServer = async (apiKeyValues?: Record<string, string>) => {
     if (!config || !config.id) {
-      toast.error('Invalid configuration');
+      toast.error(t('deep_link.toasts.invalid_config'));
+      return;
+    }
+
+    // Detect fields that need user input (similar to store flow)
+    const fieldsNeedingInput = detectRequiredFields(config);
+
+    // If there are fields needing input and no values provided, open ApiKeysModal
+    if (fieldsNeedingInput.length > 0 && !apiKeyValues) {
+      logger.mcp.info('Deep link server requires configuration fields', {
+        serverId: config.id,
+        fieldCount: fieldsNeedingInput.length,
+        fields: fieldsNeedingInput.map(f => f.key)
+      });
+
+      setApiKeysModalState({
+        isOpen: true,
+        fields: fieldsNeedingInput,
+      });
       return;
     }
 
     setIsAdding(true);
 
     try {
-      const loadingToast = toast.loading(`Adding ${serverName}...`);
+      const loadingToast = toast.loading(t('deep_link.toasts.adding_server', { name: serverName }));
 
-      // Add the server
-      const result = await window.levante.mcp.addServer(config as MCPServerConfig);
+      // Replace placeholders with actual values if provided
+      const finalConfig = apiKeyValues
+        ? replacePlaceholders(config, apiKeyValues)
+        : (config as MCPServerConfig);
 
+      logger.mcp.debug('Final config after placeholder replacement', {
+        serverId: finalConfig.id,
+        hasEnv: !!finalConfig.env,
+        hasHeaders: !!finalConfig.headers,
+        envKeys: finalConfig.env ? Object.keys(finalConfig.env) : []
+      });
+
+      // Step 1: Save configuration to .mcp.json
+      const addResult = await window.levante.mcp.addServer(finalConfig);
+
+      if (!addResult.success) {
+        toast.dismiss(loadingToast);
+        toast.error(t('deep_link.toasts.add_failed', { name: serverName }), {
+          description: addResult.error || 'An unknown error occurred',
+          duration: 7000
+        });
+        setIsAdding(false);
+        return;
+      }
+
+      // Step 2: Sync store state
+      await loadActiveServers();
+
+      // Step 3: Attempt to connect (this triggers runtime checking and auto-installation)
+      // Note: Always connect after adding (no "add as disabled" option - keep it simple)
       toast.dismiss(loadingToast);
+      const connectingToast = toast.loading(t('deep_link.toasts.connecting_server', { name: serverName }));
 
-      if (result.success) {
-        // If added as disabled, disable it
-        if (addAsDisabled) {
-          await window.levante.mcp.disableServer(config.id);
-        }
+      try {
+        await connectServer(finalConfig);
 
-        // Refresh the active servers list to show the new server
-        await loadActiveServers();
-
-        toast.success(`${serverName} added successfully`, {
-          description: addAsDisabled
-            ? 'Server added as disabled. Enable it in the Store page when ready.'
-            : 'The server has been added to your configuration.',
+        // Success!
+        toast.dismiss(connectingToast);
+        toast.success(t('deep_link.toasts.add_connect_success', { name: serverName }), {
+          description: t('deep_link.toasts.add_connect_success_description'),
           duration: 5000
         });
 
-        logger.mcp.info('MCP server added via deep link', {
-          serverId: config.id,
-          trustLevel: validation.trustLevel,
-          addedAsDisabled: addAsDisabled
+        logger.mcp.info('MCP server added and connected via deep link', {
+          serverId: finalConfig.id,
+          trustLevel: validation.trustLevel
         });
 
         onOpenChange(false);
-      } else {
-        toast.error(`Failed to add ${serverName}`, {
-          description: result.error || 'An unknown error occurred',
-          duration: 7000
-        });
+      } catch (connectError: any) {
+        toast.dismiss(connectingToast);
+
+        // Handle runtime-specific errors (Advanced Mode only)
+        if (connectError.errorCode === 'RUNTIME_CHOICE_REQUIRED' ||
+          connectError.errorCode === 'RUNTIME_NOT_FOUND') {
+
+          logger.mcp.info('Runtime issue detected for deep link server (Advanced Mode)', {
+            serverId: finalConfig.id,
+            errorCode: connectError.errorCode,
+            metadata: connectError.metadata
+          });
+
+          // Show runtime choice dialog
+          setRuntimeDialogState({
+            isOpen: true,
+            errorType: connectError.errorCode,
+            serverName: serverName,
+            serverConfig: finalConfig,
+            metadata: (connectError.metadata as any) || {}
+          });
+
+          toast.info(t('deep_link.runtime_needed'), {
+            description: t('deep_link.runtime_needed_description'),
+            duration: 4000
+          });
+        } else {
+          // Other connection errors
+          logger.mcp.error('Failed to connect deep link server', {
+            serverId: finalConfig.id,
+            error: connectError.message
+          });
+
+          toast.error(t('deep_link.toasts.add_failed_connection'), {
+            description: connectError.message || t('deep_link.toasts.add_failed_connection_description'),
+            duration: 7000
+          });
+
+          onOpenChange(false);
+        }
       }
     } catch (error) {
-      toast.error('Error adding server', {
+      toast.error(t('deep_link.toasts.add_error'), {
         description: error instanceof Error ? error.message : 'Unknown error',
         duration: 5000
       });
     } finally {
       setIsAdding(false);
+    }
+  };
+
+  const handleApiKeysSubmit = (values: Record<string, string>) => {
+    logger.mcp.debug('Received API keys from modal', {
+      keys: Object.keys(values)
+    });
+
+    // Close the API keys modal
+    setApiKeysModalState({
+      isOpen: false,
+      fields: [],
+    });
+
+    // Retry adding the server with the collected values
+    handleAddServer(values);
+  };
+
+  const handleRuntimeUseSystem = async () => {
+    if (!runtimeDialogState.serverConfig) return;
+
+    try {
+      const toastId = toast.loading(t('deep_link.toasts.connecting_system_runtime', { name: runtimeDialogState.serverName }));
+
+      // Modify server config to use system runtime explicitly
+      const modifiedConfig = {
+        ...runtimeDialogState.serverConfig,
+        runtime: {
+          ...runtimeDialogState.serverConfig.runtime!,
+          source: 'system' as const
+        }
+      };
+
+      await connectServer(modifiedConfig);
+
+      toast.success(t('deep_link.toasts.connected_system_runtime', { name: runtimeDialogState.serverName }), {
+        id: toastId
+      });
+
+      // Close both dialogs
+      setRuntimeDialogState({
+        isOpen: false,
+        errorType: null,
+        serverName: '',
+        serverConfig: null,
+        metadata: {}
+      });
+      onOpenChange(false);
+    } catch (error: any) {
+      logger.mcp.error('Failed to connect with system runtime', {
+        error: error.message
+      });
+      toast.error(t('deep_link.toasts.failed_system_runtime'), {
+        description: error.message
+      });
+    }
+  };
+
+  const handleRuntimeInstallLevante = async () => {
+    if (!runtimeDialogState.serverConfig) return;
+
+    try {
+      const toastId = toast.loading(t('deep_link.toasts.installing_runtime', { name: runtimeDialogState.serverName }));
+
+      // Install runtime via IPC
+      const installResult = await window.levante.mcp.installRuntime(
+        runtimeDialogState.metadata.runtimeType! as RuntimeType,
+        runtimeDialogState.metadata.runtimeVersion!
+      );
+
+      if (!installResult.success) {
+        throw new Error(installResult.error || 'Failed to install runtime');
+      }
+
+      // Now connect with the installed Levante runtime
+      await connectServer(runtimeDialogState.serverConfig);
+
+      toast.success(t('deep_link.toasts.runtime_installed', { name: runtimeDialogState.serverName }), {
+        id: toastId
+      });
+
+      // Close both dialogs
+      setRuntimeDialogState({
+        isOpen: false,
+        errorType: null,
+        serverName: '',
+        serverConfig: null,
+        metadata: {}
+      });
+      onOpenChange(false);
+    } catch (error: any) {
+      logger.mcp.error('Failed to install runtime', {
+        error: error.message
+      });
+      toast.error(t('deep_link.toasts.failed_install_runtime', { error: error.message }));
     }
   };
 
@@ -224,13 +460,12 @@ Provide a 2-3 sentence security assessment that:
             <div className="flex items-start gap-2">
               <Link2 className="w-5 h-5 mt-0.5 text-muted-foreground" />
               <div>
-                <DialogTitle>Add MCP Server from External Link</DialogTitle>
+                <DialogTitle>{t('deep_link.title')}</DialogTitle>
                 <DialogDescription className="mt-1">
-                  Review the server configuration before adding it to Levante
+                  {t('deep_link.description')}
                 </DialogDescription>
               </div>
             </div>
-            <TrustBadge trustLevel={validation.trustLevel} />
           </div>
         </DialogHeader>
 
@@ -241,41 +476,23 @@ Provide a 2-3 sentence security assessment that:
           {/* JSON Preview */}
           {config && <JSONPreview config={config} />}
 
-          {/* Validation Results */}
-          <ValidationPanel
-            validation={validation}
-            packageExists={packageVerification.exists}
-            isVerifyingPackage={packageVerification.isVerifying}
-          />
-
-          {/* AI Security Analysis */}
-          <AISecurityPanel analysis={aiAnalysis} />
-
-          {/* Security Warnings */}
-          <SecurityWarnings />
+          <div className="text-xs text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
+            <Link2 className="w-3 h-3 shrink-0" />
+            <span>This server will execute with your system permissions</span>
+          </div>
 
           {/* Source Information */}
           {sourceUrl && (
             <div className="text-xs text-muted-foreground flex items-center gap-2">
               <ExternalLink className="w-3 h-3" />
-              <span>Source: {sourceUrl}</span>
+              <span>{t('deep_link.source')}: {sourceUrl}</span>
             </div>
           )}
         </div>
 
         <DialogFooter className="flex-col sm:flex-row gap-3">
           <div className="flex items-center space-x-2 mr-auto">
-            <Checkbox
-              id="add-disabled"
-              checked={addAsDisabled}
-              onCheckedChange={(checked) => setAddAsDisabled(checked as boolean)}
-            />
-            <Label
-              htmlFor="add-disabled"
-              className="text-sm font-normal cursor-pointer"
-            >
-              Add as disabled (test later)
-            </Label>
+            {/* Checkbox removed as per Deep Link Runtime Integration plan */}
           </div>
 
           <Button
@@ -283,17 +500,42 @@ Provide a 2-3 sentence security assessment that:
             onClick={() => onOpenChange(false)}
             disabled={isAdding}
           >
-            Cancel
+            {t('deep_link.cancel')}
           </Button>
 
           <Button
-            onClick={handleAddServer}
-            disabled={!canProceed || isAdding || aiAnalysis.isAnalyzing}
+            onClick={() => handleAddServer()}
+            disabled={!canProceed || isAdding}
           >
-            {isAdding ? 'Adding...' : 'Validate & Add'}
+            {isAdding ? t('deep_link.adding') : t('deep_link.add_button')}
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      <RuntimeChoiceDialog
+        open={runtimeDialogState.isOpen}
+        onClose={() => setRuntimeDialogState({
+          isOpen: false,
+          errorType: null,
+          serverName: '',
+          serverConfig: null,
+          metadata: {}
+        })}
+        errorType={runtimeDialogState.errorType!}
+        serverName={runtimeDialogState.serverName}
+        metadata={runtimeDialogState.metadata}
+        onUseSystem={handleRuntimeUseSystem}
+        onInstallLevante={handleRuntimeInstallLevante}
+      />
+
+      {/* API Keys Modal */}
+      <ApiKeysModal
+        isOpen={apiKeysModalState.isOpen}
+        onClose={() => setApiKeysModalState({ isOpen: false, fields: [] })}
+        onSubmit={handleApiKeysSubmit}
+        serverName={serverName}
+        fields={apiKeysModalState.fields}
+      />
     </Dialog>
   );
 }
