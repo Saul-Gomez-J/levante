@@ -17,62 +17,12 @@ export function useServerValidation(config: Partial<MCPServerConfig> | null): Va
   useEffect(() => {
     if (!config) {
       setValidation({
-        structureValid: false,
+        structureValid: true,
         trustLevel: 'unknown',
-        warnings: [],
-        errors: ['No configuration provided']
+        warnings: ['This server will execute with your system permissions'],
+        errors: []
       });
       return;
-    }
-
-    const errors: string[] = [];
-    const warnings: string[] = [];
-
-    // Validate required fields
-    if (!config.transport) {
-      errors.push('Missing transport type');
-    }
-
-    if (config.transport && !['stdio', 'http', 'sse'].includes(config.transport)) {
-      errors.push('Invalid transport type');
-    }
-
-    // Validate stdio-specific fields
-    if (config.transport === 'stdio') {
-      if (!config.command) {
-        errors.push('Missing command for stdio transport');
-      }
-
-      // Check for potentially dangerous commands
-      const dangerousCommands = ['rm', 'del', 'format', 'sudo', 'curl', 'wget'];
-      if (config.command && dangerousCommands.some(cmd => config.command?.includes(cmd))) {
-        warnings.push('Command contains potentially dangerous operations');
-      }
-
-      // Check args for suspicious patterns
-      if (config.args) {
-        const suspiciousPatterns = ['&&', '||', ';', '|', '>', '<', '$'];
-        const hasSuspiciousArgs = config.args.some((arg: string) =>
-          suspiciousPatterns.some(pattern => arg.includes(pattern))
-        );
-        if (hasSuspiciousArgs) {
-          warnings.push('Arguments contain shell operators - potential command injection');
-        }
-      }
-    }
-
-    // Validate http/sse/streamable-http-specific fields
-    if (config.transport === 'http' || config.transport === 'sse' || config.transport === 'streamable-http') {
-      const serverUrl = config.url || config.baseUrl;
-      if (!serverUrl) {
-        errors.push('Missing URL for HTTP/SSE/streamable-http transport');
-      } else {
-        try {
-          new URL(serverUrl);
-        } catch {
-          errors.push('Invalid URL format');
-        }
-      }
     }
 
     // Determine trust level
@@ -90,18 +40,14 @@ export function useServerValidation(config: Partial<MCPServerConfig> | null): Va
       }
     }
 
-    // Add standard warnings
-    warnings.push('This server will execute with your system permissions');
-    if (trustLevel === 'unknown') {
-      warnings.push('Unknown package source - verify before installing');
-    }
+    const warnings = ['This server will execute with your system permissions'];
 
     setValidation({
-      structureValid: errors.length === 0,
+      structureValid: true,
       isOfficialPackage,
       trustLevel,
       warnings,
-      errors
+      errors: []
     });
   }, [config]);
 

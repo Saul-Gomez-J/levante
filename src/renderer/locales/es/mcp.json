@@ -275,5 +275,32 @@
     "maintainer_url": "Sitio Web",
     "install": "Instalar Este Servidor",
     "already_installed": "Ya Instalado"
+  },
+  "deep_link": {
+    "title": "Agregar servidor MCP desde enlace profundo",
+    "description": "Revisa la configuración del servidor antes de agregarlo a Levante",
+    "source": "Fuente",
+    "cancel": "Cancelar",
+    "add_button": "Agregar y conectar",
+    "adding": "Agregando...",
+    "runtime_needed": "Runtime requerido",
+    "runtime_needed_description": "Este servidor necesita que se instale un runtime. Por favor elige una opción.",
+    "toasts": {
+      "invalid_config": "Configuración de servidor inválida",
+      "adding_server": "Agregando {{name}}...",
+      "add_failed": "Error al agregar {{name}}",
+      "connecting_server": "Conectando {{name}}...",
+      "add_connect_success": "¡{{name}} agregado y conectado!",
+      "add_connect_success_description": "El servidor está activo y listo para usar",
+      "add_failed_connection": "Servidor agregado pero la conexión falló",
+      "add_failed_connection_description": "Puedes intentar conectar manualmente desde la página Store",
+      "add_error": "Error al agregar servidor",
+      "connecting_system_runtime": "Conectando {{name}} con runtime del sistema...",
+      "connected_system_runtime": "{{name}} conectado exitosamente",
+      "failed_system_runtime": "Error al conectar con runtime del sistema",
+      "installing_runtime": "Instalando runtime para {{name}}...",
+      "runtime_installed": "Runtime instalado y {{name}} conectado!",
+      "failed_install_runtime": "Error al instalar runtime: {{error}}"
+    }
   }
 }

@@ -110,7 +110,7 @@ export class DeepLinkService {
    */
   private parseMCPAddLink(params: Record<string, string>): DeepLinkAction | null {
     // Support both 'transport' (correct) and 'type' (legacy) for backwards compatibility
-    const { name, transport, type, command, args, url, headers } = params;
+    const { name, transport, type, command, args, url, headers, env } = params;
     const serverType = transport || type;
 
     if (!name || !serverType) {
@@ -140,7 +140,28 @@ export class DeepLinkService {
       serverConfig.command = command;
       // Support both comma-separated args and single arg (for URLs with single package)
       serverConfig.args = args ? (args.includes(',') ? args.split(',') : [args]) : [];
-      serverConfig.env = {};
+
+      // Parse environment variables if provided
+      if (env) {
+        try {
+          const parsedEnv = JSON.parse(env);
+          const sanitizedEnv = this.sanitizeObject(parsedEnv);
+          serverConfig.env = { ...sanitizedEnv };
+
+          logger.core.debug('Parsed and sanitized env variables', {
+            originalKeys: Object.keys(parsedEnv),
+            sanitizedKeys: Object.keys(sanitizedEnv)
+          });
+        } catch (error) {
+          logger.core.error('Failed to parse env JSON', {
+            error: error instanceof Error ? error.message : String(error),
+            env
+          });
+          serverConfig.env = {};
+        }
+      } else {
+        serverConfig.env = {};
+      }
 
       // Security: Validate npx packages and arguments before allowing deep link
       try {
@@ -168,6 +189,23 @@ export class DeepLinkService {
       }
 
       serverConfig.url = url;
+
+      // Parse environment variables if provided (for http servers too)
+      if (env) {
+        try {
+          const parsedEnv = JSON.parse(env);
+          const sanitizedEnv = this.sanitizeObject(parsedEnv);
+          serverConfig.env = { ...sanitizedEnv };
+
+          logger.core.debug('Parsed env for HTTP server', {
+            envKeys: Object.keys(sanitizedEnv)
+          });
+        } catch (error) {
+          logger.core.error('Failed to parse env JSON for HTTP server', {
+            error: error instanceof Error ? error.message : String(error)
+          });
+        }
+      }
 
       // Parse and sanitize headers to prevent prototype pollution
       if (headers) {

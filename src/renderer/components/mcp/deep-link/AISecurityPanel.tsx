@@ -1,12 +1,15 @@
 import { Loader2, Shield, AlertTriangle, XCircle } from 'lucide-react';
 import type { AISecurityAnalysis } from '@/constants/mcpSecurity';
 import { cn } from '@/lib/utils';
+import { useTranslation } from 'react-i18next';
 
 interface AISecurityPanelProps {
   analysis: AISecurityAnalysis;
 }
 
 export function AISecurityPanel({ analysis }: AISecurityPanelProps) {
+  const { t } = useTranslation('mcp');
+
   const getRiskColor = (risk?: string) => {
     switch (risk) {
       case 'low':
@@ -36,11 +39,11 @@ export function AISecurityPanel({ analysis }: AISecurityPanelProps) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-foreground">AI Security Analysis</h3>
+        <h3 className="text-sm font-medium text-foreground">{t('deep_link.ai_security.title')}</h3>
         {analysis.isAnalyzing && (
           <span className="text-xs text-muted-foreground flex items-center gap-1.5">
             <Loader2 className="w-3 h-3 animate-spin" />
-            Analyzing...
+            {t('deep_link.ai_security.analyzing')}
           </span>
         )}
       </div>
@@ -49,16 +52,7 @@ export function AISecurityPanel({ analysis }: AISecurityPanelProps) {
         {analysis.isAnalyzing && (
           <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            Running security analysis...
-          </div>
-        )}
-
-        {analysis.error && (
-          <div className="text-sm text-muted-foreground">
-            <p className="text-yellow-600 dark:text-yellow-400">
-              AI analysis unavailable: {analysis.error}
-            </p>
-            <p className="mt-2">Proceeding with manual validation only.</p>
+            {t('deep_link.ai_security.running')}
           </div>
         )}
 
@@ -75,7 +69,7 @@ export function AISecurityPanel({ analysis }: AISecurityPanelProps) {
                   return <Icon className={cn('w-4 h-4', getRiskColor(analysis.riskLevel))} />;
                 })()}
                 <span className="text-sm font-medium">
-                  Risk Level:{' '}
+                  {t('deep_link.ai_security.risk_level')}:{' '}
                   <span className={cn('uppercase', getRiskColor(analysis.riskLevel))}>
                     {analysis.riskLevel}
                   </span>
@@ -86,7 +80,7 @@ export function AISecurityPanel({ analysis }: AISecurityPanelProps) {
             {analysis.recommendations && analysis.recommendations.length > 0 && (
               <div className="pt-2 border-t border-border">
                 <p className="text-xs font-medium text-muted-foreground mb-2">
-                  Recommendations:
+                  {t('deep_link.ai_security.recommendations')}:
                 </p>
                 <ul className="space-y-1 text-sm text-foreground">
                   {analysis.recommendations.map((rec, idx) => (
