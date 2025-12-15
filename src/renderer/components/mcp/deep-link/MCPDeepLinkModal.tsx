@@ -163,7 +163,6 @@ function replacePlaceholders(
 
   return result;
 }
-import { TrustBadge } from './TrustBadge';
 import { ServerInfoPanel } from './ServerInfoPanel';
 import { JSONPreview } from './JSONPreview';
 import { useServerValidation } from '@/hooks/useServerValidation';
@@ -467,7 +466,6 @@ export function MCPDeepLinkModal({
                 </DialogDescription>
               </div>
             </div>
-            <TrustBadge trustLevel={validation.trustLevel} />
           </div>
         </DialogHeader>
 
