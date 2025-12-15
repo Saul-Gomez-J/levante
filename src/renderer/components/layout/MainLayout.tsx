@@ -121,7 +121,9 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
               className="w-full justify-start gap-2"
             >
               <MessageSquare className="w-4 h-4" />
-              {t('actions.feedback')}
+              <span className="flex-1 text-left">
+                {t('actions.feedback')} {version ? `v${version}` : ''}
+              </span>
             </Button>
           </div>
         </SidebarFooter>
