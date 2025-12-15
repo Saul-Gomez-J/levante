@@ -23,7 +23,10 @@ export class AttachmentStorage {
   private baseDir: string;
 
   constructor() {
-    // Store attachments in user data directory: ~/levante/attachments/
+    // Store attachments in Electron userData directory
+    // macOS: ~/Library/Application Support/Levante/attachments/
+    // Windows: %APPDATA%/Levante/attachments/
+    // Linux: ~/.config/Levante/attachments/
     const userData = app.getPath('userData');
     this.baseDir = path.join(userData, 'attachments');
     this.ensureBaseDirExists();
