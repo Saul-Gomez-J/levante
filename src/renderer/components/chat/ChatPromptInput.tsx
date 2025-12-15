@@ -11,7 +11,7 @@ import { ContextPreview } from '@/components/chat/ContextPreview';
 import { AddContextMenu } from '@/components/chat/AddContextMenu';
 import { useTranslation } from 'react-i18next';
 import { getRendererLogger } from '@/services/logger';
-import type { Model } from '../../../types/models';
+import type { Model, GroupedModelsByProvider } from '../../../types/models';
 import type { ChatStatus } from 'ai';
 import type { SelectedResource, SelectedPrompt, MCPResource, MCPPrompt } from '@/hooks/useMCPResources';
 
@@ -26,6 +26,7 @@ interface ChatPromptInputProps {
   model: string;
   onModelChange: (modelId: string) => void;
   availableModels: Model[];
+  groupedModelsByProvider?: GroupedModelsByProvider;
   modelsLoading: boolean;
   status?: ChatStatus;
   // File attachment props
@@ -53,6 +54,7 @@ export function ChatPromptInput({
   model,
   onModelChange,
   availableModels,
+  groupedModelsByProvider,
   modelsLoading,
   status,
   attachedFiles = [],
@@ -196,6 +198,7 @@ export function ChatPromptInput({
             value={model}
             onValueChange={onModelChange}
             models={availableModels}
+            groupedModels={groupedModelsByProvider}
             loading={modelsLoading}
             placeholder={availableModels.length === 0 ? t('model_selector.no_models') : t('model_selector.label')}
           />
