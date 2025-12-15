@@ -144,6 +144,7 @@ export interface UpdateChatSessionInput {
   title?: string;
   model?: string;
   folder_id?: string | null;
+  session_type?: SessionType;
 }
 
 export interface UpdateMessageInput {

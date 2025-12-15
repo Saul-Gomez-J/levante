@@ -36,6 +36,7 @@ interface ChatStore {
   loadSession: (sessionId: string) => Promise<void>;
   deleteSession: (sessionId: string) => Promise<boolean>;
   updateSessionTitle: (sessionId: string, title: string) => Promise<boolean>;
+  updateSessionModel: (sessionId: string, model: string) => Promise<boolean>;
   setCurrentSession: (session: ChatSession | null) => void;
   startNewChat: () => void;
 
@@ -286,6 +287,43 @@ export const useChatStore = create<ChatStore>()(
           const error = err instanceof Error ? err.message : 'Unknown error';
           logger.database.error('Error updating session title', { error });
           set({ error });
+          return false;
+        }
+      },
+
+      updateSessionModel: async (sessionId: string, model: string) => {
+        logger.database.debug('Updating session model', { sessionId, model });
+
+        try {
+          const result = await window.levante.db.sessions.update({
+            id: sessionId,
+            model,
+          });
+
+          if (result.success && result.data) {
+            logger.database.info('Session model updated', { sessionId, model });
+
+            set((state) => ({
+              sessions: state.sessions.map((s) =>
+                s.id === sessionId ? { ...s, model } : s
+              ),
+              currentSession:
+                state.currentSession?.id === sessionId
+                  ? { ...state.currentSession, model }
+                  : state.currentSession,
+            }));
+
+            return true;
+          } else {
+            logger.database.error('Failed to update session model', {
+              sessionId,
+              error: result.error,
+            });
+            return false;
+          }
+        } catch (err) {
+          const error = err instanceof Error ? err.message : 'Unknown error';
+          logger.database.error('Error updating session model', { error });
           return false;
         }
       },

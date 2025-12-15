@@ -68,6 +68,7 @@ const ChatPage = () => {
   const persistMessage = useChatStore((state) => state.persistMessage);
   const createSession = useChatStore((state) => state.createSession);
   const loadHistoricalMessages = useChatStore((state) => state.loadHistoricalMessages);
+  const updateSessionModel = useChatStore((state) => state.updateSessionModel);
   const pendingPrompt = useChatStore((state) => state.pendingPrompt);
   const setPendingPrompt = useChatStore((state) => state.setPendingPrompt);
 
@@ -514,6 +515,16 @@ const ChatPage = () => {
         };
         await persistMessage(userMessage);
 
+        // Update session model to reflect current model being used
+        if (currentSession.model !== model) {
+          logger.core.info('Updating session model', {
+            sessionId: currentSession.id,
+            oldModel: currentSession.model,
+            newModel: model
+          });
+          await updateSessionModel(currentSession.id, model);
+        }
+
         // Send to AI with attachments in the body
         // The ElectronChatTransport will pass these to the IPC layer
         await sendMessageAI(
@@ -623,6 +634,16 @@ const ChatPage = () => {
 
         await persistMessage(userMessage);
 
+        // Update session model to reflect current model being used
+        if (currentSession.model !== model) {
+          logger.core.info('Updating session model for pending message', {
+            sessionId: currentSession.id,
+            oldModel: currentSession.model,
+            newModel: model
+          });
+          await updateSessionModel(currentSession.id, model);
+        }
+
         await sendMessageAI(
           {
             text: messageText,
@@ -729,6 +750,7 @@ const ChatPage = () => {
                 groupedModelsByProvider={groupedModelsByProvider || undefined}
                 modelsLoading={modelsLoading}
                 status={status}
+                modelTaskType={modelTaskType}
                 attachedFiles={attachedFiles}
                 onFilesSelected={handleFilesSelected}
                 onFileRemove={handleFileRemove}
@@ -784,6 +806,7 @@ const ChatPage = () => {
               groupedModelsByProvider={groupedModelsByProvider || undefined}
               modelsLoading={modelsLoading}
               status={status}
+              modelTaskType={modelTaskType}
               attachedFiles={attachedFiles}
               onFilesSelected={handleFilesSelected}
               onFileRemove={handleFileRemove}

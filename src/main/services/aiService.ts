@@ -414,6 +414,33 @@ export class AIService {
   }
 
   /**
+   * Build context from full message history for inference models.
+   * Concatenates all user and assistant messages to provide conversation context.
+   * This allows inference models to understand the full conversation when generating outputs.
+   */
+  private buildInferenceContext(messages: UIMessage[]): string {
+    const contextParts: string[] = [];
+
+    for (const message of messages) {
+      if (message.role !== 'user' && message.role !== 'assistant') {
+        continue;
+      }
+
+      // Extract text from message parts
+      const textParts = message.parts?.filter((p: any) => p.type === 'text') || [];
+      const text = textParts.map((p: any) => p.text).join('\n').trim();
+
+      if (text) {
+        const prefix = message.role === 'user' ? 'User' : 'Assistant';
+        contextParts.push(`${prefix}: ${text}`);
+      }
+    }
+
+    return contextParts.join('\n');
+  }
+
+
+  /**
    * Parse a JSON block embedded in markdown fences
    */
   private extractJsonBlock(
@@ -1036,17 +1063,38 @@ export class AIService {
           inferenceInput = { messages: chatMessages };
           break;
 
-        case "text-to-image":
-          inferenceInput = { prompt: inputText };
+        case "text-to-image": {
+          // Build context from FULL conversation history
+          const contextPrompt = this.buildInferenceContext(messages);
+          this.logger.aiSdk.info("text-to-image using full conversation context", {
+            contextLength: contextPrompt.length,
+            messageCount: messages.length
+          });
+          inferenceInput = { prompt: contextPrompt || inputText };
           break;
+        }
 
-        case "text-to-speech":
-          inferenceInput = { text: inputText };
+        case "text-to-speech": {
+          // Build context from FULL conversation history
+          const contextText = this.buildInferenceContext(messages);
+          this.logger.aiSdk.info("text-to-speech using full conversation context", {
+            contextLength: contextText.length,
+            messageCount: messages.length
+          });
+          inferenceInput = { text: contextText || inputText };
           break;
+        }
 
-        case "text-to-video":
-          inferenceInput = { text: inputText };
+        case "text-to-video": {
+          // Build context from FULL conversation history
+          const contextText = this.buildInferenceContext(messages);
+          this.logger.aiSdk.info("text-to-video using full conversation context", {
+            contextLength: contextText.length,
+            messageCount: messages.length
+          });
+          inferenceInput = { text: contextText || inputText };
           break;
+        }
 
         case "image-to-image": {
           // Get image from attachment or fall back to last generated image
@@ -1140,30 +1188,54 @@ export class AIService {
 
         case "visual-question-answering":
         case "document-question-answering": {
-          if (attachments.length === 0) {
-            yield {
-              error:
-                "This model requires an image attachment. Please attach an image.",
-              done: true,
-            };
-            return;
-          }
+          // Get image from attachment or fall back to last generated/attached image
+          let imageData: string | null = null;
+          let imageSource: string = "unknown";
 
+          // First, check if user attached an image
           const qaAttachment = attachments.find((a: any) => a.type === "image");
-          if (!qaAttachment) {
+
+          if (qaAttachment?.data) {
+            imageData = qaAttachment.data;
+            imageSource = "user-attachment";
+            this.logger.aiSdk.debug("Using user-attached image for visual-qa");
+          } else {
+            // No attachment - try to find last image in conversation history
+            this.logger.aiSdk.debug("No attachment provided, searching for previous image in history");
+            const lastImage = await this.findLastGeneratedImage(messages);
+
+            if (lastImage) {
+              imageData = lastImage.data;
+              imageSource = "previous-image";
+              this.logger.aiSdk.info("Using previous image from history for visual-qa", {
+                filename: lastImage.filename,
+              });
+            }
+          }
+
+          // If no image found anywhere, show error
+          if (!imageData) {
             yield {
               error:
-                "No image found in attachments. Please provide an image for the question.",
+                "This model requires an image. Please attach an image or use it in a conversation with existing images.",
               done: true,
             };
             return;
           }
 
-          const qaBlob = await this.dataURLToBlob(qaAttachment.data);
+          const qaBlob = await this.dataURLToBlob(imageData);
+
+          // Build context from full conversation for the question
+          const contextQuestion = this.buildInferenceContext(messages);
+
+          this.logger.aiSdk.info("visual-qa input prepared", {
+            imageSource,
+            questionLength: contextQuestion.length || inputText.length,
+          });
 
           inferenceInput = {
             image: qaBlob,
-            question: inputText || "Describe the image",
+            question: contextQuestion || inputText || "Describe the image",
           };
           break;
         }

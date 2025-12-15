@@ -54,49 +54,16 @@ function isInferenceModel(taskType: string | undefined): boolean {
 
 /**
  * Filter models based on session type
+ * NOTE: Session type filtering has been removed - all models are now shown
+ * regardless of session type. Session type updates dynamically when switching models.
  */
 function filterModelsBySessionType(
   models: Model[],
   session: Session | null
 ): Model[] {
-  if (!session) {
-    return models;
-  }
-
-  const sessionType = session.session_type;
-  let filtered: Model[] = [];
-
-  if (sessionType === 'chat') {
-    // Chat session - only show chat and multimodal chat models
-    filtered = models.filter(m => {
-      const taskType = m.taskType;
-      return !taskType || taskType === 'chat' || taskType === 'image-text-to-text';
-    });
-  } else if (sessionType === 'inference') {
-    // Inference session - only show inference models
-    filtered = models.filter(m => {
-      const taskType = m.taskType;
-      return taskType && taskType !== 'chat' && taskType !== 'image-text-to-text';
-    });
-  } else {
-    // Fallback - show all models
-    filtered = models;
-  }
-
-  // ALWAYS include the session's current model, even if not in filtered list
-  // This allows continuing conversations with the same model
-  if (session.model) {
-    const currentModel = models.find(m => m.id === session.model);
-    if (currentModel && !filtered.find(m => m.id === currentModel.id)) {
-      logger.core.info('Adding session model to filtered list', {
-        model: session.model,
-        sessionType
-      });
-      filtered = [currentModel, ...filtered];
-    }
-  }
-
-  return filtered;
+  // No filtering by session type - show all models
+  // Session type will update automatically when user switches models
+  return models;
 }
 
 // ============================================================================
@@ -263,35 +230,38 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
     const newTaskType = newModelInfo?.taskType;
     const isNewModelInference = isInferenceModel(newTaskType);
 
-    // Check session type compatibility
-    const sessionType = currentSession.session_type;
+    // Determine new session type based on model
+    const newSessionType = isNewModelInference ? 'inference' : 'chat';
+    const currentSessionType = currentSession.session_type;
 
-    if (sessionType === 'chat' && isNewModelInference) {
-      logger.core.warn('Cannot switch to inference model in chat session', {
-        currentSessionType: sessionType,
-        newModel: newModelId,
-        newTaskType
+    // If session type changes, update it dynamically
+    if (currentSessionType !== newSessionType) {
+      logger.core.info('Updating session type for model switch', {
+        sessionId: currentSession.id,
+        oldType: currentSessionType,
+        newType: newSessionType,
+        model: newModelId
       });
-      alert(
-        '❌ No puedes usar modelos de inferencia en sesiones de chat.\n\n' +
-        'Las sesiones de chat están diseñadas para modelos conversacionales. ' +
-        'Para usar modelos de inferencia (text-to-image, image-to-image, etc.), inicia una nueva conversación.'
-      );
-      return;
-    }
 
-    if (sessionType === 'inference' && !isNewModelInference) {
-      logger.core.warn('Cannot switch to chat model in inference session', {
-        currentSessionType: sessionType,
-        newModel: newModelId,
-        newTaskType
-      });
-      alert(
-        '❌ No puedes usar modelos de chat en sesiones de inferencia.\n\n' +
-        'Las sesiones de inferencia están diseñadas para tareas específicas (text-to-image, image-to-image, etc.). ' +
-        'Para usar modelos de chat normales, inicia una nueva conversación.'
-      );
-      return;
+      try {
+        // Update session type in database
+        const result = await window.levante.db.sessions.update({
+          id: currentSession.id,
+          session_type: newSessionType
+        });
+
+        if (!result.success) {
+          logger.core.error('Failed to update session type', {
+            error: result.error
+          });
+          // Continue anyway - the model change will still work
+        }
+      } catch (err) {
+        logger.core.error('Error updating session type', {
+          error: err instanceof Error ? err.message : String(err)
+        });
+        // Continue anyway - the model change will still work
+      }
     }
 
     // Valid change - check provider switch
@@ -324,7 +294,7 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
     logger.core.info('Model changed', {
       oldModel: model,
       newModel: newModelId,
-      sessionType,
+      sessionType: newSessionType,
       compatible: true
     });
     setModel(newModelId);
