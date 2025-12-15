@@ -78,10 +78,10 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
           config.env = server.env;
         }
 
-        // HTTP specific fields (prefer url over baseUrl)
-        const serverUrl = server.url || server.baseUrl;
+        // HTTP specific fields (use baseUrl as normalized format)
+        const serverUrl = server.baseUrl || server.url;
         if (serverUrl) {
-          config.url = serverUrl;
+          config.baseUrl = serverUrl;
         }
         if (server.headers && Object.keys(server.headers).length > 0) {
           config.headers = server.headers;
@@ -119,10 +119,10 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
         return { valid: false, error: 'Missing required field: command (for stdio transport)' };
       }
 
-      // Support both 'url' (new) and 'baseUrl' (legacy)
+      // Support both 'url' and 'baseUrl' (baseUrl is normalized format)
       const serverUrl = parsed.url || parsed.baseUrl;
       if ((transportType === 'http' || transportType === 'sse' || transportType === 'streamable-http') && !serverUrl) {
-        return { valid: false, error: 'Missing required field: url (for http/sse/streamable-http transport)' };
+        return { valid: false, error: 'Missing required field: baseUrl (for http/sse/streamable-http transport)' };
       }
 
       return { valid: true, data: parsed };
