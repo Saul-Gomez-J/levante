@@ -101,7 +101,7 @@ export class MCPUseService implements IMCPService {
     const codeModeConfig = this.resolveCodeModeConfig(config);
 
     // Auto-detect transport type if not provided (already normalized above, but fallback)
-    const finalTransport = config.transport ||
+    const finalTransport: MCPServerConfig['transport'] | null = config.transport ||
       (config.command ? 'stdio' : (config.baseUrl || (config as any).url) ? 'http' : null);
 
     // Normalize url → baseUrl
@@ -128,7 +128,7 @@ export class MCPUseService implements IMCPService {
       serverConfig.command = config.command;
       serverConfig.args = config.args;
       serverConfig.env = config.env;
-    } else if (finalTransport === 'http' || finalTransport === 'sse') {
+    } else if (finalTransport === 'http' || finalTransport === 'sse' || finalTransport === 'streamable-http') {
       serverConfig.url = baseUrl;
       if (config.headers) {
         serverConfig.headers = config.headers;
@@ -177,7 +177,7 @@ export class MCPUseService implements IMCPService {
 
     // Retry configuration for cold start handling
     // mcp-use hardcodes initial connection timeout to 3 seconds, so we implement retry at service level
-    const maxRetries = (finalTransport === 'http' || finalTransport === 'sse') ? 3 : 1;
+    const maxRetries = (finalTransport === 'http' || finalTransport === 'sse' || finalTransport === 'streamable-http') ? 3 : 1;
     const retryDelayMs = 2000; // 2 second delay between retries
     let lastError: Error | null = null;
 

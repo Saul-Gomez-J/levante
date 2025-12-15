@@ -46,7 +46,7 @@ export interface MCPServerConfig {
   url?: string;
   baseUrl?: string; // Legacy support, prefer 'url'
   headers?: Record<string, string>;
-  transport: 'stdio' | 'http' | 'sse';
+  transport: 'stdio' | 'http' | 'sse' | 'streamable-http';
   enabled?: boolean; // Added by listServers(), not stored in JSON
 }
 

@@ -16,8 +16,22 @@
     "description": "Descubre y configura nuevas integraciones MCP",
     "available": "{{count}} disponibles",
     "available_integrations": "Integraciones Disponibles",
-    "filter_provider": "Filtrar por proveedor",
-    "all_providers": "Todos los proveedores",
+    "all_sources": "Todos",
+    "all_categories": "Todas las Categorías",
+    "source": {
+      "official": "Oficial",
+      "community": "Comunidad"
+    },
+    "category": {
+      "documentation": "Documentación",
+      "development": "Desarrollo",
+      "database": "Base de Datos",
+      "automation": "Automatización",
+      "ai": "IA",
+      "communication": "Comunicación",
+      "productivity": "Productividad",
+      "other": "Otros"
+    },
     "sync_provider": "Sincronizar",
     "syncing": "Sincronizando...",
     "last_synced": "Última sincronización: {{date}}",
@@ -25,7 +39,10 @@
     "from_provider": "De {{provider}}",
     "search_placeholder": "Buscar integraciones...",
     "no_results": "No se encontraron integraciones",
-    "no_results_description": "Prueba ajustar tu búsqueda o filtros"
+    "no_results_description": "Prueba ajustar tu búsqueda o filtros",
+    "provider_error": "No se pudo conectar con el proveedor {{name}}",
+    "no_providers_title": "No hay MCPs disponibles",
+    "no_providers_description": "No se ha podido recoger MCPs de ningún proveedor. Revisa tu conexión a internet."
   },
   "server": {
     "configure": "Configurar",
@@ -243,12 +260,19 @@
     "env_title": "Variables de Entorno",
     "env_required": "Requerido",
     "env_optional": "Opcional",
+    "required_inputs_title": "Inputs Requeridos",
+    "headers_title": "Cabeceras",
     "metadata_title": "Información Adicional",
     "author": "Autor",
     "homepage": "Página Principal",
     "repository": "Repositorio",
     "use_count": "Descargas",
     "no_env": "No requiere variables de entorno",
+    "configuration_title": "Configuración",
+    "no_config": "No requiere configuración",
+    "maintainer_title": "Mantenedor",
+    "maintainer_name": "Nombre",
+    "maintainer_url": "Sitio Web",
     "install": "Instalar Este Servidor",
     "already_installed": "Ya Instalado"
   }

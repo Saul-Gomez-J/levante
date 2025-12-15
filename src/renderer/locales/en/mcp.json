@@ -16,8 +16,22 @@
     "description": "Discover and configure new MCP integrations",
     "available": "{{count}} available",
     "available_integrations": "Available Integrations",
-    "filter_provider": "Filter by provider",
-    "all_providers": "All providers",
+    "all_sources": "All",
+    "all_categories": "All Categories",
+    "source": {
+      "official": "Official",
+      "community": "Community"
+    },
+    "category": {
+      "documentation": "Documentation",
+      "development": "Development",
+      "database": "Database",
+      "automation": "Automation",
+      "ai": "AI",
+      "communication": "Communication",
+      "productivity": "Productivity",
+      "other": "Other"
+    },
     "sync_provider": "Sync",
     "syncing": "Syncing...",
     "last_synced": "Last synced: {{date}}",
@@ -25,7 +39,10 @@
     "from_provider": "From {{provider}}",
     "search_placeholder": "Search integrations...",
     "no_results": "No integrations found",
-    "no_results_description": "Try adjusting your search or filters"
+    "no_results_description": "Try adjusting your search or filters",
+    "provider_error": "Could not connect to provider {{name}}",
+    "no_providers_title": "No MCPs available",
+    "no_providers_description": "Could not fetch MCPs from any provider. Please check your internet connection."
   },
   "server": {
     "configure": "Configure",
@@ -238,12 +255,19 @@
     "env_title": "Environment Variables",
     "env_required": "Required",
     "env_optional": "Optional",
+    "required_inputs_title": "Required Inputs",
+    "headers_title": "Headers",
     "metadata_title": "Additional Information",
     "author": "Author",
     "homepage": "Homepage",
     "repository": "Repository",
     "use_count": "Downloads",
     "no_env": "No environment variables required",
+    "configuration_title": "Configuration",
+    "no_config": "No configuration required",
+    "maintainer_title": "Maintainer",
+    "maintainer_name": "Name",
+    "maintainer_url": "Website",
     "install": "Install This Server",
     "already_installed": "Already Installed"
   }

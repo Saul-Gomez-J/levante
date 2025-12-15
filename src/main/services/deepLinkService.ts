@@ -119,7 +119,7 @@ export class DeepLinkService {
     }
 
     // Validate server type
-    if (serverType !== 'stdio' && serverType !== 'http' && serverType !== 'sse') {
+    if (serverType !== 'stdio' && serverType !== 'http' && serverType !== 'sse' && serverType !== 'streamable-http') {
       logger.core.warn('Invalid MCP server transport type', { serverType });
       return null;
     }
@@ -127,7 +127,7 @@ export class DeepLinkService {
     const serverConfig: Partial<MCPServerConfig> = {
       id: name.toLowerCase().replace(/\s+/g, '-'),
       name: name,
-      transport: serverType as 'stdio' | 'http' | 'sse',
+      transport: serverType as 'stdio' | 'http' | 'sse' | 'streamable-http',
     };
 
     // Handle stdio type
@@ -160,14 +160,14 @@ export class DeepLinkService {
       }
     }
 
-    // Handle http/sse types
-    if (serverType === 'http' || serverType === 'sse') {
+    // Handle http/sse/streamable-http types
+    if (serverType === 'http' || serverType === 'sse' || serverType === 'streamable-http') {
       if (!url) {
-        logger.core.warn('Missing URL for HTTP/SSE MCP server', { params });
+        logger.core.warn('Missing URL for HTTP/SSE/streamable-http MCP server', { params });
         return null;
       }
 
-      serverConfig.baseUrl = url;
+      serverConfig.url = url;
 
       // Parse and sanitize headers to prevent prototype pollution
       if (headers) {

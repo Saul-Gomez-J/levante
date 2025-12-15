@@ -181,8 +181,8 @@ export async function handleConnectionError(
         `MCP server connection failed. The server process may have exited unexpectedly. Please check the server logs for more details.`
       );
     }
-  } else if (transportType === "http" || transportType === "sse") {
-    // Basic error handling for HTTP/SSE transports
+  } else if (transportType === "http" || transportType === "sse" || transportType === "streamable-http") {
+    // Basic error handling for HTTP/SSE/streamable-http transports
     if (errorMessage.includes("fetch") || errorMessage.includes("network")) {
       return new Error(
         `Network error connecting to ${transportType.toUpperCase()} server at ${baseUrl}. Please check the URL and network connection.`

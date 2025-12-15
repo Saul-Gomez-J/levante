@@ -164,7 +164,7 @@ export function CustomMCPConfig({ serverId, onClose, initialConfig, onConfigChan
         return { valid: false, error: t('config.validation.missing_command') };
       }
 
-      if ((transportType === 'http' || transportType === 'sse') && !parsed.baseUrl && !parsed.url) {
+      if ((transportType === 'http' || transportType === 'sse' || transportType === 'streamable-http') && !parsed.baseUrl && !parsed.url) {
         return { valid: false, error: t('config.validation.missing_baseurl') };
       }
 

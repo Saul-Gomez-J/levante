@@ -1,111 +1,96 @@
+import { app } from 'electron';
 import path from 'path';
 import fs from 'fs/promises';
 import { getLogger } from '../logging';
+import type {
+  MCPProvider,
+  MCPRegistryEntry,
+  LevanteAPIResponse,
+  LevanteAPIServer,
+  InputDefinition,
+  MCPConfigField
+} from '../../../renderer/types/mcp';
 import { mcpCacheService } from './MCPCacheService';
 
 const logger = getLogger();
 
-// Provider type definition (matches renderer types)
-export interface MCPProvider {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  type: 'local' | 'github' | 'api';
-  endpoint: string;
-  enabled: boolean;
-  homepage?: string;
-  lastSynced?: string;
-  serverCount?: number;
-  config?: {
-    branch?: string;
-    path?: string;
-    authRequired?: boolean;
-    authToken?: string;
-  };
-}
+// Default production host for Levante services
+const DEFAULT_SERVICES_HOST = 'https://services.levanteapp.com';
 
-// Registry entry type (matches renderer types)
-export interface MCPRegistryEntry {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  icon: string;
-  transport: {
-    type: 'stdio' | 'http' | 'sse';
-    autoDetect: boolean;
-  };
-  configuration: {
-    fields: Array<{
-      key: string;
-      label: string;
-      type: string;
-      required: boolean;
-      description: string;
-      placeholder?: string;
-      options?: string[];
-      defaultValue?: unknown;
-    }>;
-    defaults?: Record<string, unknown>;
-    template?: {
-      type: 'stdio' | 'http' | 'sse';
-      command?: string;
-      args?: string[];
-      env?: Record<string, string>;
-      baseUrl?: string;
-      headers?: Record<string, string>;
-    };
-  };
-  source?: string;
-  metadata?: {
-    useCount?: number;
-    homepage?: string;
-    author?: string;
-    repository?: string;
-    path?: string;
-  };
-}
-
-interface MCPRegistry {
-  version: string;
-  lastUpdated?: string;
-  entries: MCPRegistryEntry[];
-}
-
-// AITempl API response types
-interface AitemplMcpServer {
-  name: string;
-  description: string;
-  category: string;
-  content: string; // JSON string with mcpServers configuration
-  downloads: number;
-}
-
-interface AitemplResponse {
-  mcps: AitemplMcpServer[];
-}
-
-/**
- * Service for fetching and normalizing MCP servers from various providers
- */
 export class MCPProviderService {
-  private defaultCacheMaxAge = 60 * 60 * 1000; // 1 hour
-
   /**
-   * Fetch from local file
+   * ✅ SIMPLIFICADO: Solo un método de sincronización
    */
-  private async fetchFromLocal(filePath: string): Promise<MCPRegistry> {
-    const fullPath = path.join(__dirname, '../../renderer/data', filePath);
-    const content = await fs.readFile(fullPath, 'utf-8');
-    return JSON.parse(content);
+  async syncProvider(provider: MCPProvider): Promise<MCPRegistryEntry[]> {
+    logger.mcp.info(`[MCPProviderService] Syncing provider: ${provider.id}`);
+
+    try {
+      // Fetch from API
+      const apiResponse = await this.fetchFromAPI(provider.endpoint);
+
+      // Transform to internal format
+      const entries = this.transformAPIResponse(apiResponse);
+
+      // Cachear resultados
+      await mcpCacheService.setCache(provider.id, entries);
+
+      logger.mcp.info(`[MCPProviderService] Synced ${entries.length} servers from ${provider.id}`);
+
+      return entries;
+    } catch (error) {
+      logger.mcp.error(`[MCPProviderService] Error syncing provider ${provider.id}:`, error as any);
+
+      // Intentar devolver desde cache si existe
+      const cachedEntries = await mcpCacheService.getCache<MCPRegistryEntry[]>(provider.id);
+      if (cachedEntries) {
+        logger.mcp.info(`[MCPProviderService] Returning cached data for ${provider.id}`);
+        return cachedEntries;
+      }
+
+      throw error;
+    }
   }
 
   /**
-   * Fetch from external API
+   * Gets the Levante services host from environment or uses default
    */
-  private async fetchFromAPI(url: string): Promise<unknown> {
-    const response = await fetch(url, {
+  private getServicesHost(): string {
+    const envHost = process.env.LEVANTE_SERVICES_HOST;
+    if (envHost) {
+      // Remove trailing slash if present
+      const host = envHost.replace(/\/$/, '');
+      logger.mcp.debug(`[MCPProviderService] Using env host: ${host}`);
+      return host;
+    }
+    return DEFAULT_SERVICES_HOST;
+  }
+
+  /**
+   * Resolves the API endpoint
+   * - If endpoint is a path (starts with /), combines with services host
+   * - If endpoint is a full URL, uses it directly (for external APIs)
+   */
+  private resolveEndpoint(endpoint: string): string {
+    // If endpoint is a path, combine with host
+    if (endpoint.startsWith('/')) {
+      const host = this.getServicesHost();
+      const fullUrl = `${host}${endpoint}`;
+      logger.mcp.debug(`[MCPProviderService] Resolved endpoint: ${fullUrl}`);
+      return fullUrl;
+    }
+
+    // If it's already a full URL, use it directly
+    return endpoint;
+  }
+
+  /**
+   * Fetches data from the API endpoint
+   */
+  private async fetchFromAPI(endpoint: string): Promise<LevanteAPIResponse> {
+    const resolvedEndpoint = this.resolveEndpoint(endpoint);
+    logger.mcp.debug(`[MCPProviderService] Fetching from API: ${resolvedEndpoint}`);
+
+    const response = await fetch(resolvedEndpoint, {
       headers: {
         'Accept': 'application/json',
         'User-Agent': 'Levante-MCP-Client/1.0'
@@ -113,131 +98,137 @@ export class MCPProviderService {
     });
 
     if (!response.ok) {
-      throw new Error(`API fetch failed: ${response.status} ${response.statusText}`);
+      throw new Error(`API request failed: ${response.status} ${response.statusText}`);
     }
 
-    return response.json();
+    const data = await response.json();
+    return data as LevanteAPIResponse;
   }
 
   /**
-   * Normalize Levante (local) registry
+   * Transforms API response to internal registry format
    */
-  private normalizeLevante(data: MCPRegistry, source: string): MCPRegistryEntry[] {
-    return data.entries.map(entry => ({
-      ...entry,
-      source
-    }));
+  private transformAPIResponse(apiResponse: LevanteAPIResponse): MCPRegistryEntry[] {
+    return apiResponse.servers.map(server => this.transformServer(server));
   }
 
   /**
-   * Normalize AITempl response
+   * Transforms an individual server from API format to internal registry format
    */
-  private normalizeAitempl(data: AitemplResponse, source: string): MCPRegistryEntry[] {
-    return data.mcps.map(server => {
-      // Parse the content JSON to extract server configuration
-      let command = 'npx';
-      let args: string[] = [];
-      let env: Record<string, string> = {};
+  private transformServer(server: LevanteAPIServer): MCPRegistryEntry {
+    // Generate configuration fields from inputs
+    const fields: MCPConfigField[] = this.generateFieldsFromInputs(server.inputs || {});
 
-      try {
-        const contentObj = JSON.parse(server.content);
-        const mcpServers = contentObj.mcpServers;
-        if (mcpServers) {
-          // Get the first server from mcpServers object
-          const serverKey = Object.keys(mcpServers)[0];
-          if (serverKey && mcpServers[serverKey]) {
-            const serverConfig = mcpServers[serverKey];
-            command = serverConfig.command || 'npx';
-            args = serverConfig.args || [];
-            env = serverConfig.env || {};
-          }
-        }
-      } catch (e) {
-        logger.mcp.warn('Failed to parse AITempl server content', {
-          serverName: server.name,
-          error: e instanceof Error ? e.message : e
-        });
-      }
+    // Build template from server configuration or generate defaults
+    const template = this.buildTemplate(server);
 
+    return {
+      id: server.id,
+      name: server.name,
+      description: server.description,
+      category: server.category,
+      icon: server.icon,
+      logoUrl: server.logoUrl,
+      source: server.source,  // "official" | "community"
+      maintainer: server.maintainer,
+      status: server.status || 'active',
+      version: server.version,
+      transport: {
+        type: server.transport,
+        autoDetect: true
+      },
+      configuration: {
+        fields,
+        defaults: this.extractDefaults(server),
+        template: template as MCPRegistryEntry['configuration']['template']
+      },
+      metadata: server.metadata
+    };
+  }
+
+  /**
+   * Generates configuration fields from API inputs definition
+   */
+  private generateFieldsFromInputs(inputs: Record<string, InputDefinition>): MCPConfigField[] {
+    const fields: MCPConfigField[] = [];
+
+    for (const [key, input] of Object.entries(inputs)) {
+      fields.push({
+        key,
+        label: input.label || key,
+        type: input.type || 'string',
+        required: input.required ?? true,
+        description: input.description,
+        placeholder: input.default || '',
+        defaultValue: input.default
+      });
+    }
+
+    return fields;
+  }
+
+  /**
+   * Builds configuration template from server data
+   * Uses API-provided template if available, otherwise generates from inputs
+   */
+  private buildTemplate(server: LevanteAPIServer): Record<string, unknown> {
+    // If API provides a template, use it directly
+    if (server.configuration?.template) {
       return {
-        id: `${source}-${server.name}`,
-        name: server.name,
-        description: server.description || '',
-        category: server.category || 'general',
-        icon: 'server',
-        transport: { type: 'stdio' as const, autoDetect: true },
-        source,
-        configuration: {
-          fields: Object.keys(env).map(key => ({
-            key,
-            label: key,
-            type: 'string',
-            required: true,
-            description: `Environment variable: ${key}`,
-            placeholder: env[key]
-          })),
-          defaults: { command, args: args.join(' ') },
-          template: {
-            type: 'stdio' as const,
-            command,
-            args,
-            env
-          }
-        },
-        metadata: {
-          useCount: server.downloads
-        }
+        type: server.transport,
+        ...server.configuration.template
       };
-    });
+    }
+
+    // Generate template based on transport type
+    if (server.transport === 'stdio') {
+      return {
+        type: 'stdio',
+        command: 'npx',
+        args: [],
+        env: this.extractInputDefaults(server.inputs || {})
+      };
+    }
+
+    // For sse/streamable-http
+    return {
+      type: server.transport,
+      url: server.metadata?.homepage || '',
+      headers: {}
+    };
   }
 
   /**
-   * Main method: sync provider and return normalized entries
+   * Extracts default values from inputs definition
    */
-  async syncProvider(provider: MCPProvider): Promise<MCPRegistryEntry[]> {
-    logger.mcp.info('Syncing provider', { providerId: provider.id, type: provider.type });
+  private extractInputDefaults(inputs: Record<string, InputDefinition>): Record<string, string> {
+    const defaults: Record<string, string> = {};
 
-    try {
-      let entries: MCPRegistryEntry[];
-
-      if (provider.type === 'local') {
-        const rawData = await this.fetchFromLocal(provider.endpoint);
-        entries = this.normalizeLevante(rawData, provider.id);
-      } else if (provider.type === 'api') {
-        const rawData = await this.fetchFromAPI(provider.endpoint);
-
-        // Route to correct normalizer based on provider ID
-        if (provider.id === 'aitempl') {
-          entries = this.normalizeAitempl(rawData as AitemplResponse, provider.id);
-        } else {
-          logger.mcp.warn('No normalizer for API provider', { providerId: provider.id });
-          entries = [];
-        }
-      } else {
-        // TODO: Add support for github provider type in the future
-        logger.mcp.warn('Provider type not yet supported', {
-          providerId: provider.id,
-          type: provider.type
-        });
-        return [];
+    for (const [key, input] of Object.entries(inputs)) {
+      if (input.default) {
+        defaults[key] = input.default;
       }
-
-      // Cache the results
-      await mcpCacheService.setCache(provider.id, entries);
-
-      logger.mcp.info('Provider synced successfully', {
-        providerId: provider.id,
-        entryCount: entries.length
-      });
-
-      return entries;
-    } catch (error) {
-      logger.mcp.error('Failed to sync provider', {
-        providerId: provider.id,
-        error: error instanceof Error ? error.message : error
-      });
-      throw error;
     }
+
+    return defaults;
+  }
+
+  /**
+   * Extracts defaults for UI form population
+   */
+  private extractDefaults(server: LevanteAPIServer): Record<string, unknown> {
+    const defaults: Record<string, unknown> = {};
+
+    // Extract defaults from inputs
+    if (server.inputs) {
+      for (const [key, input] of Object.entries(server.inputs)) {
+        if (input.default !== undefined) {
+          defaults[key] = input.default;
+        }
+      }
+    }
+
+    return defaults;
   }
 
   /**
@@ -251,7 +242,8 @@ export class MCPProviderService {
    * Check if cache is valid
    */
   async isCacheValid(providerId: string, maxAgeMs?: number): Promise<boolean> {
-    return mcpCacheService.isCacheValid(providerId, maxAgeMs || this.defaultCacheMaxAge);
+    const defaultCacheMaxAge = 60 * 60 * 1000; // 1 hour
+    return mcpCacheService.isCacheValid(providerId, maxAgeMs || defaultCacheMaxAge);
   }
 
   /**
@@ -262,5 +254,4 @@ export class MCPProviderService {
   }
 }
 
-// Singleton instance
 export const mcpProviderService = new MCPProviderService();

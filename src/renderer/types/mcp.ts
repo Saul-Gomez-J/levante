@@ -1,35 +1,108 @@
+// =============================================================================
+// API Response Types (from Levante MCP Store API)
+// =============================================================================
+
+export interface LevanteAPIResponse {
+  version: string;
+  provider: {
+    id: string;
+    name: string;
+    homepage?: string;
+  };
+  servers: LevanteAPIServer[];
+}
+
+export interface LevanteAPIServer {
+  id: string;
+  name: string;
+  description: string;
+  category: MCPCategory;
+  icon?: string;
+  logoUrl?: string;
+  source: MCPSource;  // "official" | "community"
+  maintainer?: MCPMaintainer;
+  status?: MCPStatus;
+  version?: string;
+  transport: 'stdio' | 'http' | 'sse' | 'streamable-http';
+  inputs?: Record<string, InputDefinition>;
+  configuration?: {
+    template?: Record<string, unknown>;
+  };
+  metadata?: MCPMetadata;
+}
+
+export type MCPCategory =
+  | 'documentation'
+  | 'development'
+  | 'database'
+  | 'automation'
+  | 'ai'
+  | 'communication'
+  | 'productivity'
+  | 'other';
+
+export type MCPSource = 'official' | 'community';
+
+export type MCPStatus = 'active' | 'deprecated' | 'experimental';
+
+export interface MCPMaintainer {
+  name: string;
+  url?: string;
+  github?: string;
+}
+
+export interface MCPMetadata {
+  homepage?: string;
+  repository?: string;
+  author?: string;
+  addedAt?: string;
+  lastUpdated?: string;
+}
+
+export interface InputDefinition {
+  label: string;
+  required: boolean;
+  type: 'string' | 'password' | 'number' | 'boolean';
+  default?: string;
+  description?: string;
+}
+
+// Legacy alias for backwards compatibility
+export type EnvFieldConfig = InputDefinition;
+
+// =============================================================================
+// Internal Registry Types (transformed from API)
+// =============================================================================
+
 export interface MCPRegistryEntry {
   id: string;
   name: string;
   description: string;
-  category: string;
-  icon: string;
+  category: MCPCategory;
+  icon?: string;
+  logoUrl?: string;
+  source: MCPSource;  // "official" | "community" - used for filtering
+  maintainer?: MCPMaintainer;
+  status?: MCPStatus;
+  version?: string;
   transport: {
-    type: 'stdio' | 'http' | 'sse';
+    type: 'stdio' | 'http' | 'sse' | 'streamable-http';
     autoDetect: boolean;
   };
   configuration: {
     fields: MCPConfigField[];
-    defaults?: Record<string, any>;
+    defaults?: Record<string, unknown>;
     template?: {
-      type: 'stdio' | 'http' | 'sse';
+      type: 'stdio' | 'http' | 'sse' | 'streamable-http';
       command?: string;
       args?: string[];
       env?: Record<string, string>;
-      baseUrl?: string;
+      url?: string;
+      baseUrl?: string;  // Legacy support
       headers?: Record<string, string>;
     };
   };
-  // Provider source
-  source?: string; // 'levante' | 'smithery' | 'mcp-so' | 'awesome-mcp' | etc.
-  // Additional metadata from external providers
-  metadata?: {
-    useCount?: number;
-    homepage?: string;
-    author?: string;
-    repository?: string;
-    path?: string;
-  };
+  metadata?: MCPMetadata;
 }
 
 export interface MCPProvider {
@@ -37,30 +110,22 @@ export interface MCPProvider {
   name: string;
   description: string;
   icon: string;
-  type: 'local' | 'github' | 'api';
+  type: 'api';  // Solo tipo API ahora
   endpoint: string;
   enabled: boolean;
   homepage?: string;
   lastSynced?: string;
   serverCount?: number;
-  // Type-specific configuration
-  config?: {
-    branch?: string;        // For GitHub
-    path?: string;          // Path to registry file
-    authRequired?: boolean;
-    authToken?: string;
-  };
 }
 
 export interface MCPConfigField {
   key: string;
   label: string;
-  type: 'text' | 'password' | 'select' | 'number' | 'boolean' | 'textarea';
+  type: 'string' | 'password' | 'number' | 'boolean';
   required: boolean;
-  description: string;
+  description?: string;
   placeholder?: string;
-  options?: string[];
-  defaultValue?: any;
+  defaultValue?: string;
 }
 
 export interface MCPRegistry {
@@ -77,12 +142,13 @@ export interface MCPServerConfig {
   url?: string;
   baseUrl?: string; // Legacy support, prefer 'url'
   headers?: Record<string, string>;
-  transport: 'stdio' | 'http' | 'sse';
+  transport: 'stdio' | 'http' | 'sse' | 'streamable-http';
   enabled?: boolean;  // Added by listServers(), not stored in JSON
   runtime?: {
-    type?: 'node' | 'python';
+    type?: string;
     version?: string;
-    source?: 'system' | 'shared';
+    source?: 'system' | 'levante';
+    path?: string;
   };
 }
 

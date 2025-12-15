@@ -44,9 +44,10 @@ export class ModelFetchService {
 
   // Fetch Vercel AI Gateway models
   static async fetchGatewayModels(apiKey: string, baseUrl: string = 'https://ai-gateway.vercel.sh/v1'): Promise<any[]> {
+    let normalizedBaseUrl = baseUrl;
     try {
       // Normalize endpoint (add http:// if missing)
-      const normalizedBaseUrl = normalizeEndpoint(baseUrl);
+      normalizedBaseUrl = normalizeEndpoint(baseUrl);
 
       // Validate baseUrl format and protocol
       const validation = validateLocalEndpoint(normalizedBaseUrl);

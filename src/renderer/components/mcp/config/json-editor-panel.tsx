@@ -121,8 +121,8 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
 
       // Support both 'url' (new) and 'baseUrl' (legacy)
       const serverUrl = parsed.url || parsed.baseUrl;
-      if ((transportType === 'http' || transportType === 'sse') && !serverUrl) {
-        return { valid: false, error: 'Missing required field: url (for http/sse transport)' };
+      if ((transportType === 'http' || transportType === 'sse' || transportType === 'streamable-http') && !serverUrl) {
+        return { valid: false, error: 'Missing required field: url (for http/sse/streamable-http transport)' };
       }
 
       return { valid: true, data: parsed };
