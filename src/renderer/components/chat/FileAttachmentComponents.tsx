@@ -8,7 +8,7 @@
  */
 
 import { Button } from '@/components/ui/button';
-import { PaperclipIcon, XIcon, ImageIcon, MicIcon, VideoIcon } from 'lucide-react';
+import { PaperclipIcon, XIcon, ImageIcon, MicIcon, VideoIcon, FileTextIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { MessageAttachment } from '../../../types/database';
 
@@ -111,7 +111,8 @@ function FilePreviewItem({ file, onRemove }: FilePreviewItemProps) {
   const isImage = mimeType.startsWith('image/');
   const isAudio = mimeType.startsWith('audio/');
   const isVideo = mimeType.startsWith('video/');
-  const Icon = isImage ? ImageIcon : isVideo ? VideoIcon : isAudio ? MicIcon : PaperclipIcon;
+  const isPDF = mimeType === 'application/pdf';
+  const Icon = isImage ? ImageIcon : isVideo ? VideoIcon : isAudio ? MicIcon : isPDF ? FileTextIcon : PaperclipIcon;
 
   // Create preview URL for images and videos
   const previewUrl = isFile && (isImage || isVideo) ? URL.createObjectURL(file) : null;

@@ -11,6 +11,7 @@ import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import { getRendererLogger } from '@/services/logger';
 import type { Model } from '../../types/models';
+import type { ModelCapabilities } from '../../types/modelCategories';
 
 const logger = getRendererLogger();
 
@@ -22,6 +23,8 @@ const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const MIN_IMAGE_DIMENSION = 256; // px for inference image tasks
 const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp'];
 const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp3', 'audio/flac', 'audio/m4a'];
+const ALLOWED_PDF_TYPES = ['application/pdf'];
+const MAX_PDF_SIZE = 25 * 1024 * 1024; // 25MB for PDFs
 
 // ============================================================================
 // Types
@@ -29,7 +32,7 @@ const ALLOWED_AUDIO_TYPES = ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp3'
 
 export interface SavedAttachment {
   id: string;
-  type: 'image' | 'audio' | 'video';
+  type: 'image' | 'audio' | 'video' | 'document';
   filename: string;
   mimeType: string;
   size: number;
@@ -46,7 +49,7 @@ export interface AttachmentDataForInference {
 
 interface UseFileAttachmentsOptions {
   modelTaskType?: string;
-  modelCapabilities?: string[];
+  modelCapabilities?: ModelCapabilities;
   isStreaming?: boolean;
 }
 
@@ -110,10 +113,17 @@ export function useFileAttachments(options: UseFileAttachmentsOptions = {}): Use
   const [isDragging, setIsDragging] = useState(false);
 
   // Check if model supports file attachments
-  const supportsFileAttachment = !!(
-    (modelTaskType && ['image-text-to-text', 'image-to-image'].includes(modelTaskType)) ||
-    modelCapabilities?.includes('vision')
-  );
+  // Always enabled - hybrid PDF support and validation happens at processing time
+  const supportsFileAttachment = true;
+
+  // Debug logging
+  logger.core.debug('File attachment support check', {
+    supportsFileAttachment,
+    modelTaskType,
+    hasModelCapabilities: !!modelCapabilities,
+    supportsVision: modelCapabilities?.supportsVision,
+    isStreaming,
+  });
 
   // Get allowed MIME types based on current model task type
   const getAllowedMimeTypes = useCallback((): string[] => {
@@ -122,7 +132,9 @@ export function useFileAttachments(options: UseFileAttachmentsOptions = {}): Use
       case 'image-to-image':
         return ALLOWED_IMAGE_TYPES;
       default:
-        return ALLOWED_IMAGE_TYPES;
+        // Hybrid support: Vision models get images+PDF, others get images+PDF (via extraction)
+        // Ideally we should allow PDF for everyone now.
+        return [...ALLOWED_IMAGE_TYPES, ...ALLOWED_PDF_TYPES];
     }
   }, [modelTaskType]);
 
@@ -133,31 +145,24 @@ export function useFileAttachments(options: UseFileAttachmentsOptions = {}): Use
       case 'image-to-image':
         return 'images';
       default:
-        return 'images';
+        return 'images or PDFs';
     }
   }, [modelTaskType]);
 
   // Get file accept attribute based on model task type
   const getFileAccept = useCallback((): string => {
-    if (modelCapabilities?.includes('vision')) {
-      return 'image/*';
-    }
-
-    switch (modelTaskType) {
-      case 'image-text-to-text':
-      case 'image-to-image':
-        return 'image/*';
-      default:
-        return 'image/*';
-    }
-  }, [modelTaskType, modelCapabilities]);
+    // Always allow PDF + Images for generic chat (hybrid support)
+    return 'image/*,.pdf,application/pdf';
+  }, []);
 
   // Get attachment button title based on model task type
   const getAttachmentTitle = useCallback((): string => {
-    if (modelCapabilities?.includes('vision')) {
-      return 'Attach image for multimodal chat';
+    // If model supports vision natively or via hybrid text extraction
+    if (modelCapabilities?.supportsVision || true) { // Always true due to hybrid support, but keeping logic clear
+      return 'Attach images or PDFs';
     }
-
+    // This part of the code is effectively unreachable due to `|| true` above.
+    // It's kept here for context if the `|| true` condition were to be removed.
     switch (modelTaskType) {
       case 'image-text-to-text':
         return 'Attach image for multimodal chat';
@@ -178,12 +183,15 @@ export function useFileAttachments(options: UseFileAttachmentsOptions = {}): Use
 
     for (const file of files) {
       // Check file size
-      if (file.size > MAX_FILE_SIZE) {
-        errors.push(`${file.name}: File size exceeds 10MB limit`);
+      const isPDF = file.type === 'application/pdf';
+      const maxSize = isPDF ? MAX_PDF_SIZE : MAX_FILE_SIZE;
+
+      if (file.size > maxSize) {
+        errors.push(`${file.name}: File size exceeds ${maxSize / (1024 * 1024)}MB limit`);
         logger.core.warn('File size exceeds limit', {
           filename: file.name,
           size: file.size,
-          maxSize: MAX_FILE_SIZE,
+          maxSize,
         });
         continue;
       }
@@ -268,12 +276,13 @@ export function useFileAttachments(options: UseFileAttachmentsOptions = {}): Use
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!supportsFileAttachment || isStreaming) return;
+    // Match AddContextMenu behavior: only disabled when streaming
+    if (isStreaming) return;
 
     if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
       setIsDragging(true);
     }
-  }, [supportsFileAttachment, isStreaming]);
+  }, [isStreaming]);
 
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -295,13 +304,14 @@ export function useFileAttachments(options: UseFileAttachmentsOptions = {}): Use
     e.stopPropagation();
     setIsDragging(false);
 
-    if (!supportsFileAttachment || isStreaming) return;
+    // Match AddContextMenu behavior: only disabled when streaming
+    if (isStreaming) return;
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {
       await handleFilesSelected(files);
     }
-  }, [supportsFileAttachment, isStreaming, handleFilesSelected]);
+  }, [isStreaming, handleFilesSelected]);
 
   // Process and save attachments to disk
   const processAttachments = useCallback(async (
