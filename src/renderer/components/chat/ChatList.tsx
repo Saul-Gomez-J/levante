@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, MessageSquare, Plus, Trash2, MoreVertical, Pencil } from 'lucide-react';
+import { Search, Plus, Trash2, MoreVertical, Pencil } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -131,21 +131,11 @@ export function ChatList({
       <div className="p-4 border-b">
         <Button
           onClick={onNewChat}
-          className="w-full mb-2 justify-start gap-2"
+          className="w-full mb-3 justify-start gap-2"
           disabled={loading}
         >
           <Plus size={16} />
           {t('chat_list.new_chat')}
-        </Button>
-
-        <Button
-          onClick={() => window.levante.openExternal('https://www.levanteapp.com/feedback')}
-          variant="outline"
-          className="w-full mb-3 justify-start gap-2"
-          disabled={loading}
-        >
-          <MessageSquare size={16} />
-          {t('chat_list.feedback')}
         </Button>
 
         {/* Search */}
