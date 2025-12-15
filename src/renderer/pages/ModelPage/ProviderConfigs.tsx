@@ -239,8 +239,9 @@ export const CloudConfig = ({ provider }: { provider: ProviderConfig }) => {
 
   const handleSave = async () => {
     const updates: any = { apiKey };
-    if (organizationId) updates.organizationId = organizationId;
-    if (projectId) updates.projectId = projectId;
+    // Always include organizationId/projectId to allow clearing them
+    updates.organizationId = organizationId.trim() || undefined;
+    updates.projectId = projectId.trim() || undefined;
     await updateProvider(provider.id, updates);
 
     // Auto-sync for dynamic providers after saving API key

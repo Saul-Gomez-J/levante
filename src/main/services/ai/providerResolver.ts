@@ -236,7 +236,8 @@ function configureOpenAI(provider: ProviderConfig, modelId: string) {
 
   const openaiProvider = createOpenAI({
     apiKey: provider.apiKey,
-    organization: provider.organizationId,
+    // Only pass organization if explicitly set and not empty
+    ...(provider.organizationId?.trim() && { organization: provider.organizationId.trim() }),
   });
 
   return openaiProvider(modelId);
