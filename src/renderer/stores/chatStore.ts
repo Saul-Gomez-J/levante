@@ -41,7 +41,8 @@ interface ChatStore {
   startNewChat: () => void;
 
   // Message persistence (called by useChat onFinish callback)
-  persistMessage: (message: UIMessage) => Promise<void>;
+  // Returns generated content if attachments were converted to text markers
+  persistMessage: (message: UIMessage) => Promise<{ generatedContent?: string } | void>;
   loadHistoricalMessages: (sessionId: string) => Promise<UIMessage[]>;
 
   // Deep link actions
@@ -334,7 +335,7 @@ export const useChatStore = create<ChatStore>()(
       },
 
       // Message persistence
-      persistMessage: async (message: UIMessage) => {
+      persistMessage: async (message: UIMessage): Promise<{ generatedContent?: string } | void> => {
         const { currentSession } = get();
 
         if (!currentSession) {
@@ -342,13 +343,42 @@ export const useChatStore = create<ChatStore>()(
           return;
         }
 
+        let generatedContent: string | undefined;
+
         try {
           // Extract text content from parts
           const textParts = message.parts.filter((p) => p.type === 'text');
-          const content = textParts
+          let content = textParts
             .map((p: any) => p.text)
             .join('\n')
             .trim();
+
+          // Extract attachments if present (from UIMessage extension)
+          const attachments = (message as any).attachments || undefined;
+
+          // If no text content but has attachments, generate hidden content marker for AI context
+          if (!content && attachments && attachments.length > 0) {
+            // Get base path for absolute paths
+            const basePathResult = await window.levante.attachments.getBasePath();
+            const basePath = basePathResult.success ? basePathResult.data : '';
+
+            content = attachments
+              .map((att: any) => {
+                const relativePath = att.path || att.storagePath;
+                const absolutePath = basePath ? `${basePath}/${relativePath}` : relativePath;
+                return `[attachment:${att.type}:${absolutePath}:${att.filename}]`;
+              })
+              .join('\n');
+
+            // Store generated content to return to caller
+            generatedContent = content;
+
+            logger.core.info('Generated content from attachments', {
+              messageId: message.id,
+              attachmentCount: attachments.length,
+              generatedContent: content,
+            });
+          }
 
           // Extract tool calls from parts
           const toolCallParts = message.parts.filter((p) =>
@@ -365,9 +395,6 @@ export const useChatStore = create<ChatStore>()(
               status: part.state === 'output-available' ? 'success' : part.state,
             }));
           }
-
-          // Extract attachments if present (from UIMessage extension)
-          const attachments = (message as any).attachments || undefined;
 
           // Debug: Log attachments being persisted
           if (attachments) {
@@ -435,6 +462,11 @@ export const useChatStore = create<ChatStore>()(
           logger.database.error('Error persisting message', {
             error: err instanceof Error ? err.message : err,
           });
+        }
+
+        // Return generated content if any (for updating UI state)
+        if (generatedContent) {
+          return { generatedContent };
         }
       },
 

@@ -49,4 +49,9 @@ export const attachmentsApi = {
    * Get storage statistics
    */
   stats: () => ipcRenderer.invoke('levante/attachments/stats'),
+
+  /**
+   * Get base path for attachments storage
+   */
+  getBasePath: () => ipcRenderer.invoke('levante/attachments/base-path'),
 };

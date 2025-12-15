@@ -164,5 +164,14 @@ export function setupAttachmentHandlers() {
     }
   });
 
+  // Get base path for attachments
+  ipcMain.removeHandler('levante/attachments/base-path');
+  ipcMain.handle('levante/attachments/base-path', () => {
+    return {
+      success: true,
+      data: attachmentStorage.getBasePath()
+    };
+  });
+
   logger.ipc.info('Attachment IPC handlers registered');
 }
