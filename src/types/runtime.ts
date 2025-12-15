@@ -1,5 +1,6 @@
 export type RuntimeType = 'node' | 'python';
 export type RuntimeSource = 'system' | 'shared';
+export type RuntimeErrorType = 'RUNTIME_NOT_FOUND' | 'RUNTIME_CHOICE_REQUIRED';
 
 export interface RuntimeConfig {
   type: RuntimeType;

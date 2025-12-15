@@ -133,7 +133,7 @@ export const BLOCKED_NODE_FLAGS = [
  * Valid npm package name regex
  * Matches: @scope/package-name or package-name
  */
-export const NPM_PACKAGE_REGEX = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+export const NPM_PACKAGE_REGEX = /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*(?:@[a-zA-Z0-9.+_-]+)?$/;
 
 /**
  * Valid Python package name regex (PyPI naming conventions)
@@ -271,16 +271,9 @@ export function validateNpxPackage(packageName: string, args: string[] = []): vo
   // Check if package is in official whitelist
   const isOfficial = OFFICIAL_MCP_PACKAGES.includes(cleanPackageName as any);
 
+  // Whitelist is currently disabled for deep links; allow any valid package name.
   if (!isOfficial) {
-    // Check if it's at least from @modelcontextprotocol scope
-    if (!cleanPackageName.startsWith('@modelcontextprotocol/')) {
-      logger.mcp.warn('Package not in official whitelist', { packageName: cleanPackageName });
-      throw new Error(
-        `Package "${cleanPackageName}" is not in the official MCP packages whitelist. ` +
-        `For security reasons, only verified MCP packages can be installed via deep links. ` +
-        `Please install this package manually through the UI if you trust it.`
-      );
-    }
+    logger.mcp.warn('Package not in official whitelist (allowing)', { packageName: cleanPackageName });
   }
 
   // Check for dangerous npx flags in arguments
@@ -323,13 +316,9 @@ export function validateUvxPackage(packageName: string, args: string[] = []): vo
   // Check if package is in official whitelist
   const isOfficial = OFFICIAL_PYTHON_MCP_PACKAGES.includes(packageName as any);
 
+  // Whitelist is currently disabled for deep links; allow any valid package name.
   if (!isOfficial) {
-    logger.mcp.warn('Python package not in official whitelist', { packageName });
-    throw new Error(
-      `Package "${packageName}" is not in the official Python MCP packages whitelist. ` +
-      `For security reasons, only verified MCP packages can be installed via deep links. ` +
-      `Please install this package manually through the UI if you trust it.`
-    );
+    logger.mcp.warn('Python package not in official whitelist (allowing)', { packageName });
   }
 
   // Check for dangerous patterns in arguments

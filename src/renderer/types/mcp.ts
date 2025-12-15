@@ -2,6 +2,8 @@
 // API Response Types (from Levante MCP Store API)
 // =============================================================================
 
+import type { RuntimeType, RuntimeSource } from "../../types/runtime";
+
 export interface LevanteAPIResponse {
   version: string;
   provider: {
@@ -145,9 +147,9 @@ export interface MCPServerConfig {
   transport: "stdio" | "http" | "sse" | "streamable-http";
   enabled?: boolean; // Added by listServers(), not stored in JSON
   runtime?: {
-    type?: string;
+    type?: RuntimeType;
     version?: string;
-    source?: "system" | "shared" | "levante";
+    source?: RuntimeSource | "levante";
     path?: string;
   };
 }

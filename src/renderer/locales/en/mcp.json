@@ -270,5 +270,32 @@
     "maintainer_url": "Website",
     "install": "Install This Server",
     "already_installed": "Already Installed"
+  },
+  "deep_link": {
+    "title": "Add MCP Server from Deep Link",
+    "description": "Review the server configuration before adding it to Levante",
+    "source": "Source",
+    "cancel": "Cancel",
+    "add_button": "Add and Connect",
+    "adding": "Adding...",
+    "runtime_needed": "Runtime Required",
+    "runtime_needed_description": "This server needs a runtime to be installed. Please choose an option.",
+    "toasts": {
+      "invalid_config": "Invalid server configuration",
+      "adding_server": "Adding {{name}}...",
+      "add_failed": "Failed to add {{name}}",
+      "connecting_server": "Connecting {{name}}...",
+      "add_connect_success": "{{name}} added and connected!",
+      "add_connect_success_description": "The server is now active and ready to use",
+      "add_failed_connection": "Server added but connection failed",
+      "add_failed_connection_description": "You can try connecting manually from the Store page",
+      "add_error": "Failed to add server",
+      "connecting_system_runtime": "Connecting {{name}} with system runtime...",
+      "connected_system_runtime": "{{name}} connected successfully",
+      "failed_system_runtime": "Failed to connect with system runtime",
+      "installing_runtime": "Installing runtime for {{name}}...",
+      "runtime_installed": "Runtime installed and {{name}} connected!",
+      "failed_install_runtime": "Failed to install runtime: {{error}}"
+    }
   }
 }

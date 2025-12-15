@@ -37,17 +37,17 @@ levante://mcp/add?name=<server-name>&transport=<server-transport>&<config-params
 **Examples**:
 
 ```bash
-# Add stdio MCP server (single package argument)
+# Add stdio MCP server (no environment variables)
 levante://mcp/add?name=Memory%20Server&transport=stdio&command=npx&args=@modelcontextprotocol/server-memory
 
-# Add stdio MCP server (multiple arguments)
-levante://mcp/add?name=Custom%20Server&transport=stdio&command=node&args=server.js,--port,3000
+# Add stdio MCP server with environment variables (requires user input)
+levante://mcp/add?name=GitHub%20Server&transport=stdio&command=npx&args=-y,@modelcontextprotocol/server-github&env=%7B%22GITHUB_PERSONAL_ACCESS_TOKEN%22%3A%22%24%7BGITHUB_PERSONAL_ACCESS_TOKEN%7D%22%7D
 
-# Add HTTP MCP server
-levante://mcp/add?name=Custom%20Server&transport=http&url=http://localhost:3000
+# Add HTTP MCP server with Bearer token placeholder
+levante://mcp/add?name=Custom%20API&transport=http&url=https://api.example.com&headers=%7B%22Authorization%22%3A%22Bearer%20%24%7BAPI_TOKEN%7D%22%7D
 
-# Add SSE MCP server with headers
-levante://mcp/add?name=Secure%20Server&transport=sse&url=https://api.example.com&headers=%7B%22Authorization%22%3A%22Bearer%20token%22%7D
+# Add SSE MCP server with multiple env variables
+levante://mcp/add?name=Database%20Server&transport=sse&url=https://db.example.com&env=%7B%22DB_HOST%22%3A%22%24%7BDB_HOST%7D%22%2C%22DB_PASSWORD%22%3A%22%24%7BDB_PASSWORD%7D%22%7D
 ```
 
 **Behavior**:
@@ -73,6 +73,38 @@ levante://mcp/add?name=Secure%20Server&transport=sse&url=https://api.example.com
   - 🟡 Community Package: Community-developed packages
   - 🔴 Unknown Source: Unverified sources
 - **Test Mode**: Option to add servers as disabled for safe testing
+
+**Environment Variable Placeholders:**
+
+Deep links support placeholder syntax for environment variables that need user input:
+
+1. **Placeholder Format**: `${VARIABLE_NAME}`
+   - Variable names must be uppercase with underscores
+   - Examples: `${API_KEY}`, `${GITHUB_TOKEN}`, `${DATABASE_URL}`
+
+2. **Detection**: Levante automatically detects placeholders and prompts for values
+   - If placeholders are found, an input dialog appears before installation
+   - User must provide values for all required placeholders
+
+3. **Field Type Detection**:
+   - Variables with `PASSWORD`, `SECRET`, `TOKEN`, or `KEY` in the name → password field (hidden input)
+   - Other variables → text field (visible input)
+
+4. **Example with env parameter**:
+```json
+{
+  "API_KEY": "${API_KEY}",
+  "DATABASE_URL": "${DATABASE_URL}",
+  "SECRET_TOKEN": "${SECRET_TOKEN}"
+}
+```
+
+When URL-encoded:
+```
+env=%7B%22API_KEY%22%3A%22%24%7BAPI_KEY%7D%22%2C%22DATABASE_URL%22%3A%22%24%7BDATABASE_URL%7D%22%7D
+```
+
+5. **Replacement**: Placeholders are replaced with user-provided values before saving the configuration
 
 ---
 
