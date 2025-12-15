@@ -59,6 +59,37 @@ export class MCPConfigurationManager {
     return sanitized;
   }
 
+  /**
+   * Normalize server config for consistent storage format
+   * Ensures compatibility with Claude Desktop configuration format
+   */
+  private normalizeServerConfig(config: any): any {
+    const normalized = { ...config };
+
+    // Normalize 'type' to 'transport' if needed (Claude Desktop compatibility)
+    if (normalized.type && !normalized.transport) {
+      normalized.transport = normalized.type;
+      delete normalized.type;
+    }
+
+    // Normalize 'url' to 'baseUrl' if needed
+    if (normalized.url && !normalized.baseUrl) {
+      normalized.baseUrl = normalized.url;
+      delete normalized.url;
+    }
+
+    // Auto-detect transport if not provided
+    if (!normalized.transport) {
+      if (normalized.command) {
+        normalized.transport = 'stdio';
+      } else if (normalized.baseUrl) {
+        normalized.transport = 'http';
+      }
+    }
+
+    return normalized;
+  }
+
   async loadConfiguration(): Promise<MCPConfiguration> {
     try {
       const content = await fs.readFile(this.configPath, 'utf-8');
@@ -116,8 +147,11 @@ export class MCPConfigurationManager {
     // Sanitize config to prevent prototype pollution
     const sanitizedConfig = this.sanitizeServerConfig(config);
 
+    // Normalize config for consistent storage format
+    const normalizedConfig = this.normalizeServerConfig(sanitizedConfig);
+
     // Extract id and create server config without id
-    const { id, ...serverConfig } = sanitizedConfig;
+    const { id, ...serverConfig } = normalizedConfig;
     currentConfig.mcpServers[id] = serverConfig;
 
     await this.saveConfiguration(currentConfig);
@@ -152,11 +186,14 @@ export class MCPConfigurationManager {
     // Sanitize config to prevent prototype pollution
     const sanitizedConfig = this.sanitizeServerConfig(config);
 
+    // Normalize config for consistent storage format
+    const normalizedConfig = this.normalizeServerConfig(sanitizedConfig);
+
     // Check in mcpServers (active)
     if (currentConfig.mcpServers[serverId]) {
       currentConfig.mcpServers[serverId] = {
         ...currentConfig.mcpServers[serverId],
-        ...sanitizedConfig
+        ...normalizedConfig
       };
       await this.saveConfiguration(currentConfig);
     }
@@ -164,7 +201,7 @@ export class MCPConfigurationManager {
     else if (currentConfig.disabled && currentConfig.disabled[serverId]) {
       currentConfig.disabled[serverId] = {
         ...currentConfig.disabled[serverId],
-        ...sanitizedConfig
+        ...normalizedConfig
       };
       await this.saveConfiguration(currentConfig);
     }
@@ -184,28 +221,7 @@ export class MCPConfigurationManager {
       return null;
     }
 
-    const normalized: any = { ...serverConfig };
-
-    // Normalize 'type' to 'transport' if needed
-    if (normalized.type && !normalized.transport) {
-      normalized.transport = normalized.type;
-      delete normalized.type;
-    }
-
-    // Normalize 'url' to 'baseUrl' if needed
-    if (normalized.url && !normalized.baseUrl) {
-      normalized.baseUrl = normalized.url;
-      delete normalized.url;
-    }
-
-    // Auto-detect transport if not provided
-    if (!normalized.transport) {
-      if (normalized.command) {
-        normalized.transport = 'stdio';
-      } else if (normalized.baseUrl) {
-        normalized.transport = 'http';
-      }
-    }
+    const normalized = this.normalizeServerConfig(serverConfig);
 
     return {
       id: serverId,
@@ -218,28 +234,7 @@ export class MCPConfigurationManager {
 
     // Helper to normalize server config
     const normalizeServer = (id: string, serverConfig: any, enabled: boolean): MCPServerConfig => {
-      const normalized: any = { ...serverConfig };
-
-      // Convert 'type' to 'transport' if needed (Claude Desktop compatibility)
-      if (normalized.type && !normalized.transport) {
-        normalized.transport = normalized.type;
-        delete normalized.type;
-      }
-
-      // Normalize 'url' to 'baseUrl' if needed
-      if (normalized.url && !normalized.baseUrl) {
-        normalized.baseUrl = normalized.url;
-        delete normalized.url;
-      }
-
-      // Auto-detect transport if not provided
-      if (!normalized.transport) {
-        if (normalized.command) {
-          normalized.transport = 'stdio';
-        } else if (normalized.baseUrl) {
-          normalized.transport = 'http';
-        }
-      }
+      const normalized = this.normalizeServerConfig(serverConfig);
 
       return {
         id,
@@ -274,33 +269,9 @@ export class MCPConfigurationManager {
     // Normalize imported servers
     const normalizedServers: Record<string, any> = {};
     for (const [serverId, serverConfig] of Object.entries(importedConfig.mcpServers)) {
-      const normalized: any = { ...serverConfig };
-
-      // Normalize 'url' to 'baseUrl' if needed
-      if (normalized.url && !normalized.baseUrl) {
-        normalized.baseUrl = normalized.url;
-        delete normalized.url;
-        this.logger.mcp.debug('Normalized url to baseUrl for imported server', { serverId });
-      }
-
-      // Auto-detect transport type if missing
-      // We use 'type' for compatibility with Claude Desktop
-      if (!normalized.type && !normalized.transport) {
-        if (normalized.command) {
-          // Has command → stdio transport
-          normalized.type = 'stdio';
-          this.logger.mcp.debug('Auto-detected stdio transport for imported server', { serverId });
-        } else if (normalized.baseUrl) {
-          // Has baseUrl → default to http (user can change to sse if needed)
-          normalized.type = 'http';
-          this.logger.mcp.debug('Auto-detected http transport for imported server', { serverId });
-        } else {
-          this.logger.mcp.warn('Cannot auto-detect transport type for server, defaulting to stdio', { serverId });
-          normalized.type = 'stdio';
-        }
-      }
-
+      const normalized = this.normalizeServerConfig(serverConfig);
       normalizedServers[serverId] = normalized;
+      this.logger.mcp.debug('Normalized imported server configuration', { serverId });
     }
 
     // Merge with existing configuration
