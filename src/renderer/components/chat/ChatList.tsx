@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, MessageSquare, Plus, Trash2, MoreVertical, Pencil } from 'lucide-react';
+import { Search, Plus, Trash2, MoreVertical, Pencil } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {

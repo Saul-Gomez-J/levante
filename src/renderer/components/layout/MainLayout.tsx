@@ -85,11 +85,11 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
           )}
         </SidebarContent>
         <SidebarFooter>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={() => onPageChange?.('store')}
-                isActive={currentPage === 'store'}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={() => onPageChange?.('store')}
+              isActive={currentPage === 'store'}
               >
                 <Store className="w-4 h-4" />
                 {t('navigation.mcp')}
@@ -110,14 +110,21 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
                 isActive={currentPage === 'settings'}
               >
                 <Settings className="w-4 h-4" />
-                {t('navigation.settings')}
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-          <div className="border-t pt-2">
-            <p className="text-xs text-muted-foreground text-center p-2">
-              v{version} • {platform}
-            </p>
+              {t('navigation.settings')}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+          <div className="border-t pt-2 px-2">
+            <Button
+              onClick={() => window.levante.openExternal('https://www.levanteapp.com/feedback')}
+              variant="outline"
+              className="w-full justify-start gap-2"
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span className="flex-1 text-left">
+                {t('actions.feedback')} {version ? `v${version}` : ''}
+              </span>
+            </Button>
           </div>
         </SidebarFooter>
       </Sidebar>

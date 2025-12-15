@@ -37,6 +37,7 @@
   },
   "chat_list": {
     "new_chat": "Nuevo Chat",
+    "feedback": "Feedback",
     "search_placeholder": "Buscar chats...",
     "loading": "Cargando chats...",
     "no_chats": "Aún no hay chats",
