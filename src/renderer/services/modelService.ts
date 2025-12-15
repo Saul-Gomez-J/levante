@@ -1,4 +1,4 @@
-import type { Model, ProviderConfig } from '../../types/models';
+import type { Model, ProviderConfig, GroupedModelsByProvider, ProviderWithModels } from '../../types/models';
 import type { ModelCategory, SessionType } from '../../types/modelCategories';
 import { getRendererLogger } from '@/services/logger';
 import { migrateCloudProvider, migrateCloudProvidersToDynamic } from './model/migrations';
@@ -210,6 +210,81 @@ class ModelServiceImpl {
     }
 
     return activeProvider.models.filter(m => m.isAvailable);
+  }
+
+  // Get all providers with their selected models (for multi-provider selector)
+  async getAllProvidersWithSelectedModels(): Promise<GroupedModelsByProvider> {
+    const groupedResult: GroupedModelsByProvider = {
+      providers: [],
+      totalModelCount: 0
+    };
+
+    // 1. Refresh dynamic providers if needed (smart sync)
+    // We don't want to block UI, so we trust cache but trigger background sync if very old
+    const now = Date.now();
+    this.providers.forEach(provider => {
+      if (provider.modelSource === 'dynamic' &&
+        (!provider.lastModelSync || (now - provider.lastModelSync > 1000 * 60 * 5))) {
+        // Trigger sync but don't await it to keep UI snappy
+        // If it's critical, the user can refresh or we can await
+        this.syncProviderModels(provider.id).catch(err => {
+          logger.models.warn(`Background sync failed for ${provider.name}`, err);
+        });
+      }
+    });
+
+    // 2. Iterate through all providers
+    for (const provider of this.providers) {
+      if (!provider.models) continue;
+
+      let selectedModels: Model[] = [];
+
+      // Filter available and selected models
+      if (provider.modelSource === 'dynamic') {
+        const selectedIds = new Set(provider.selectedModelIds || []);
+        // Also check isSelected flag as fallback/redundancy
+        selectedModels = provider.models.filter(m =>
+          m.isAvailable &&
+          (selectedIds.has(m.id) || m.isSelected)
+        );
+      } else {
+        // User defined providers
+        selectedModels = provider.models.filter(m =>
+          m.isAvailable &&
+          m.isSelected !== false // Default to true if undefined
+        );
+      }
+
+      if (selectedModels.length > 0) {
+        groupedResult.providers.push({
+          provider,
+          models: selectedModels,
+          modelCount: selectedModels.length
+        });
+        groupedResult.totalModelCount += selectedModels.length;
+      }
+    }
+
+    // 3. Sort providers: Active first, then alphabetically
+    groupedResult.providers.sort((a, b) => {
+      if (a.provider.id === this.activeProviderId) return -1;
+      if (b.provider.id === this.activeProviderId) return 1;
+      return a.provider.name.localeCompare(b.provider.name);
+    });
+
+    return groupedResult;
+  }
+
+  // Find which provider owns a model
+  async getProviderForModel(modelId: string): Promise<string | null> {
+    for (const provider of this.providers) {
+      // Check if model exists in provider
+      const model = provider.models.find(m => m.id === modelId);
+      if (model) {
+        return provider.id;
+      }
+    }
+    return null;
   }
 
   // Toggle model selection

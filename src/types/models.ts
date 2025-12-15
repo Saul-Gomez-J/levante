@@ -47,6 +47,17 @@ export interface ProviderConfig {
   region?: string; // For AWS Bedrock (future)
 }
 
+export interface ProviderWithModels {
+  provider: ProviderConfig;
+  models: Model[];
+  modelCount: number;
+}
+
+export interface GroupedModelsByProvider {
+  providers: ProviderWithModels[];
+  totalModelCount: number;
+}
+
 export interface ModelService {
   fetchOpenRouterModels(apiKey?: string): Promise<Model[]>;
   fetchGatewayModels(apiKey: string, baseUrl: string): Promise<Model[]>;
@@ -54,5 +65,7 @@ export interface ModelService {
   getUserDefinedModels(providerId: string): Promise<Model[]>;
   syncProviderModels(providerId: string): Promise<Model[]>;
   getAvailableModels(): Promise<Model[]>;
+  getAllProvidersWithSelectedModels(): Promise<GroupedModelsByProvider>;
+  getProviderForModel(modelId: string): Promise<string | null>;
   getActiveProvider(): Promise<ProviderConfig | null>;
 }

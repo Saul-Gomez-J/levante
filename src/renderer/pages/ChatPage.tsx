@@ -98,6 +98,7 @@ const ChatPage = () => {
     setModel,
     availableModels,
     filteredAvailableModels,
+    groupedModelsByProvider,
     modelsLoading,
     currentModelInfo,
     modelTaskType,
@@ -725,6 +726,7 @@ const ChatPage = () => {
                 model={model}
                 onModelChange={handleModelChange}
                 availableModels={filteredAvailableModels}
+                groupedModelsByProvider={groupedModelsByProvider || undefined}
                 modelsLoading={modelsLoading}
                 status={status}
                 attachedFiles={attachedFiles}
@@ -779,6 +781,7 @@ const ChatPage = () => {
               model={model}
               onModelChange={handleModelChange}
               availableModels={filteredAvailableModels}
+              groupedModelsByProvider={groupedModelsByProvider || undefined}
               modelsLoading={modelsLoading}
               status={status}
               attachedFiles={attachedFiles}

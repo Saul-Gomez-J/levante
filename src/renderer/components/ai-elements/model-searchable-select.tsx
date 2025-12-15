@@ -23,16 +23,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { Check, ChevronsUpDown, Loader2, Filter, X } from 'lucide-react';
-import { useState, useMemo } from 'react';
-import type { Model } from '../../../types/models';
+import { Check, ChevronsUpDown, Loader2, Filter, X, ChevronRight, ChevronDown } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import type { Model, GroupedModelsByProvider } from '../../../types/models';
 import type { ModelCategory } from '../../../types/modelCategories';
 import { useTranslation } from 'react-i18next';
 
 export interface ModelSearchableSelectProps {
   value?: string;
   onValueChange?: (value: string) => void;
+
   models: Model[];
+  groupedModels?: GroupedModelsByProvider;
   loading?: boolean;
   placeholder?: string;
   className?: string;
@@ -42,6 +44,7 @@ export const ModelSearchableSelect = ({
   value,
   onValueChange,
   models,
+  groupedModels,
   loading = false,
   placeholder,
   className,
@@ -50,6 +53,19 @@ export const ModelSearchableSelect = ({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ModelCategory | null>(null);
+  const [collapsedProviders, setCollapsedProviders] = useState<Set<string>>(new Set());
+
+  // Toggle provider collapse
+  const toggleProviderCollapse = (providerId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const newCollapsed = new Set(collapsedProviders);
+    if (newCollapsed.has(providerId)) {
+      newCollapsed.delete(providerId);
+    } else {
+      newCollapsed.add(providerId);
+    }
+    setCollapsedProviders(newCollapsed);
+  };
 
   // Get category display name
   const getCategoryDisplayName = (category: ModelCategory): string => {
@@ -63,11 +79,19 @@ export const ModelSearchableSelect = ({
     return displayNames[category] || category;
   };
 
+  // Determine effective models list for categories: use all models from all providers if grouped
+  const effectiveModelsForCategories = useMemo(() => {
+    if (groupedModels) {
+      return groupedModels.providers.flatMap(p => p.models);
+    }
+    return models;
+  }, [models, groupedModels]);
+
   // Calculate available categories with counts
   const availableCategories = useMemo(() => {
     const counts = new Map<ModelCategory, number>();
 
-    models.forEach(model => {
+    effectiveModelsForCategories.forEach(model => {
       if (model.category) {
         counts.set(model.category, (counts.get(model.category) || 0) + 1);
       }
@@ -78,7 +102,7 @@ export const ModelSearchableSelect = ({
       count,
       label: getCategoryDisplayName(category)
     })).sort((a, b) => a.label.localeCompare(b.label));
-  }, [models]);
+  }, [effectiveModelsForCategories]);
 
   // Simple fuzzy search function
   const fuzzyMatch = (text: string, query: string): boolean => {
@@ -102,31 +126,95 @@ export const ModelSearchableSelect = ({
     return queryIndex === normalizedQuery.length;
   };
 
-  // Filter models based on category and search
-  const filteredModels = models
-    .filter(model => {
-      // Filter by category
-      if (selectedCategory && model.category !== selectedCategory) {
-        return false;
-      }
-      return true;
-    })
-    .filter(model =>
-      // Fuzzy search
-      fuzzyMatch(model.name, search) || fuzzyMatch(model.provider, search)
-    );
+  // Prepare display groups (supporting both legacy 'models' and new 'groupedModels')
+  const displayGroups = useMemo(() => {
+    // Helper to filter a list of models
+    const filterModels = (list: Model[]) => {
+      return list
+        .filter(model => {
+          // Filter by category
+          if (selectedCategory && model.category !== selectedCategory) {
+            return false;
+          }
+          return true;
+        })
+        .filter(model =>
+          // Fuzzy search
+          fuzzyMatch(model.name, search) || fuzzyMatch(model.provider, search)
+        );
+    };
 
-  // Group models by provider
-  const groupedModels = filteredModels.reduce((groups, model) => {
-    const provider = model.provider || 'Other';
-    if (!groups[provider]) {
-      groups[provider] = [];
+    if (groupedModels && groupedModels.providers.length > 0) {
+      // Use grouped models from service
+      return groupedModels.providers
+        .map(group => ({
+          id: group.provider.id,
+          name: group.provider.name,
+          models: filterModels(group.models),
+          originalCount: group.modelCount,
+          active: group.provider.isActive // For highlighting
+        }))
+        .filter(group => group.models.length > 0);
+    } else {
+      // Legacy fallback: group the 'models' prop manually
+      const filtered = filterModels(models);
+
+      const groups: Record<string, Model[]> = {};
+      filtered.forEach(model => {
+        const providerName = model.provider || 'Other';
+        if (!groups[providerName]) {
+          groups[providerName] = [];
+        }
+        groups[providerName].push(model);
+      });
+
+      return Object.entries(groups).map(([name, models]) => ({
+        id: name,
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        models,
+        originalCount: models.length,
+        active: false // Can't detect active in legacy mode easily without prop
+      }));
     }
-    groups[provider].push(model);
-    return groups;
-  }, {} as Record<string, Model[]>);
+  }, [models, groupedModels, selectedCategory, search]);
 
-  const selectedModel = models.find(model => model.id === value);
+  // Auto-expand active provider group initially
+  useEffect(() => {
+    if (groupedModels && !open) {
+      // Reset collapse state when closed? 
+      // User requirement: "Providers displayed as collapsible groups (closed by default)."
+      // Maybe we want to keep them closed by default except the one with the selected model?
+      // Or simply default all to closed? 
+      // Let's default to closed, but user might want to see the selected model.
+
+      const shouldCollapse = new Set<string>();
+      groupedModels.providers.forEach(p => {
+        // If this provider does NOT contain the selected model, collapse it?
+        // Or collapse everything by default except active provider?
+        // Requirement: "Active provider highlighted".
+        // Let's start with all expanded or all collapsed? 
+        // "Providers displayed as collapsible groups (closed by default)" -> This suggests all closed?
+        // But that hides the models. Usually "closed by default" means non-active ones.
+        // Let's implement logic: collapse all groups that do NOT contain the currently selected model.
+
+        const hasSelectedModel = p.models.some(m => m.id === value);
+        if (!hasSelectedModel) {
+          shouldCollapse.add(p.provider.id);
+        }
+      });
+      setCollapsedProviders(shouldCollapse);
+    }
+  }, [groupedModels, open, value]); // Re-run when opening
+
+  const selectedModel = useMemo(() => {
+    if (groupedModels) {
+      for (const group of groupedModels.providers) {
+        const found = group.models.find(m => m.id === value);
+        if (found) return found;
+      }
+    }
+    return models.find(model => model.id === value);
+  }, [models, groupedModels, value]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -156,7 +244,7 @@ export const ModelSearchableSelect = ({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[300px] p-0" align="start">
-        <Command>
+        <Command shouldFilter={false}>
           <div className="flex items-center border-b px-3">
             <CommandInput
               placeholder={t('model_selector.search_placeholder')}
@@ -226,45 +314,74 @@ export const ModelSearchableSelect = ({
             )}
           </div>
           <CommandList>
-            <CommandEmpty>
-              {selectedCategory
-                ? `No models found in "${getCategoryDisplayName(selectedCategory)}" category`
-                : t('model_selector.no_models_found')
-              }
-            </CommandEmpty>
-            {Object.entries(groupedModels).map(([provider, providerModels]) => (
-              <CommandGroup key={provider} heading={provider.charAt(0).toUpperCase() + provider.slice(1)}>
-                {providerModels.map((model) => (
-                  <CommandItem
-                    key={model.id}
-                    value={model.id}
-                    onSelect={() => {
-                      onValueChange?.(model.id);
-                      setOpen(false);
-                      setSearch('');
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value === model.id ? "opacity-100" : "opacity-0"
+            {displayGroups.length === 0 && (
+              <div className="py-6 text-center text-sm">
+                {selectedCategory
+                  ? `No models found in "${getCategoryDisplayName(selectedCategory)}" category`
+                  : t('model_selector.no_models_found')
+                }
+              </div>
+            )}
+            {displayGroups.map((group) => {
+              const isCollapsed = collapsedProviders.has(group.id);
+
+              return (
+                <CommandGroup
+                  key={group.id}
+                  heading={
+                    <div
+                      className="flex items-center cursor-pointer hover:bg-accent/50 rounded px-1 -mx-1 py-0.5 select-none"
+                      onClick={(e) => toggleProviderCollapse(group.id, e)}
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight className="h-3 w-3 mr-1 opacity-70" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3 mr-1 opacity-70" />
                       )}
-                    />
-                    <div className="flex flex-col flex-1">
-                      <span>{model.name}</span>
-                      {model.contextLength && (
-                        <span className="text-xs text-muted-foreground">
-                          {model.contextLength >= 1000
-                            ? t('model_selector.context_k', { count: Math.round(model.contextLength / 1000) })
-                            : t('model_selector.context', { count: model.contextLength })
-                          }
+                      <span className={cn(
+                        "font-medium flex-1",
+                        group.active && "text-primary font-bold"
+                      )}>
+                        {group.name}
+                        <span className="ml-1.5 text-xs text-muted-foreground font-normal opacity-70">
+                          ({group.models.length})
                         </span>
-                      )}
+                      </span>
                     </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            ))}
+                  }
+                >
+                  {!isCollapsed && group.models.map((model) => (
+                    <CommandItem
+                      key={model.id}
+                      value={model.id}
+                      onSelect={() => {
+                        onValueChange?.(model.id);
+                        setOpen(false);
+                        setSearch('');
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 h-4 w-4",
+                          value === model.id ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      <div className="flex flex-col flex-1">
+                        <span>{model.name}</span>
+                        {model.contextLength > 0 && (
+                          <span className="text-xs text-muted-foreground">
+                            {model.contextLength >= 1000
+                              ? t('model_selector.context_k', { count: Math.round(model.contextLength / 1000) })
+                              : t('model_selector.context', { count: model.contextLength })
+                            }
+                          </span>
+                        )}
+                      </div>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              );
+            })}
           </CommandList>
         </Command>
       </PopoverContent>
