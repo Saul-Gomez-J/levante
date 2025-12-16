@@ -92,10 +92,11 @@ export function ProviderStep({
   onModelSelect,
   onOAuthSuccess,
 }: ProviderStepProps) {
-  const { t } = useTranslation('wizard');
+  const { t, i18n } = useTranslation('wizard');
   const provider = PROVIDERS.find((p) => p.id === selectedProvider);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState('');
+  const [showAllModels, setShowAllModels] = useState(false);
 
   // OAuth hook for OpenRouter
   const { isAuthenticating, initiateOAuthFlow } = useOpenRouterOAuth({
@@ -203,9 +204,8 @@ export function ProviderStep({
                     >
                       <span className="text-sm text-muted-foreground">{t('provider.advanced')}</span>
                       <ChevronDown
-                        className={`h-4 w-4 text-muted-foreground transition-transform ${
-                          isAdvancedOpen ? 'transform rotate-180' : ''
-                        }`}
+                        className={`h-4 w-4 text-muted-foreground transition-transform ${isAdvancedOpen ? 'transform rotate-180' : ''
+                          }`}
                       />
                     </Button>
                   </CollapsibleTrigger>
@@ -370,54 +370,159 @@ export function ProviderStep({
                     <Label htmlFor="model-select">
                       {t('provider.select_model')}
                     </Label>
-                    <Select
-                      value={selectedModel || ''}
-                      onValueChange={onModelSelect}
-                    >
-                      <SelectTrigger id="model-select">
-                        <SelectValue placeholder={t('provider.select_model_placeholder')} />
-                      </SelectTrigger>
-                      <SelectContent className="max-h-[400px]">
-                        {/* Search Input */}
-                        <div className="sticky top-0 bg-popover p-2 border-b z-10">
-                          <div className="relative">
-                            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                              placeholder={t('provider.search_models')}
-                              value={modelSearchQuery}
-                              onChange={(e) => setModelSearchQuery(e.target.value)}
-                              className="pl-8 h-9"
-                              onClick={(e) => e.stopPropagation()}
-                              onKeyDown={(e) => e.stopPropagation()}
-                            />
+
+                    {/* OpenRouter: Show 4 specific models as buttons */}
+                    {selectedProvider === 'openrouter' ? (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-4 gap-2">
+                          {[
+                            { displayName: 'GPT-5 Mini', fullName: 'OpenAI: GPT-5 Mini' },
+                            { displayName: 'Haiku 4.5', fullName: 'Anthropic: Claude Haiku 4.5' },
+                            { displayName: 'Gemini 2.5', fullName: 'Google: Gemini 2.5 Flash' },
+                            { displayName: 'Grok 4.1', fullName: 'xAI: Grok 4.1 Fast' },
+                          ].map((model) => {
+                            // Find the actual model by exact name match
+                            const actualModel = availableModels.find(
+                              (m) => m.name === model.fullName
+                            );
+                            const modelId = actualModel?.id || model.fullName;
+                            const isSelected = selectedModel === modelId;
+
+                            return (
+                              <Button
+                                key={model.fullName}
+                                type="button"
+                                variant={isSelected ? 'default' : 'outline'}
+                                className="h-auto py-2 px-3 justify-center text-center"
+                                onClick={() => onModelSelect(modelId)}
+                              >
+                                <span className="font-medium text-sm">{model.displayName}</span>
+                              </Button>
+                            );
+                          })}
+                        </div>
+
+                        {/* See more models toggle + info text */}
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-muted-foreground">
+                            {t('provider.can_change_later')}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setShowAllModels(!showAllModels)}
+                            className="text-sm text-primary hover:underline"
+                          >
+                            {showAllModels
+                              ? (i18n.language === 'es' ? 'Ver menos modelos' : 'See less models')
+                              : (i18n.language === 'es' ? 'Ver más modelos' : 'See more models')
+                            }
+                          </button>
+                        </div>
+
+                        {/* All models selector - collapsible */}
+                        {showAllModels && (
+                          <div className="space-y-2 pt-2">
+                            <Select
+                              value={selectedModel || ''}
+                              onValueChange={onModelSelect}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder={t('provider.select_model_placeholder')} />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[400px]">
+                                {/* Search Input */}
+                                <div className="sticky top-0 bg-popover p-2 border-b z-10">
+                                  <div className="relative">
+                                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                    <Input
+                                      placeholder={t('provider.search_models')}
+                                      value={modelSearchQuery}
+                                      onChange={(e) => setModelSearchQuery(e.target.value)}
+                                      className="pl-8 h-9"
+                                      onClick={(e) => e.stopPropagation()}
+                                      onKeyDown={(e) => e.stopPropagation()}
+                                    />
+                                  </div>
+                                </div>
+                                {/* Models List */}
+                                <div className="max-h-[300px] overflow-y-auto">
+                                  {availableModels
+                                    .filter((model) =>
+                                      model.name.toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
+                                      model.id.toLowerCase().includes(modelSearchQuery.toLowerCase())
+                                    )
+                                    .map((model) => (
+                                      <SelectItem key={model.id} value={model.id}>
+                                        {model.name}
+                                      </SelectItem>
+                                    ))}
+                                  {availableModels.filter((model) =>
+                                    model.name.toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
+                                    model.id.toLowerCase().includes(modelSearchQuery.toLowerCase())
+                                  ).length === 0 && (
+                                      <div className="py-6 text-center text-sm text-muted-foreground">
+                                        {t('provider.no_models_found')}
+                                      </div>
+                                    )}
+                                </div>
+                              </SelectContent>
+                            </Select>
                           </div>
-                        </div>
-                        {/* Models List */}
-                        <div className="max-h-[300px] overflow-y-auto">
-                          {availableModels
-                            .filter((model) =>
-                              model.name.toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
-                              model.id.toLowerCase().includes(modelSearchQuery.toLowerCase())
-                            )
-                            .map((model) => (
-                              <SelectItem key={model.id} value={model.id}>
-                                {model.name}
-                              </SelectItem>
-                            ))}
-                          {availableModels.filter((model) =>
-                            model.name.toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
-                            model.id.toLowerCase().includes(modelSearchQuery.toLowerCase())
-                          ).length === 0 && (
-                            <div className="py-6 text-center text-sm text-muted-foreground">
-                              {t('provider.no_models_found')}
+                        )}
+                      </div>
+                    ) : (
+                      /* Other providers: Show searchable dropdown */
+                      <div className="space-y-2">
+                        <Select
+                          value={selectedModel || ''}
+                          onValueChange={onModelSelect}
+                        >
+                          <SelectTrigger id="model-select">
+                            <SelectValue placeholder={t('provider.select_model_placeholder')} />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-[400px]">
+                            {/* Search Input */}
+                            <div className="sticky top-0 bg-popover p-2 border-b z-10">
+                              <div className="relative">
+                                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                  placeholder={t('provider.search_models')}
+                                  value={modelSearchQuery}
+                                  onChange={(e) => setModelSearchQuery(e.target.value)}
+                                  className="pl-8 h-9"
+                                  onClick={(e) => e.stopPropagation()}
+                                  onKeyDown={(e) => e.stopPropagation()}
+                                />
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      {t('provider.can_change_later')}
-                    </p>
+                            {/* Models List */}
+                            <div className="max-h-[300px] overflow-y-auto">
+                              {availableModels
+                                .filter((model) =>
+                                  model.name.toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
+                                  model.id.toLowerCase().includes(modelSearchQuery.toLowerCase())
+                                )
+                                .map((model) => (
+                                  <SelectItem key={model.id} value={model.id}>
+                                    {model.name}
+                                  </SelectItem>
+                                ))}
+                              {availableModels.filter((model) =>
+                                model.name.toLowerCase().includes(modelSearchQuery.toLowerCase()) ||
+                                model.id.toLowerCase().includes(modelSearchQuery.toLowerCase())
+                              ).length === 0 && (
+                                  <div className="py-6 text-center text-sm text-muted-foreground">
+                                    {t('provider.no_models_found')}
+                                  </div>
+                                )}
+                            </div>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          {t('provider.can_change_later')}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </>
