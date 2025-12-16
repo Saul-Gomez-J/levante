@@ -577,6 +577,11 @@ export interface LevanteAPI {
       data?: { totalSize: number; fileCount: number };
       error?: string;
     }>;
+    getBasePath: () => Promise<{
+      success: boolean;
+      data?: string;
+      error?: string;
+    }>;
   };
 
   // Analytics functionality

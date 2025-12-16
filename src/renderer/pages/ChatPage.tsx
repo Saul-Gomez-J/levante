@@ -68,6 +68,7 @@ const ChatPage = () => {
   const persistMessage = useChatStore((state) => state.persistMessage);
   const createSession = useChatStore((state) => state.createSession);
   const loadHistoricalMessages = useChatStore((state) => state.loadHistoricalMessages);
+  const updateSessionModel = useChatStore((state) => state.updateSessionModel);
   const pendingPrompt = useChatStore((state) => state.pendingPrompt);
   const setPendingPrompt = useChatStore((state) => state.setPendingPrompt);
 
@@ -265,22 +266,42 @@ const ChatPage = () => {
           attachments: messageWithAttachments.attachments,
         });
 
-        await persistMessage(messageWithAttachments);
+        const persistResult = await persistMessage(messageWithAttachments);
 
-        // Update the message in useChat state to include attachments
+        // Update the message in useChat state to include attachments and generated content
         if (generatedAttachments.length > 0) {
           logger.core.info('Updating message state with attachments', {
             messageId: message.id,
             attachmentCount: generatedAttachments.length,
+            hasGeneratedContent: !!persistResult?.generatedContent,
           });
 
           // Find and update the message in the messages array
           setMessages((prevMessages) =>
-            prevMessages.map((m) =>
-              m.id === message.id
-                ? { ...m, attachments: generatedAttachments } as any
-                : m
-            )
+            prevMessages.map((m) => {
+              if (m.id !== message.id) return m;
+
+              // Build updated message with attachments
+              const updatedMessage: any = {
+                ...m,
+                attachments: generatedAttachments,
+              };
+
+              // If content was generated from attachments, add it to parts
+              if (persistResult?.generatedContent) {
+                const existingParts = m.parts || [];
+                const hasTextPart = existingParts.some((p: any) => p.type === 'text');
+
+                if (!hasTextPart) {
+                  updatedMessage.parts = [
+                    ...existingParts,
+                    { type: 'text', text: persistResult.generatedContent }
+                  ];
+                }
+              }
+
+              return updatedMessage;
+            })
           );
         }
       }
@@ -514,6 +535,16 @@ const ChatPage = () => {
         };
         await persistMessage(userMessage);
 
+        // Update session model to reflect current model being used
+        if (currentSession.model !== model) {
+          logger.core.info('Updating session model', {
+            sessionId: currentSession.id,
+            oldModel: currentSession.model,
+            newModel: model
+          });
+          await updateSessionModel(currentSession.id, model);
+        }
+
         // Send to AI with attachments in the body
         // The ElectronChatTransport will pass these to the IPC layer
         await sendMessageAI(
@@ -623,6 +654,16 @@ const ChatPage = () => {
 
         await persistMessage(userMessage);
 
+        // Update session model to reflect current model being used
+        if (currentSession.model !== model) {
+          logger.core.info('Updating session model for pending message', {
+            sessionId: currentSession.id,
+            oldModel: currentSession.model,
+            newModel: model
+          });
+          await updateSessionModel(currentSession.id, model);
+        }
+
         await sendMessageAI(
           {
             text: messageText,
@@ -729,6 +770,7 @@ const ChatPage = () => {
                 groupedModelsByProvider={groupedModelsByProvider || undefined}
                 modelsLoading={modelsLoading}
                 status={status}
+                modelTaskType={modelTaskType}
                 attachedFiles={attachedFiles}
                 onFilesSelected={handleFilesSelected}
                 onFileRemove={handleFileRemove}
@@ -784,6 +826,7 @@ const ChatPage = () => {
               groupedModelsByProvider={groupedModelsByProvider || undefined}
               modelsLoading={modelsLoading}
               status={status}
+              modelTaskType={modelTaskType}
               attachedFiles={attachedFiles}
               onFilesSelected={handleFilesSelected}
               onFileRemove={handleFileRemove}

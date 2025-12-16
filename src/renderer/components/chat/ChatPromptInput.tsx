@@ -17,6 +17,32 @@ import type { SelectedResource, SelectedPrompt, MCPResource, MCPPrompt } from '@
 
 const logger = getRendererLogger();
 
+/**
+ * Get smart placeholder text based on current model type
+ */
+function getPlaceholderText(taskType?: string): string {
+  if (!taskType || taskType === 'chat' || taskType === 'image-text-to-text') {
+    return 'Type a message...';
+  }
+
+  switch (taskType) {
+    case 'text-to-image':
+      return 'Describe the image you want to generate...';
+    case 'image-to-image':
+      return 'Describe the changes or attach an image...';
+    case 'text-to-speech':
+    case 'text-to-video':
+      return 'Enter text to synthesize...';
+    case 'automatic-speech-recognition':
+      return 'Attach an audio file...';
+    case 'visual-question-answering':
+    case 'document-question-answering':
+      return 'Ask a question about the image...';
+    default:
+      return 'Type a message...';
+  }
+}
+
 interface ChatPromptInputProps {
   input: string;
   onInputChange: (value: string) => void;
@@ -29,6 +55,7 @@ interface ChatPromptInputProps {
   groupedModelsByProvider?: GroupedModelsByProvider;
   modelsLoading: boolean;
   status?: ChatStatus;
+  modelTaskType?: string; // Add task type for smart placeholders
   // File attachment props
   attachedFiles?: File[];
   onFilesSelected?: (files: File[]) => void;
@@ -57,6 +84,7 @@ export function ChatPromptInput({
   groupedModelsByProvider,
   modelsLoading,
   status,
+  modelTaskType,
   attachedFiles = [],
   onFilesSelected,
   onFileRemove,
@@ -70,6 +98,9 @@ export function ChatPromptInput({
   onPromptRemove,
 }: ChatPromptInputProps) {
   const { t } = useTranslation('chat');
+
+  // Get smart placeholder based on model type
+  const placeholder = getPlaceholderText(modelTaskType);
 
   // Check if we have any context to show
   const hasContext = attachedFiles.length > 0 || selectedResources.length > 0 || selectedPrompts.length > 0;
@@ -172,7 +203,7 @@ export function ChatPromptInput({
         value={input}
         rows={1}
         className="p-2 border-none"
-        placeholder={t('input.placeholder')}
+        placeholder={placeholder}
       />
 
       {/* Toolbar */}

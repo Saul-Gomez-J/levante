@@ -71,6 +71,16 @@ const processContentWithMermaid = (content: string) => {
   return parts.length > 1 ? parts : [{ type: 'text', content }];
 };
 
+// Filter out attachment markers from content (they're for AI context only)
+const filterAttachmentMarkers = (content: string): string => {
+  return content
+    // New format: [attachment:type:path:filename]
+    .replace(/\[attachment:[^\]]+\]\n?/g, '')
+    // Old format: ![filename](levante://attachments/...)
+    .replace(/!\[[^\]]*\]\(levante:\/\/attachments\/[^)]*\)\n?/g, '')
+    .trim();
+};
+
 export const Response = memo(
   ({ className, children, ...props }: ResponseProps) => {
     const [shouldProcessMermaid, setShouldProcessMermaid] = useState(false);
@@ -78,14 +88,24 @@ export const Response = memo(
     // Streamdown expects [lightTheme, darkTheme] tuple
     const shikiTheme: [BundledTheme, BundledTheme] = ['github-light', 'github-dark'];
 
+    // Filter attachment markers from string content
+    const filteredChildren = typeof children === 'string'
+      ? filterAttachmentMarkers(children)
+      : children;
+
     // Listen for streaming finish events
     useEffect(() => {
-      if (typeof children === 'string' && children.includes('```mermaid')) {
+      if (typeof filteredChildren === 'string' && filteredChildren.includes('```mermaid')) {
         setShouldProcessMermaid(true);
       }
-    }, [streamFinished, children]);
+    }, [streamFinished, filteredChildren]);
 
-    if (typeof children !== 'string') {
+    // Don't render anything if content is only attachment markers
+    if (typeof filteredChildren === 'string' && !filteredChildren) {
+      return null;
+    }
+
+    if (typeof filteredChildren !== 'string') {
       return (
         <Streamdown
           className={cn(
@@ -98,17 +118,17 @@ export const Response = memo(
           shikiTheme={shikiTheme}
           {...props}
         >
-          {children}
+          {filteredChildren}
         </Streamdown>
       );
     }
 
     // Check if content has complete mermaid blocks
-    const hasCompleteMermaid = /```mermaid\s*\n[\s\S]*?\n\s*```/.test(children);
+    const hasCompleteMermaid = /```mermaid\s*\n[\s\S]*?\n\s*```/.test(filteredChildren);
 
     // If we should process Mermaid and have complete blocks, do so
     if (shouldProcessMermaid && hasCompleteMermaid) {
-      const parts = processContentWithMermaid(children);
+      const parts = processContentWithMermaid(filteredChildren);
 
       if (parts.length > 1 || (parts.length === 1 && parts[0].type === 'mermaid')) {
         return (
@@ -150,7 +170,7 @@ export const Response = memo(
         shikiTheme={shikiTheme}
         {...props}
       >
-        {children}
+        {filteredChildren}
       </Streamdown>
     );
   }
