@@ -229,7 +229,7 @@ export class ModelFetchService {
       // Security: API key in Authorization header instead of URL query string
       // This prevents API key exposure in logs, browser history, and network monitoring
       const response = await safeFetch(
-        "https://generativelanguage.googleapis.com/v1/models",
+        "https://generativelanguage.googleapis.com/v1beta/models",
         {
           headers: {
             "x-goog-api-key": apiKey,
