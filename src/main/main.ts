@@ -56,6 +56,9 @@ app.whenReady().then(async () => {
     // Create main window
     mainWindow = createMainWindow();
 
+    // Ensure user has UUID and is tracked (fire and forget, don't block UI)
+    analyticsService.ensureUserTracked().catch(() => { });
+
     // Track app open (fire and forget, don't block UI)
     analyticsService.trackAppOpen().catch(() => { });
 

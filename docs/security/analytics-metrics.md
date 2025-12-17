@@ -63,16 +63,19 @@ Levante's analytics system is designed with privacy as a core principle:
   user_id: string,           // Anonymous UUID v4
   first_seen_at: timestamp,  // When user first registered
   last_seen_at: timestamp,   // When user last seen
-  sharing_data: boolean,     // Current consent status
+  sharing_data: boolean,     // Current consent status (true or false)
   updated_at: timestamp      // Last update time
 }
 ```
 
-**Trigger:** When user completes wizard and consents to analytics
+**Trigger:** When user completes wizard (regardless of consent choice)
 
 **Notes:**
 - Uses `upsert` with `onConflict: 'user_id'` to prevent duplicates
-- Only creates record on first consent, updates `last_seen_at` on subsequent calls
+- **ALL users are tracked**, with `sharing_data` set to their consent choice
+- Users who decline analytics: `sharing_data: false`
+- Users who accept analytics: `sharing_data: true`
+- This allows measuring total user base and opt-in rates
 
 ---
 
@@ -92,7 +95,10 @@ Levante's analytics system is designed with privacy as a core principle:
 }
 ```
 
-**Trigger:** Every time the application starts
+**Trigger:**
+- **First time (onboarding)**: Tracked for ALL users (regardless of consent)
+- **App start without UUID**: If user somehow has no UUID, one is created with `sharing_data: false` and first open is tracked
+- **Subsequent app starts**: Only tracked if user has consented (`sharing_data: true`)
 
 **Platform Detection:**
 - `darwin` → `"macOS"`
@@ -103,6 +109,11 @@ Levante's analytics system is designed with privacy as a core principle:
 - Understand version adoption rates
 - Identify platform-specific issues
 - Track active user engagement
+
+**Notes:**
+- The initial app open during onboarding is always tracked to measure total installs
+- Users without UUID (edge case) are automatically assigned one with `sharing_data: false`
+- After onboarding, only users who consented will have subsequent app opens tracked
 
 ---
 
