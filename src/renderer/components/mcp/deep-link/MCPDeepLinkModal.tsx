@@ -286,7 +286,7 @@ export function MCPDeepLinkModal({
   });
 
   // Get MCP store to refresh active servers list
-  const { connectServer, loadActiveServers } = useMCPStore();
+  const { connectServer, loadActiveServers, activeServers } = useMCPStore();
 
   // Validation hooks
   const validation = useServerValidation(config);
@@ -294,6 +294,18 @@ export function MCPDeepLinkModal({
   const handleAddServer = async (apiKeyValues?: Record<string, string>) => {
     if (!config || !config.id) {
       toast.error(t('deep_link.toasts.invalid_config'));
+      return;
+    }
+
+    // Check if server already exists
+    const serverExists = activeServers.some(server => server.id === config.id);
+    if (serverExists) {
+      logger.mcp.warn('Server already exists, cannot add duplicate', { serverId: config.id });
+      toast.error(t('deep_link.toasts.server_already_exists', { name: serverName }), {
+        description: t('deep_link.toasts.server_already_exists_description'),
+        duration: 5000
+      });
+      onOpenChange(false);
       return;
     }
 
