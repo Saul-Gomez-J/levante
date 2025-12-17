@@ -5,6 +5,14 @@ import { validateMCPCommand } from './mcp/packageValidator';
 
 const logger = getLogger();
 
+export interface InputDefinition {
+  label: string;
+  required: boolean;
+  type: 'string' | 'password' | 'number' | 'boolean';
+  default?: string;
+  description?: string;
+}
+
 export interface DeepLinkAction {
   type: 'mcp-add' | 'chat-new';
   data: Record<string, unknown>;
@@ -106,11 +114,11 @@ export class DeepLinkService {
 
   /**
    * Parse MCP server addition deep link
-   * Format: levante://mcp/add?name=server&transport=stdio&command=npx&args=package-name
+   * Format: levante://mcp/add?name=server&transport=stdio&command=npx&args=package-name&inputs={...}
    */
   private parseMCPAddLink(params: Record<string, string>): DeepLinkAction | null {
     // Support both 'transport' (correct) and 'type' (legacy) for backwards compatibility
-    const { name, transport, type, command, args, url, headers, env } = params;
+    const { name, transport, type, command, args, url, headers, env, inputs } = params;
     const serverType = transport || type;
 
     if (!name || !serverType) {
@@ -235,13 +243,40 @@ export class DeepLinkService {
       }
     }
 
-    logger.core.info('Parsed MCP add deep link', { serverConfig });
+    // Parse inputs if provided (field definitions for configuration)
+    let parsedInputs: Record<string, InputDefinition> | undefined;
+    if (inputs) {
+      try {
+        parsedInputs = JSON.parse(inputs);
+        const sanitizedInputs = this.sanitizeObject(parsedInputs);
+
+        logger.core.debug('Parsed input definitions from deep link', {
+          inputKeys: Object.keys(sanitizedInputs)
+        });
+
+        parsedInputs = sanitizedInputs;
+      } catch (error) {
+        logger.core.error('Failed to parse inputs JSON', {
+          error: error instanceof Error ? error.message : String(error),
+          inputs
+        });
+        // Continue without inputs on parse error
+        parsedInputs = undefined;
+      }
+    }
+
+    logger.core.info('Parsed MCP add deep link', {
+      serverConfig,
+      hasInputs: !!parsedInputs,
+      inputCount: parsedInputs ? Object.keys(parsedInputs).length : 0
+    });
 
     return {
       type: 'mcp-add',
       data: {
         name,
-        config: serverConfig
+        config: serverConfig,
+        inputs: parsedInputs
       }
     };
   }
