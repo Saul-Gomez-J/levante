@@ -40,7 +40,7 @@ export class LoggerConfigService {
 
   public initializeFromEnvironment(): void {
     // Always reinitialize to pick up environment variables
-    // This allows the logger to properly load configuration after dotenv runs
+    // This allows the logger to properly load configuration after dotenv runss
     this.config = this.loadConfig();
     this.isInitialized = true;
   }
