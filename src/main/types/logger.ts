@@ -21,6 +21,42 @@ export interface CategoryLogger {
   error(message: string, context?: LogContext): void;
 }
 
+/**
+ * Configuration for log file rotation
+ */
+export interface LogRotationConfig {
+  /**
+   * Maximum size of log file in bytes before rotation
+   * Default: 10485760 (10MB)
+   */
+  maxSize: number;
+
+  /**
+   * Maximum number of rotated log files to keep
+   * Default: 5
+   */
+  maxFiles: number;
+
+  /**
+   * Maximum age of log files in days
+   * Files older than this will be deleted
+   * Default: 7
+   */
+  maxAge: number;
+
+  /**
+   * Whether to compress rotated log files
+   * Default: false
+   */
+  compress: boolean;
+
+  /**
+   * Date pattern for rotated file names
+   * Default: 'YYYY-MM-DD-HHmmss'
+   */
+  datePattern?: string;
+}
+
 export interface LoggerConfig {
   enabled: boolean;
   level: LogLevel;
@@ -31,6 +67,7 @@ export interface LoggerConfig {
     console: boolean;
     file: boolean;
     filePath?: string;
+    rotation?: LogRotationConfig;
   };
 }
 

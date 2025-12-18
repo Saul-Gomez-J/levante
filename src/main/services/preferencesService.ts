@@ -23,180 +23,218 @@ export class PreferencesService {
       await directoryService.ensureBaseDir();
 
       this.store = new Store({
-      name: 'ui-preferences',
-      cwd: directoryService.getBaseDir(), // Store preferences in ~/levante/ directory
-      // No encryption key - we'll encrypt specific values manually
-      defaults: DEFAULT_PREFERENCES,
-      schema: {
-        theme: {
-          type: 'string',
-          enum: ['light', 'dark', 'system'],
-          default: 'system'
-        },
-        language: {
-          type: 'string',
-          default: 'en'
-        },
-        timezone: {
-          type: 'string',
-          default: 'auto'
-        },
-        windowBounds: {
-          type: 'object',
-          properties: {
-            width: { type: 'number', minimum: 800, default: 1200 },
-            height: { type: 'number', minimum: 600, default: 800 },
-            x: { type: 'number' },
-            y: { type: 'number' }
+        name: 'ui-preferences',
+        cwd: directoryService.getBaseDir(), // Store preferences in ~/levante/ directory
+        // No encryption key - we'll encrypt specific values manually
+        defaults: DEFAULT_PREFERENCES,
+        schema: {
+          theme: {
+            type: 'string',
+            enum: ['light', 'dark', 'system'],
+            default: 'system'
           },
-          required: ['width', 'height'],
-          default: { width: 1200, height: 800 }
-        },
-        sidebarCollapsed: {
-          type: 'boolean',
-          default: false
-        },
-        lastUsedModel: {
-          type: 'string',
-          default: 'openai/gpt-4'
-        },
-        chatInputHeight: {
-          type: 'number',
-          minimum: 60,
-          maximum: 400,
-          default: 120
-        },
-        fontSize: {
-          type: 'string',
-          enum: ['small', 'medium', 'large'],
-          default: 'medium'
-        },
-        codeTheme: {
-          type: 'string',
-          enum: ['light', 'dark', 'auto'],
-          default: 'auto'
-        },
-        showLineNumbers: {
-          type: 'boolean',
-          default: true
-        },
-        wordWrap: {
-          type: 'boolean',
-          default: true
-        },
-        autoSave: {
-          type: 'boolean',
-          default: true
-        },
-        notifications: {
-          type: 'object',
-          properties: {
-            showDesktop: { type: 'boolean', default: true },
-            showInApp: { type: 'boolean', default: true },
-            soundEnabled: { type: 'boolean', default: false }
+          language: {
+            type: 'string',
+            default: 'en'
           },
-          required: ['showDesktop', 'showInApp', 'soundEnabled'],
-          default: { showDesktop: true, showInApp: true, soundEnabled: false }
-        },
-        shortcuts: {
-          type: 'object',
-          properties: {
-            newChat: { type: 'string', default: 'Cmd+N' },
-            toggleSidebar: { type: 'string', default: 'Cmd+B' },
-            search: { type: 'string', default: 'Cmd+F' }
+          timezone: {
+            type: 'string',
+            default: 'auto'
           },
-          required: ['newChat', 'toggleSidebar', 'search'],
-          default: { newChat: 'Cmd+N', toggleSidebar: 'Cmd+B', search: 'Cmd+F' }
-        },
-        providers: {
-          type: 'array',
-          default: []
-        },
-        activeProvider: {
-          type: ['string', 'null'],
-          default: null
-        },
-        ai: {
-          type: 'object',
-          properties: {
-            baseSteps: { type: 'number', minimum: 1, default: 5 },
-            maxSteps: { type: 'number', minimum: 1, default: 20 }
+          windowBounds: {
+            type: 'object',
+            properties: {
+              width: { type: 'number', minimum: 800, default: 1200 },
+              height: { type: 'number', minimum: 600, default: 800 },
+              x: { type: 'number' },
+              y: { type: 'number' }
+            },
+            required: ['width', 'height'],
+            default: { width: 1200, height: 800 }
           },
-          required: ['baseSteps', 'maxSteps'],
-          default: { baseSteps: 5, maxSteps: 20 }
-        },
-        hasAcceptedFreeModelWarning: {
-          type: 'boolean',
-          default: false
-        },
-        developerMode: {
-          type: 'boolean',
-          default: false
-        },
-        runtime: {
-          type: 'object',
-          properties: {
-            preferSystemRuntimes: { type: 'boolean', default: false }
+          sidebarCollapsed: {
+            type: 'boolean',
+            default: false
           },
-          required: ['preferSystemRuntimes'],
-          default: { preferSystemRuntimes: false }
-        },
-        mcp: {
-          type: 'object',
-          properties: {
-            sdk: { type: 'string', enum: ['mcp-use', 'official-sdk'], default: 'mcp-use' },
-            codeModeDefaults: {
-              type: 'object',
-              properties: {
-                enabled: { type: 'boolean', default: true },
-                executor: { type: 'string', enum: ['vm', 'e2b'], default: 'vm' },
-                vmTimeout: { type: 'number', default: 30000 },
-                vmMemoryLimit: { type: 'number', default: 134217728 }
+          lastUsedModel: {
+            type: 'string',
+            default: 'openai/gpt-4'
+          },
+          chatInputHeight: {
+            type: 'number',
+            minimum: 60,
+            maximum: 400,
+            default: 120
+          },
+          fontSize: {
+            type: 'string',
+            enum: ['small', 'medium', 'large'],
+            default: 'medium'
+          },
+          codeTheme: {
+            type: 'string',
+            enum: ['light', 'dark', 'auto'],
+            default: 'auto'
+          },
+          showLineNumbers: {
+            type: 'boolean',
+            default: true
+          },
+          wordWrap: {
+            type: 'boolean',
+            default: true
+          },
+          autoSave: {
+            type: 'boolean',
+            default: true
+          },
+          notifications: {
+            type: 'object',
+            properties: {
+              showDesktop: { type: 'boolean', default: true },
+              showInApp: { type: 'boolean', default: true },
+              soundEnabled: { type: 'boolean', default: false }
+            },
+            required: ['showDesktop', 'showInApp', 'soundEnabled'],
+            default: { showDesktop: true, showInApp: true, soundEnabled: false }
+          },
+          shortcuts: {
+            type: 'object',
+            properties: {
+              newChat: { type: 'string', default: 'Cmd+N' },
+              toggleSidebar: { type: 'string', default: 'Cmd+B' },
+              search: { type: 'string', default: 'Cmd+F' }
+            },
+            required: ['newChat', 'toggleSidebar', 'search'],
+            default: { newChat: 'Cmd+N', toggleSidebar: 'Cmd+B', search: 'Cmd+F' }
+          },
+          providers: {
+            type: 'array',
+            default: []
+          },
+          activeProvider: {
+            type: ['string', 'null'],
+            default: null
+          },
+          ai: {
+            type: 'object',
+            properties: {
+              baseSteps: { type: 'number', minimum: 1, default: 5 },
+              maxSteps: { type: 'number', minimum: 1, default: 20 }
+            },
+            required: ['baseSteps', 'maxSteps'],
+            default: { baseSteps: 5, maxSteps: 20 }
+          },
+          hasAcceptedFreeModelWarning: {
+            type: 'boolean',
+            default: false
+          },
+          developerMode: {
+            type: 'boolean',
+            default: false
+          },
+          runtime: {
+            type: 'object',
+            properties: {
+              preferSystemRuntimes: { type: 'boolean', default: false }
+            },
+            required: ['preferSystemRuntimes'],
+            default: { preferSystemRuntimes: false }
+          },
+          mcp: {
+            type: 'object',
+            properties: {
+              sdk: { type: 'string', enum: ['mcp-use', 'official-sdk'], default: 'mcp-use' },
+              codeModeDefaults: {
+                type: 'object',
+                properties: {
+                  enabled: { type: 'boolean', default: true },
+                  executor: { type: 'string', enum: ['vm', 'e2b'], default: 'vm' },
+                  vmTimeout: { type: 'number', default: 30000 },
+                  vmMemoryLimit: { type: 'number', default: 134217728 }
+                },
+                required: ['enabled', 'executor', 'vmTimeout', 'vmMemoryLimit'],
+                default: {
+                  enabled: true,
+                  executor: 'vm',
+                  vmTimeout: 30000,
+                  vmMemoryLimit: 134217728
+                }
               },
-              required: ['enabled', 'executor', 'vmTimeout', 'vmMemoryLimit'],
-              default: {
+              e2bApiKey: { type: 'string' }
+            },
+            required: ['sdk', 'codeModeDefaults'],
+            default: {
+              sdk: 'mcp-use',
+              codeModeDefaults: {
                 enabled: true,
                 executor: 'vm',
                 vmTimeout: 30000,
                 vmMemoryLimit: 134217728
               }
-            },
-            e2bApiKey: { type: 'string' }
+            }
           },
-          required: ['sdk', 'codeModeDefaults'],
-          default: {
-            sdk: 'mcp-use',
-            codeModeDefaults: {
-              enabled: true,
-              executor: 'vm',
-              vmTimeout: 30000,
-              vmMemoryLimit: 134217728
+          security: {
+            type: 'object',
+            properties: {
+              encryptApiKeys: { type: 'boolean', default: false }
+            },
+            required: ['encryptApiKeys'],
+            default: { encryptApiKeys: false }
+          },
+          enableMCP: {
+            type: 'boolean',
+            default: true
+          },
+          // NUEVO: Schema para logging
+          logging: {
+            type: 'object',
+            properties: {
+              rotation: {
+                type: 'object',
+                properties: {
+                  maxSize: { type: 'number', minimum: 1024, default: 10485760 },
+                  maxFiles: { type: 'number', minimum: 1, default: 3 },
+                  maxAge: { type: 'number', minimum: 1, default: 7 },
+                  compress: { type: 'boolean', default: false },
+                  datePattern: { type: 'string' }
+                },
+                required: ['maxSize', 'maxFiles', 'maxAge', 'compress'],
+                default: {
+                  maxSize: 10485760,
+                  maxFiles: 3,
+                  maxAge: 7,
+                  compress: false,
+                  datePattern: 'YYYY-MM-DD-HHmmss'
+                }
+              }
+            },
+            required: ['rotation'],
+            default: {
+              rotation: {
+                maxSize: 10485760,
+                maxFiles: 3,
+                maxAge: 7,
+                compress: false,
+                datePattern: 'YYYY-MM-DD-HHmmss'
+              }
             }
           }
-        },
-        security: {
-          type: 'object',
-          properties: {
-            encryptApiKeys: { type: 'boolean', default: false }
-          },
-          required: ['encryptApiKeys'],
-          default: { encryptApiKeys: false }
-        },
-        enableMCP: {
-          type: 'boolean',
-          default: true
         }
-      }
-    });
+      });
 
-    this.initialized = true;
-    this.logger.preferences.info("PreferencesService initialized", { storePath: this.store.path });
+      this.initialized = true;
+      this.logger.preferences.info("PreferencesService initialized", { storePath: this.store.path });
     } catch (error) {
-      this.logger.preferences.error("Failed to initialize PreferencesService", { 
-        error: error instanceof Error ? error.message : error 
+      this.logger.preferences.error("Failed to initialize PreferencesService", {
+        error: error instanceof Error ? error.message : error
       });
       throw error;
     }
+  }
+
+  public isInitialized(): boolean {
+    return this.initialized;
   }
 
   private ensureInitialized(): void {
@@ -330,7 +368,7 @@ export class PreferencesService {
     this.ensureInitialized();
     this.logger.preferences.info("Resetting all preferences to defaults");
     this.store.clear();
-    
+
     // Broadcast reset event
     const windows = BrowserWindow.getAllWindows();
     windows.forEach(window => {
@@ -338,8 +376,8 @@ export class PreferencesService {
         try {
           window.webContents.send('levante/preferences/reset', DEFAULT_PREFERENCES);
         } catch (error) {
-          this.logger.preferences.error("Failed to broadcast reset to window", { 
-            error: error instanceof Error ? error.message : error 
+          this.logger.preferences.error("Failed to broadcast reset to window", {
+            error: error instanceof Error ? error.message : error
           });
         }
       }
@@ -405,12 +443,12 @@ export class PreferencesService {
         type: provider.type,
         isActive: provider.isActive,
         modelCount: Array.isArray(provider.models) ? provider.models.length : 0,
-        selectedModels: Array.isArray(provider.models) 
-          ? provider.models.filter((m: any) => m.isSelected).length 
+        selectedModels: Array.isArray(provider.models)
+          ? provider.models.filter((m: any) => m.isSelected).length
           : 0
       }));
     }
-    
+
     // For other model-related data, return as-is (it's probably short)
     return value;
   }

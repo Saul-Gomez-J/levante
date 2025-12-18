@@ -61,6 +61,17 @@ export interface UIPreferences {
   mcp?: MCPPreferences;
   /** Enable MCP tools in chat */
   enableMCP: boolean;
+
+  // NUEVO: Configuración de logging
+  logging?: {
+    rotation: {
+      maxSize: number;
+      maxFiles: number;
+      maxAge: number;
+      compress: boolean;
+      datePattern?: string;
+    };
+  };
 }
 
 export type PreferenceKey = keyof UIPreferences;
@@ -125,4 +136,15 @@ export const DEFAULT_PREFERENCES: UIPreferences = {
   },
   mcp: DEFAULT_MCP_PREFERENCES,
   enableMCP: true,
+
+  // NUEVO: Defaults de logging
+  logging: {
+    rotation: {
+      maxSize: 10 * 1024 * 1024, // 10MB
+      maxFiles: 3,
+      maxAge: 7,
+      compress: false,
+      datePattern: 'YYYY-MM-DD-HHmmss'
+    }
+  }
 };

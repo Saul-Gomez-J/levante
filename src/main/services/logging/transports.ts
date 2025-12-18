@@ -1,6 +1,7 @@
-import type { LogTransport, LogEntry, LogLevel } from '../../types/logger';
+import type { LogTransport, LogEntry, LogLevel, LogRotationConfig } from '../../types/logger';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as zlib from 'zlib';
 import { directoryService } from '../directoryService';
 
 // Shared timezone configuration for all transports
@@ -140,20 +141,213 @@ export class ConsoleTransport implements LogTransport {
   }
 }
 
+/**
+ * Manages log file rotation, compression, and cleanup
+ */
+class LogRotationManager {
+  constructor(
+    private readonly baseFilePath: string,
+    private readonly config: LogRotationConfig
+  ) { }
+
+  /**
+   * Check if rotation is needed based on file size
+   */
+  public shouldRotate(): boolean {
+    try {
+      if (!fs.existsSync(this.baseFilePath)) return false;
+      const stats = fs.statSync(this.baseFilePath);
+      return stats.size >= this.config.maxSize;
+    } catch {
+      // File doesn't exist or can't be accessed
+      return false;
+    }
+  }
+
+  /**
+   * Perform log rotation
+   */
+  public async rotate(): Promise<void> {
+    try {
+      // Generate timestamp for rotated file
+      const timestamp = this.formatTimestamp(new Date());
+      const ext = path.extname(this.baseFilePath);
+      const basename = path.basename(this.baseFilePath, ext);
+      const dirname = path.dirname(this.baseFilePath);
+
+      // Create rotated filename: levante-2025-01-18-143025.log
+      const rotatedFileName = `${basename}-${timestamp}${ext}`;
+      const rotatedFilePath = path.join(dirname, rotatedFileName);
+
+      // Rename current log file
+      if (fs.existsSync(this.baseFilePath)) {
+        fs.renameSync(this.baseFilePath, rotatedFilePath);
+      }
+
+      // Compress if enabled, then cleanup (must be sequential)
+      if (this.config.compress) {
+        this.compressFile(rotatedFilePath)
+          .then(() => {
+            return this.cleanupOldFiles();
+          })
+          .catch(error => {
+            console.error('Failed to compress log file:', error);
+            // Still try cleanup even if compression fails
+            return this.cleanupOldFiles();
+          });
+      } else {
+        this.cleanupOldFiles().catch(error => {
+          console.error('Failed to cleanup old log files:', error);
+        });
+      }
+
+    } catch (error) {
+      console.error('Failed to rotate log file:', error);
+    }
+  }
+
+  /**
+   * Compress a rotated log file
+   */
+  private async compressFile(filePath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const gzipPath = `${filePath}.gz`;
+
+      // Skip if already compressed or doesn't exist
+      if (!fs.existsSync(filePath) || fs.existsSync(gzipPath)) {
+        resolve();
+        return;
+      }
+
+      const readStream = fs.createReadStream(filePath);
+      const writeStream = fs.createWriteStream(gzipPath);
+      const gzip = zlib.createGzip();
+
+      readStream
+        .pipe(gzip)
+        .pipe(writeStream)
+        .on('finish', () => {
+          // Delete original file after successful compression
+          try {
+            fs.unlinkSync(filePath);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        })
+        .on('error', reject);
+    });
+  }
+
+  /**
+   * Clean up old log files based on maxFiles and maxAge
+   */
+  private async cleanupOldFiles(): Promise<void> {
+    try {
+      const dirname = path.dirname(this.baseFilePath);
+      const ext = path.extname(this.baseFilePath);
+      const basename = path.basename(this.baseFilePath, ext);
+
+      // Get all rotated log files (including compressed)
+      const files = fs.readdirSync(dirname);
+      const logFiles = files
+        .filter(file => {
+          return file.startsWith(`${basename}-`) &&
+            (file.endsWith(ext) || file.endsWith(`${ext}.gz`));
+        })
+        .map(file => {
+          const filePath = path.join(dirname, file);
+          const stats = fs.statSync(filePath);
+          return {
+            path: filePath,
+            name: file,
+            mtime: stats.mtime,
+            size: stats.size
+          };
+        })
+        .sort((a, b) => b.mtime.getTime() - a.mtime.getTime()); // Newest first
+
+      // Delete files exceeding maxFiles limit
+      if (logFiles.length > this.config.maxFiles) {
+        const filesToDelete = logFiles.slice(this.config.maxFiles);
+        for (const file of filesToDelete) {
+          try {
+            fs.unlinkSync(file.path);
+          } catch (error) {
+            console.error(`Failed to delete log file ${file.name}:`, error);
+          }
+        }
+      }
+
+      // Delete files older than maxAge
+      const maxAgeMs = this.config.maxAge * 24 * 60 * 60 * 1000;
+      const now = Date.now();
+
+      for (const file of logFiles) {
+        const age = now - file.mtime.getTime();
+        if (age > maxAgeMs) {
+          try {
+            fs.unlinkSync(file.path);
+          } catch (error) {
+            console.error(`Failed to delete old log file ${file.name}:`, error);
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('Failed to cleanup log files:', error);
+    }
+  }
+
+  /**
+   * Format timestamp for rotated file names
+   */
+  private formatTimestamp(date: Date): string {
+    const pattern = this.config.datePattern || 'YYYY-MM-DD-HHmmss';
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const hours = String(date.getHours()).padStart(2, '0');
+    const minutes = String(date.getMinutes()).padStart(2, '0');
+    const seconds = String(date.getSeconds()).padStart(2, '0');
+
+    return pattern
+      .replace('YYYY', String(year))
+      .replace('MM', month)
+      .replace('DD', day)
+      .replace('HH', hours)
+      .replace('mm', minutes)
+      .replace('ss', seconds);
+  }
+}
+
 export class FileTransport implements LogTransport {
   private readonly resolvedFilePath: string;
+  private rotationManager?: LogRotationManager;
+  private rotationPromise?: Promise<void>;
 
-  constructor(private readonly filePath?: string) {
+  constructor(
+    private readonly filePath?: string,
+    private readonly rotationConfig?: LogRotationConfig
+  ) {
     // Use DirectoryService for consistent path management
-    this.resolvedFilePath = filePath 
+    this.resolvedFilePath = filePath
       ? this.resolveFilePath(filePath)
       : directoryService.getLogsPath();
-    
+
     this.ensureDirectoryExists();
+
+    // Initialize rotation manager if config provided
+    if (rotationConfig) {
+      this.rotationManager = new LogRotationManager(
+        this.resolvedFilePath,
+        rotationConfig
+      );
+    }
   }
 
   private resolveFilePath(filePath: string): string {
-    // If relative path, use DirectoryService to resolve within ~/levante/
     if (!path.isAbsolute(filePath)) {
       return directoryService.getFilePath(filePath);
     }
@@ -162,7 +356,6 @@ export class FileTransport implements LogTransport {
 
   private ensureDirectoryExists(): void {
     try {
-      // Ensure directory exists synchronously for constructor
       const directory = path.dirname(this.resolvedFilePath);
       require('fs').mkdirSync(directory, { recursive: true });
     } catch (error) {
@@ -172,29 +365,44 @@ export class FileTransport implements LogTransport {
 
   write(entry: LogEntry): void {
     try {
+      // Check if rotation is needed (before writing)
+      if (this.rotationManager && this.rotationManager.shouldRotate()) {
+        this.performRotation();
+      }
+
       const logLine = this.formatEntry(entry);
-      
-      // Append to file synchronously (for simplicity and reliability)
       fs.appendFileSync(this.resolvedFilePath, logLine + '\n', 'utf8');
     } catch (error) {
-      // Fallback to console if file writing fails
       console.error('Failed to write to log file:', error);
-      // Don't use ConsoleTransport to avoid infinite loops
       console.log(this.formatEntry(entry));
     }
+  }
+
+  private performRotation(): void {
+    // Prevent concurrent rotation
+    if (this.rotationPromise) {
+      return;
+    }
+
+    // Perform rotation asynchronously
+    this.rotationPromise = this.rotationManager!
+      .rotate()
+      .finally(() => {
+        this.rotationPromise = undefined;
+      });
   }
 
   private formatEntry(entry: LogEntry): string {
     const timestamp = this.formatTimestamp(entry.timestamp);
     const category = `[${entry.category.toUpperCase()}]`;
     const level = `[${entry.level.toUpperCase()}]`;
-    
+
     let output = `${timestamp} ${category} ${level} ${entry.message}`;
-    
+
     if (entry.context && Object.keys(entry.context).length > 0) {
       output += ' ' + this.formatContext(entry.context);
     }
-    
+
     return output;
   }
 

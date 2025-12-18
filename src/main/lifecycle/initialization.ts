@@ -9,7 +9,7 @@
  */
 
 import { app, BrowserWindow } from "electron";
-import { getLogger, setLogTimezone } from "../services/logging";
+import { getLogger, setLogTimezone, initializeLogger } from "../services/logging";
 import { databaseService } from "../services/databaseService";
 import { preferencesService } from "../services/preferencesService";
 import { userProfileService } from "../services/userProfileService";
@@ -75,6 +75,10 @@ export async function initializeServices(): Promise<void> {
       setLogTimezone(timezone);
       logger.core.info("Log timezone configured", { timezone });
     }
+
+    // Initialize logger after preferences are available so rotation config is applied
+    initializeLogger();
+    logger.core.info("Logger initialized with persisted preferences");
   } catch (error) {
     logger.core.error("Failed to initialize preferences service", {
       error: error instanceof Error ? error.message : error,
