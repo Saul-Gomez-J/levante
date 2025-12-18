@@ -7,8 +7,7 @@ import {
   AIConfigSection,
   DeveloperModeSection,
   RuntimesSection,
-  MCPSection,
-  LoggingSection
+  MCPSection
 } from '@/components/settings';
 
 const SettingsPage = () => {
@@ -45,7 +44,6 @@ const SettingsPage = () => {
         <DeveloperModeSection />
         {developerMode && <RuntimesSection />}
         <MCPSection />
-        <LoggingSection />
       </div>
     </div>
   );

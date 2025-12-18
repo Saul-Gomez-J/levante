@@ -49,32 +49,7 @@ LOG_COMPRESS=false       # Gzip rotated files
 LOG_DATE_PATTERN=YYYY-MM-DD-HHmmss
 ```
 
-## Persistent Configuration (Production)
-
-In production or compiled applications, logging configuration is stored in `~/levante/ui-preferences.json`. This ensures that settings persist even after application updates.
-
-### Configuration Schema
-
-```json
-{
-  "logging": {
-    "rotation": {
-      "maxSize": 10485760,
-      "maxFiles": 5,
-      "maxAge": 7,
-      "compress": false
-    }
-  }
-}
-```
-
-## UI Configuration
-
-You can configure log management directly in the application settings:
-1. Open **Settings**
-2. Scroll to the **Log Rotation** section
-3. Adjust file size, retention limits, and compression settings
-4. Click **Save Settings**
+> Nota: la aplicación usa siempre estos valores por defecto o los que definas por entorno; no hay configuración desde la UI.
 
 ## Log Rotation
 

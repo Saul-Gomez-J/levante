@@ -7,4 +7,3 @@ export { AIConfigSection } from './AIConfigSection';
 export { DeveloperModeSection } from './DeveloperModeSection';
 export { RuntimesSection } from './RuntimesSection';
 export { MCPSection } from './MCPSection';
-export { LoggingSection } from './LoggingSection';

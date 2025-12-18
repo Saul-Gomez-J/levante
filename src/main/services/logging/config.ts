@@ -48,46 +48,14 @@ export class LoggerConfigService {
   private loadConfig(): LoggerConfig {
     const env = process.env;
 
-    // NUEVO: Cargar configuración de rotación desde preferences
-    let rotationConfig: LogRotationConfig | undefined;
-    let usedFallbackConfig = false;
-
-    try {
-      // Importar preferencesService de forma segura
-      const { preferencesService } = require('../preferencesService');
-
-      if (preferencesService && preferencesService.isInitialized()) {
-        const logging = preferencesService.get('logging');
-        if (logging?.rotation) {
-          rotationConfig = logging.rotation;
-          // Note: can't use logger here as it's not yet initialized
-        }
-      }
-    } catch (error) {
-      // PreferencesService no disponible aún (primera inicialización)
-      // Usar variables de entorno como fallback
-      usedFallbackConfig = true;
-    }
-
-    // Fallback a variables de entorno (desarrollo) o defaults
-    if (!rotationConfig) {
-      usedFallbackConfig = true;
-      rotationConfig = {
-        maxSize: this.parseInt(env.LOG_MAX_SIZE, 10 * 1024 * 1024),
-        maxFiles: this.parseInt(env.LOG_MAX_FILES, 3),
-        maxAge: this.parseInt(env.LOG_MAX_AGE, 7),
-        compress: this.parseBoolean(env.LOG_COMPRESS, false),
-        datePattern: env.LOG_DATE_PATTERN || 'YYYY-MM-DD-HHmmss'
-      };
-
-      // Si usamos env vars, guardar en preferences para próxima vez
-      this.migrateEnvToPreferences(rotationConfig);
-    }
-
-    if (usedFallbackConfig) {
-      // No logger available here yet; warn via console
-      console.warn("[logger] Preferences not available, using env/default rotation config");
-    }
+    // Configuración fija (permitimos override por env, no por UI)
+    const rotationConfig: LogRotationConfig = {
+      maxSize: this.parseInt(env.LOG_MAX_SIZE, 10 * 1024 * 1024),
+      maxFiles: this.parseInt(env.LOG_MAX_FILES, 3),
+      maxAge: this.parseInt(env.LOG_MAX_AGE, 7),
+      compress: this.parseBoolean(env.LOG_COMPRESS, false),
+      datePattern: env.LOG_DATE_PATTERN || 'YYYY-MM-DD-HHmmss'
+    };
 
     return {
       enabled: this.parseBoolean(env.DEBUG_ENABLED, true),
@@ -109,25 +77,6 @@ export class LoggerConfigService {
         rotation: rotationConfig,
       },
     };
-  }
-
-  /**
-   * Migra configuración de .env.local a ui-preferences.json
-   */
-  private migrateEnvToPreferences(rotationConfig: LogRotationConfig): void {
-    try {
-      const { preferencesService } = require('../preferencesService');
-
-      if (preferencesService && preferencesService['initialized']) {
-        // Solo migrar si no existe ya en preferences
-        const existing = preferencesService.get('logging');
-        if (!existing?.rotation) {
-          preferencesService.set('logging', { rotation: rotationConfig });
-        }
-      }
-    } catch (error) {
-      // Silenciar error - no crítico
-    }
   }
 
   private parseInt(

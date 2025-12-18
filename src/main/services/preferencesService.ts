@@ -185,40 +185,6 @@ export class PreferencesService {
           enableMCP: {
             type: 'boolean',
             default: true
-          },
-          // NUEVO: Schema para logging
-          logging: {
-            type: 'object',
-            properties: {
-              rotation: {
-                type: 'object',
-                properties: {
-                  maxSize: { type: 'number', minimum: 1024, default: 10485760 },
-                  maxFiles: { type: 'number', minimum: 1, default: 3 },
-                  maxAge: { type: 'number', minimum: 1, default: 7 },
-                  compress: { type: 'boolean', default: false },
-                  datePattern: { type: 'string' }
-                },
-                required: ['maxSize', 'maxFiles', 'maxAge', 'compress'],
-                default: {
-                  maxSize: 10485760,
-                  maxFiles: 3,
-                  maxAge: 7,
-                  compress: false,
-                  datePattern: 'YYYY-MM-DD-HHmmss'
-                }
-              }
-            },
-            required: ['rotation'],
-            default: {
-              rotation: {
-                maxSize: 10485760,
-                maxFiles: 3,
-                maxAge: 7,
-                compress: false,
-                datePattern: 'YYYY-MM-DD-HHmmss'
-              }
-            }
           }
         }
       });

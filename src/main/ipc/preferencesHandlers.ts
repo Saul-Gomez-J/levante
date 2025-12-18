@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron';
 import { preferencesService } from '../services/preferencesService';
 import { PreferenceKey, UIPreferences } from '../../types/preferences';
-import { getLogger, setLogTimezone, initializeLogger } from '../services/logging';
+import { getLogger, setLogTimezone } from '../services/logging';
 
 const logger = getLogger();
 
@@ -34,15 +34,6 @@ export function setupPreferencesHandlers() {
       if (key === 'timezone' && typeof value === 'string') {
         setLogTimezone(value);
         logger.preferences.info('Log timezone updated', { timezone: value });
-      }
-
-      // Refresh logger configuration when logging preferences change
-      if (key === 'logging') {
-        // Use the value directly from the set() call instead of re-reading
-        initializeLogger();
-        logger.preferences.info('Logger reconfigured after preference change', {
-          savedConfig: value
-        });
       }
 
       return {

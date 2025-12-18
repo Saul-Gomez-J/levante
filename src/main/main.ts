@@ -6,6 +6,7 @@ fixPath();
 import { app, BrowserWindow } from "electron";
 import { join } from "path";
 import { config } from "dotenv";
+import { initializeLogger } from "./services/logging";
 import { updateService } from "./services/updateService";
 import { deepLinkService } from "./services/deepLinkService";
 import { oauthCallbackServer } from "./services/oauthCallbackServer";
@@ -20,6 +21,9 @@ import { registerAppEvents, setupDeepLinkHandling } from "./lifecycle/events";
 // Load environment variables
 config({ path: join(__dirname, "../../.env.local") });
 config({ path: join(__dirname, "../../.env") });
+
+// Initialize logger
+initializeLogger();
 
 // Initialize auto-updates
 updateService.initialize();
