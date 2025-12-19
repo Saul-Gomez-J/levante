@@ -888,12 +888,29 @@ function convertJsonSchemaToZod(schema: any, debugPath?: string): any {
     // Object with specific properties
     if (schema.properties && Object.keys(schema.properties).length > 0) {
       const schemaObj: Record<string, any> = {};
+      const propertyNames = Object.keys(schema.properties);
+
+      // Validate required array - filter out properties that don't exist
+      // This is crucial for Gemini API which strictly validates this
+      const validRequired = schema.required
+        ? (schema.required as string[]).filter(reqProp => {
+            const exists = propertyNames.includes(reqProp);
+            if (!exists) {
+              logger.aiSdk.warn("Required property not found in properties (Gemini will reject this)", {
+                path: debugPath,
+                requiredProperty: reqProp,
+                availableProperties: propertyNames
+              });
+            }
+            return exists;
+          })
+        : [];
 
       for (const [propName, propDef] of Object.entries(schema.properties)) {
         const propSchema = convertJsonSchemaToZod(propDef, `${debugPath || ''}.${propName}`);
 
-        // Handle required fields
-        if (schema.required && Array.isArray(schema.required) && schema.required.includes(propName)) {
+        // Handle required fields using validated required array
+        if (validRequired.includes(propName)) {
           schemaObj[propName] = propSchema;
         } else {
           schemaObj[propName] = propSchema.optional();
@@ -923,8 +940,14 @@ function convertJsonSchemaToZod(schema: any, debugPath?: string): any {
       return z.record(z.any()).describe(description);
     }
 
-    // Fallback: empty object
-    return z.object({}).describe(description);
+    // IMPORTANT: Object with no properties and no additionalProperties
+    // This represents "any object" in JSON Schema, so use z.record(z.any())
+    // Using z.object({}) would create a closed empty object that Gemini rejects
+    logger.aiSdk.debug("Converting bare object (no properties) to z.record(z.any())", {
+      path: debugPath,
+      reason: "Gemini requires objects without properties to be treated as dynamic records"
+    });
+    return z.record(z.any()).describe(description);
   }
 
   // Handle primitive types
@@ -949,6 +972,13 @@ function convertJsonSchemaToZod(schema: any, debugPath?: string): any {
 function createAISDKTool(serverId: string, mcpTool: Tool) {
   logger.aiSdk.debug("Creating AI SDK tool", { serverId, toolName: mcpTool.name });
 
+  // Log the RAW MCP schema BEFORE any conversion
+  logger.aiSdk.debug("Raw MCP tool schema", {
+    serverId,
+    toolName: mcpTool.name,
+    fullInputSchema: JSON.stringify(mcpTool.inputSchema, null, 2)
+  });
+
   // Validate tool name
   if (!mcpTool.name || mcpTool.name.trim() === "") {
     throw new Error(
@@ -962,6 +992,34 @@ function createAISDKTool(serverId: string, mcpTool: Tool) {
   try {
     if (mcpTool.inputSchema && mcpTool.inputSchema.properties) {
       const schemaObj: Record<string, any> = {};
+      const propertyNames = Object.keys(mcpTool.inputSchema.properties);
+
+      // Log the full schema for debugging Gemini issues
+      logger.aiSdk.debug("Processing tool schema", {
+        toolName: mcpTool.name,
+        serverId,
+        hasRequired: !!mcpTool.inputSchema.required,
+        requiredArray: mcpTool.inputSchema.required || [],
+        propertyNames,
+        fullSchema: JSON.stringify(mcpTool.inputSchema, null, 2)
+      });
+
+      // Validate required array - filter out properties that don't exist
+      // This is crucial for Gemini API which strictly validates this
+      const validRequired = mcpTool.inputSchema.required
+        ? (mcpTool.inputSchema.required as string[]).filter(reqProp => {
+            const exists = propertyNames.includes(reqProp);
+            if (!exists) {
+              logger.aiSdk.warn("Tool has required property not in properties (Gemini will reject)", {
+                toolName: mcpTool.name,
+                requiredProperty: reqProp,
+                availableProperties: propertyNames,
+                serverId
+              });
+            }
+            return exists;
+          })
+        : [];
 
       for (const [propName, propDef] of Object.entries(
         mcpTool.inputSchema.properties
@@ -972,8 +1030,8 @@ function createAISDKTool(serverId: string, mcpTool: Tool) {
         // Pass tool name and property for better debugging
         schemaObj[propName] = convertJsonSchemaToZod(propInfo, `${mcpTool.name}.${propName}`);
 
-        // Handle required fields at top level
-        if (!mcpTool.inputSchema.required?.includes(propName)) {
+        // Handle required fields using validated required array
+        if (!validRequired.includes(propName)) {
           schemaObj[propName] = schemaObj[propName].optional();
         }
       }
