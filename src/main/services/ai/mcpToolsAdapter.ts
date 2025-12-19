@@ -837,6 +837,113 @@ export async function getMCPTools(): Promise<Record<string, any>> {
 }
 
 /**
+ * Recursively convert JSON Schema to Zod schema
+ * Preserves array items definitions for proper Google Generative AI compatibility
+ */
+function convertJsonSchemaToZod(schema: any, debugPath?: string): any {
+  if (!schema || typeof schema !== 'object') {
+    return z.any().describe(schema?.description || "");
+  }
+
+  const description = schema.description || "";
+
+  // Handle array type with items
+  if (schema.type === "array") {
+    // Log problematic arrays for debugging
+    if (debugPath && (debugPath.includes('nodes') || debugPath.includes('operations'))) {
+      logger.aiSdk.debug("Converting array schema", {
+        path: debugPath,
+        hasItems: !!schema.items,
+        itemsType: typeof schema.items,
+        itemsValue: JSON.stringify(schema.items, null, 2),
+        fullSchema: JSON.stringify(schema, null, 2)
+      });
+    }
+
+    if (schema.items) {
+      // Handle array of schemas (tuple type) - not commonly used but possible
+      if (Array.isArray(schema.items)) {
+        logger.aiSdk.warn("Array items is an array (tuple type), using any[]", {
+          path: debugPath,
+          itemsLength: schema.items.length
+        });
+        return z.array(z.any()).describe(description);
+      }
+
+      // Recursively convert items schema
+      const itemsSchema = convertJsonSchemaToZod(schema.items, `${debugPath || ''}.items`);
+      return z.array(itemsSchema).describe(description);
+    }
+
+    // Fallback if no items defined
+    logger.aiSdk.warn("Array without items definition", {
+      path: debugPath,
+      schema: JSON.stringify(schema, null, 2)
+    });
+    return z.array(z.any()).describe(description);
+  }
+
+  // Handle object type
+  if (schema.type === "object") {
+    // Object with specific properties
+    if (schema.properties && Object.keys(schema.properties).length > 0) {
+      const schemaObj: Record<string, any> = {};
+
+      for (const [propName, propDef] of Object.entries(schema.properties)) {
+        const propSchema = convertJsonSchemaToZod(propDef, `${debugPath || ''}.${propName}`);
+
+        // Handle required fields
+        if (schema.required && Array.isArray(schema.required) && schema.required.includes(propName)) {
+          schemaObj[propName] = propSchema;
+        } else {
+          schemaObj[propName] = propSchema.optional();
+        }
+      }
+
+      return z.object(schemaObj).describe(description);
+    }
+
+    // Object with additionalProperties (generic object with dynamic keys)
+    // This handles cases like { "type": "object", "additionalProperties": true }
+    if (schema.additionalProperties === true || (schema.additionalProperties && typeof schema.additionalProperties === 'object')) {
+      logger.aiSdk.debug("Converting object with additionalProperties to z.record()", {
+        path: debugPath,
+        hasAdditionalProperties: !!schema.additionalProperties,
+        additionalPropertiesType: typeof schema.additionalProperties
+      });
+
+      // Use z.record() for objects with dynamic keys
+      // If additionalProperties is an object (schema), convert it recursively
+      if (typeof schema.additionalProperties === 'object') {
+        const valueSchema = convertJsonSchemaToZod(schema.additionalProperties, `${debugPath || ''}.additionalProperties`);
+        return z.record(valueSchema).describe(description);
+      }
+
+      // If additionalProperties is just true, use z.any() for values
+      return z.record(z.any()).describe(description);
+    }
+
+    // Fallback: empty object
+    return z.object({}).describe(description);
+  }
+
+  // Handle primitive types
+  switch (schema.type) {
+    case "string":
+      return z.string().describe(description);
+    case "number":
+    case "integer":
+      return z.number().describe(description);
+    case "boolean":
+      return z.boolean().describe(description);
+    case "null":
+      return z.null().describe(description);
+    default:
+      return z.any().describe(description);
+  }
+}
+
+/**
  * Convert an MCP tool to AI SDK format
  */
 function createAISDKTool(serverId: string, mcpTool: Tool) {
@@ -861,35 +968,11 @@ function createAISDKTool(serverId: string, mcpTool: Tool) {
       )) {
         const propInfo = propDef as any;
 
-        // Map common schema types to Zod
-        switch (propInfo.type) {
-          case "string":
-            schemaObj[propName] = z
-              .string()
-              .describe(propInfo.description || "");
-            break;
-          case "number":
-            schemaObj[propName] = z
-              .number()
-              .describe(propInfo.description || "");
-            break;
-          case "boolean":
-            schemaObj[propName] = z
-              .boolean()
-              .describe(propInfo.description || "");
-            break;
-          case "array":
-            schemaObj[propName] = z
-              .array(z.any())
-              .describe(propInfo.description || "");
-            break;
-          default:
-            schemaObj[propName] = z
-              .any()
-              .describe(propInfo.description || "");
-        }
+        // Use recursive converter to properly handle nested structures
+        // Pass tool name and property for better debugging
+        schemaObj[propName] = convertJsonSchemaToZod(propInfo, `${mcpTool.name}.${propName}`);
 
-        // Handle required fields
+        // Handle required fields at top level
         if (!mcpTool.inputSchema.required?.includes(propName)) {
           schemaObj[propName] = schemaObj[propName].optional();
         }
