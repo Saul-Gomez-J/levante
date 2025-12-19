@@ -592,6 +592,18 @@ export class AIService {
     }
   }
 
+  private async getBuiltInToolsConfig(): Promise<{ mermaidValidation: boolean }> {
+    try {
+      const { preferencesService } = await import("./preferencesService");
+      const aiPrefs = preferencesService.get('ai') as any;
+      return {
+        mermaidValidation: aiPrefs?.mermaidValidation !== false // Enabled by default
+      };
+    } catch {
+      return { mermaidValidation: true };
+    }
+  }
+
   async *streamChat(
     request: ChatRequest
   ): AsyncGenerator<ChatStreamChunk, void, unknown> {
@@ -679,9 +691,17 @@ export class AIService {
       const modelProvider = await getModelProvider(model);
 
       // Get MCP tools if enabled
+      // Get MCP tools if enabled
       let tools = {};
+
+      // Get built-in tools (always available, independent of MCP)
+      const { getBuiltInTools } = await import('./ai/builtInTools');
+      const builtInToolsConfig = await this.getBuiltInToolsConfig();
+      const builtInTools = await getBuiltInTools(builtInToolsConfig);
+
       if (enableMCP) {
-        tools = await getMCPTools();
+        const mcpTools = await getMCPTools();
+        tools = { ...builtInTools, ...mcpTools };
         this.logger.aiSdk.debug("Passing tools to streamText", {
           toolCount: Object.keys(tools).length,
           toolNames: Object.keys(tools),
@@ -748,6 +768,8 @@ export class AIService {
             finalToolNames: Object.keys(tools),
           }
         );
+      } else {
+        tools = builtInTools;
       }
 
       const messagesWithFileParts = await this.includeAttachmentsInMessageParts(
@@ -993,7 +1015,7 @@ export class AIService {
   /**
    * Handle inference model (text-to-image, image-to-image, etc.)
    */
-  private async *handleInferenceModel(
+  private async * handleInferenceModel(
     request: ChatRequest,
     taskType: InferenceTask
   ): AsyncGenerator<ChatStreamChunk, void, unknown> {

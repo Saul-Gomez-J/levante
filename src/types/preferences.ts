@@ -48,6 +48,7 @@ export interface UIPreferences {
   ai: {
     baseSteps: number;
     maxSteps: number;
+    mermaidValidation: boolean;
   };
   hasAcceptedFreeModelWarning?: boolean;
   developerMode: boolean;
@@ -114,6 +115,7 @@ export const DEFAULT_PREFERENCES: UIPreferences = {
   ai: {
     baseSteps: 5,
     maxSteps: 20,
+    mermaidValidation: true,
   },
   hasAcceptedFreeModelWarning: false,
   developerMode: false,

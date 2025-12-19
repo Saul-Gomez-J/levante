@@ -7,8 +7,10 @@ import StorePage from '@/pages/StorePage'
 import { OnboardingWizard } from '@/pages/OnboardingWizard'
 import { MCPDeepLinkModal } from '@/components/mcp/deep-link/MCPDeepLinkModal'
 import { useChatStore, initializeChatStore } from '@/stores/chatStore'
-import { modelService } from '@/services/modelService'
 import { logger } from '@/services/logger'
+import { modelService } from '@/services/modelService'
+import { setupMermaidValidationHandler } from '@/services/mermaidValidationService'
+
 import { useTranslation } from 'react-i18next'
 import { toast, Toaster } from 'sonner'
 import '@/i18n/config' // Initialize i18n
@@ -70,7 +72,7 @@ function App() {
       window.removeEventListener('theme-changed', handleThemeChange as EventListener);
     };
   }, []);
-  
+
   // Apply theme to document
   useEffect(() => {
     const root = document.documentElement;
@@ -160,6 +162,15 @@ function App() {
   useEffect(() => {
     const initializeServices = async () => {
       logger.core.info('Renderer application starting');
+
+      // Initialize mermaid validation handler
+      try {
+        setupMermaidValidationHandler();
+        logger.core.info('Mermaid validation handler initialized');
+      } catch (error) {
+        logger.core.error('Failed to initialize Mermaid validation handler', { error });
+      }
+
       await Promise.all([
         initializeChatStore(),
         modelService.initialize()
@@ -171,7 +182,7 @@ function App() {
       logger.core.error('Failed to initialize renderer services', { error: error instanceof Error ? error.message : error });
     });
   }, []);
-  
+
   // Chat management for sidebar - using Zustand selectors
   const currentSession = useChatStore((state) => state.currentSession)
   const sessions = useChatStore((state) => state.sessions)

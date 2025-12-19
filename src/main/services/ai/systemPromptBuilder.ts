@@ -159,7 +159,14 @@ graph TD
 \`\`\`
 (Too many emojis, too many line breaks, bright yellow/green with poor contrast)
 
-Always provide diagrams when users request visual representations, but prioritize simple, parseable syntax over visual complexity.`;
+Always provide diagrams when users request visual representations, but prioritize simple, parseable syntax over visual complexity.
+
+VALIDATION PROTOCOL:
+If you are requested to generate a Mermaid diagram or decide to generate one:
+1. You MUST use the \`builtin_validate_mermaid\` tool to validate the code BEFORE presenting it.
+2. If validation fails, use the error information to fix the code and validate again.
+3. Only output the Mermaid code block if it passes validation.
+4. Output the diagram in a markdown code block with the \`mermaid\` language identifier.`;
 
   // Debug log for final system prompt
   logger.aiSdk.debug('Final system prompt generated', {
