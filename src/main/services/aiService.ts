@@ -769,9 +769,9 @@ export class AIService {
           enableMCP,
           Object.keys(tools).length
         ),
-        stopWhen: stepCountIs(
-          await calculateMaxSteps(Object.keys(tools).length)
-        ),
+        // Use stopWhen as recommended in AI SDK v5 (not maxSteps)
+        // This allows the model to continue generating after tool results
+        stopWhen: stepCountIs(await calculateMaxSteps(Object.keys(tools).length)),
 
         // Callback for each chunk - measure TTFB
         onChunk: ({ chunk }) => {
@@ -1387,9 +1387,7 @@ export class AIService {
           enableMCP,
           Object.keys(tools).length
         ),
-        stopWhen: stepCountIs(
-          await calculateMaxSteps(Object.keys(tools).length)
-        ),
+        stopWhen: stepCountIs(await calculateMaxSteps(Object.keys(tools).length)),
       });
 
       return {

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,12 +21,32 @@ export function ApiKeysModal({ isOpen, onClose, onSubmit, serverName, fields }: 
   const [values, setValues] = useState<Record<string, string>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Initialize values with defaults when fields change
+  useEffect(() => {
+    const initialValues: Record<string, string> = {};
+    fields.forEach(field => {
+      if (field.defaultValue) {
+        initialValues[field.key] = field.defaultValue;
+      }
+    });
+    setValues(initialValues);
+  }, [fields]);
+
   const handleSubmit = () => {
     const newErrors: Record<string, string> = {};
 
-    // Validate required fields
+    // Prepare final values, including defaults for fields not filled
+    const finalValues: Record<string, string> = {};
     fields.forEach(field => {
-      if (field.required && (!values[field.key] || values[field.key].trim() === '')) {
+      const value = values[field.key];
+      if (value !== undefined && value !== '') {
+        // User provided a value
+        finalValues[field.key] = value;
+      } else if (field.defaultValue) {
+        // Use default value if available
+        finalValues[field.key] = field.defaultValue;
+      } else if (field.required) {
+        // Required field with no value and no default
         newErrors[field.key] = t('config.validation.field_required', { field: field.label });
       }
     });
@@ -37,7 +57,7 @@ export function ApiKeysModal({ isOpen, onClose, onSubmit, serverName, fields }: 
     }
 
     // Submit values
-    onSubmit(values);
+    onSubmit(finalValues);
 
     // Reset form
     setValues({});
