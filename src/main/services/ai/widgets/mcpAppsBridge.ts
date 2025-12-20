@@ -17,6 +17,7 @@
  * Events:
  * - mcp:tool-input: Tool input received
  * - mcp:tool-result: Tool result received
+ * - mcp:tool-cancelled: Tool execution was cancelled
  * - mcp:context-change: Host context changed
  * - mcp:teardown: Widget is about to be torn down
  *
@@ -237,6 +238,10 @@ export function generateMcpAppsBridgeScript(options: WidgetBridgeOptions): strin
           if (params.locale) window.openai.locale = params.locale;
           if (params.displayMode) window.openai.displayMode = params.displayMode;
           window.dispatchEvent(new CustomEvent('mcp:context-change', { detail: params }));
+          break;
+
+        case 'ui/notifications/tool-cancelled':
+          window.dispatchEvent(new CustomEvent('mcp:tool-cancelled', { detail: params }));
           break;
 
         case 'ui/notifications/teardown':
