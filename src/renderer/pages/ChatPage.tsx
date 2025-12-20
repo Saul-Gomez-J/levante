@@ -50,6 +50,7 @@ const ChatPage = () => {
   const [pendingFirstMessage, setPendingFirstMessage] = useState<string | null>(null);
   const [pendingFirstAttachments, setPendingFirstAttachments] = useState<File[] | null>(null);
   const [pendingMessageAfterStop, setPendingMessageAfterStop] = useState<string | null>(null);
+  const [pendingWidgetMessage, setPendingWidgetMessage] = useState<string | null>(null);
 
   // MCP Resources hook
   const {
@@ -335,6 +336,47 @@ const ChatPage = () => {
         });
     }
   }, [pendingMessageAfterStop, status, sendMessageAI, persistMessage]);
+
+  // Handle messages sent from fullscreen widgets
+  useEffect(() => {
+    if (pendingWidgetMessage && currentSession && status !== 'streaming' && status !== 'submitted') {
+      const messageText = pendingWidgetMessage;
+      setPendingWidgetMessage(null);
+
+      // Persist user message to database BEFORE sending to AI
+      const userMessage = {
+        id: `user-${Date.now()}`,
+        role: 'user' as const,
+        parts: [{ type: 'text' as const, text: messageText }],
+        attachments: undefined,
+      };
+
+      persistMessage(userMessage)
+        .then(() => {
+          sendMessageAI({ text: messageText });
+        })
+        .catch((err) => {
+          logger.database.error('Failed to persist widget message', { error: err });
+        });
+    }
+  }, [pendingWidgetMessage, currentSession, status, sendMessageAI, persistMessage]);
+
+  // Callback for sending messages directly from widgets (fullscreen chat input)
+  const handleSendMessage = useCallback((text: string) => {
+    if (!text.trim()) return;
+
+    if (currentSession && status !== 'streaming' && status !== 'submitted') {
+      // Send immediately if we have a session and not streaming
+      setPendingWidgetMessage(text);
+    } else if (status === 'streaming') {
+      // If streaming, queue it after stop
+      setPendingMessageAfterStop(text);
+      stop();
+    } else {
+      // No session - set input so user can send normally (will create session)
+      setInput(text);
+    }
+  }, [currentSession, status, stop, setInput]);
 
   // Load messages when session changes
   useEffect(() => {
@@ -797,6 +839,8 @@ const ChatPage = () => {
                   message={message}
                   isStreaming={status === 'streaming'}
                   onPrompt={setInput}
+                  onSendMessage={handleSendMessage}
+                  chatMessages={messages}
                 />
               ))}
 

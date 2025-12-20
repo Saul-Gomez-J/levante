@@ -22,6 +22,8 @@ import {
 } from '@/components/ui/dialog';
 import { Maximize2, Minimize2, PictureInPicture2, X } from 'lucide-react';
 import { logger } from '@/services/logger';
+import { FullscreenChatInput } from './FullscreenChatInput';
+import type { UIMessage } from '@ai-sdk/react';
 
 // Type for UIResourceRenderer's resource prop (using any to avoid SDK type conflicts)
 type RendererResource = Parameters<typeof UIResourceRenderer>[0]['resource'];
@@ -31,7 +33,9 @@ interface UIResourceMessageProps {
   serverId?: string;
   className?: string;
   onPrompt?: (prompt: string) => void;
+  onSendMessage?: (text: string) => void;
   onToolCall?: (toolName: string, params: Record<string, unknown>) => Promise<unknown>;
+  chatMessages?: UIMessage[];
 }
 
 /**
@@ -46,9 +50,14 @@ function WidgetControls({
   onModeChange: (mode: UIResourceDisplayMode) => void;
   onClose?: () => void;
 }) {
+  // In fullscreen mode, only show PiP button (X is in header bar)
+  const showFullscreenButton = mode !== 'fullscreen';
+  const showPipButton = mode !== 'pip';
+  const showCloseButton = onClose && mode !== 'fullscreen';
+
   return (
     <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-background/80 backdrop-blur-sm rounded-md p-1">
-      {mode !== 'fullscreen' && (
+      {showFullscreenButton && (
         <Button
           variant="ghost"
           size="icon"
@@ -59,18 +68,7 @@ function WidgetControls({
           <Maximize2 className="h-3 w-3" />
         </Button>
       )}
-      {mode === 'fullscreen' && (
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6"
-          onClick={() => onModeChange('inline')}
-          title="Exit Fullscreen"
-        >
-          <Minimize2 className="h-3 w-3" />
-        </Button>
-      )}
-      {mode !== 'pip' && (
+      {showPipButton && (
         <Button
           variant="ghost"
           size="icon"
@@ -81,7 +79,7 @@ function WidgetControls({
           <PictureInPicture2 className="h-3 w-3" />
         </Button>
       )}
-      {onClose && (
+      {showCloseButton && (
         <Button
           variant="ghost"
           size="icon"
@@ -94,6 +92,28 @@ function WidgetControls({
       )}
     </div>
   );
+}
+
+/**
+ * Extract widget/tool name from resource for display in header
+ */
+function getWidgetName(resource: UIResource): string {
+  // Try to extract from metadata
+  const meta = resource.resource?._meta;
+  if (meta?.toolName && typeof meta.toolName === 'string') {
+    return meta.toolName;
+  }
+
+  // Fallback to URI - extract last segment
+  const uri = resource.resource?.uri || '';
+  if (uri) {
+    // Handle "ui://server/tool" or similar patterns
+    const parts = uri.replace(/^ui:\/\//, '').split('/');
+    const lastPart = parts[parts.length - 1];
+    if (lastPart) return lastPart;
+  }
+
+  return 'Widget';
 }
 
 /**
@@ -129,7 +149,9 @@ export function UIResourceMessage({
   serverId,
   className,
   onPrompt,
+  onSendMessage,
   onToolCall,
+  chatMessages,
 }: UIResourceMessageProps) {
   const theme = useThemeDetector();
   const [displayMode, setDisplayMode] = useState<UIResourceDisplayMode>('inline');
@@ -138,6 +160,8 @@ export function UIResourceMessage({
   const containerRef = useRef<HTMLDivElement>(null);
   // Direct iframe ref for proper focus control (MCP-UI recommended approach)
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  // Track if user manually closed fullscreen to prevent widget from reopening it
+  const userClosedFullscreenRef = useRef(false);
 
   // Widget proxy state for HTML widgets that need CSP bypass
   // Uses HTTP localhost proxy instead of srcdoc to give widgets their own origin
@@ -216,6 +240,26 @@ export function UIResourceMessage({
     });
     return data;
   }, [resource]);
+
+  // Convert UIMessage[] to simplified ChatMessage[] for fullscreen overlay
+  // Only extract text content, no tool calls or widget renders
+  const simplifiedMessages = useMemo(() => {
+    if (!chatMessages) return [];
+    return chatMessages
+      .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
+      .map((msg) => {
+        // Extract text from parts
+        const textParts = msg.parts
+          ?.filter((part: any) => part?.type === 'text' && part?.text)
+          .map((part: any) => part.text) || [];
+        const content = textParts.join('\n').trim();
+        return {
+          role: msg.role as 'user' | 'assistant',
+          content,
+        };
+      })
+      .filter((msg) => msg.content); // Only include messages with content
+  }, [chatMessages]);
 
   // Extract HTML content and base URL from resource (memoized to prevent unnecessary re-renders)
   const { widgetHtmlContent, widgetBaseUrl } = useMemo(() => {
@@ -615,6 +659,16 @@ export function UIResourceMessage({
           const mode = data.mode || data.payload?.mode;
           logger.mcp.info('Widget requesting display mode', { mode });
           if (mode === 'inline' || mode === 'pip' || mode === 'fullscreen') {
+            // If user manually closed fullscreen, ignore widget's fullscreen requests
+            if (mode === 'fullscreen' && userClosedFullscreenRef.current) {
+              logger.mcp.info('Ignoring fullscreen request - user manually closed it');
+              // Still respond but with current mode
+              (event.source as Window)?.postMessage({
+                type: 'openai:set_globals',
+                globals: { displayMode: displayMode },
+              }, '*');
+              break;
+            }
             setDisplayMode(mode);
             // Respond with set_globals to confirm the mode change
             (event.source as Window)?.postMessage({
@@ -956,11 +1010,13 @@ export function UIResourceMessage({
   // Fullscreen mode
   if (displayMode === 'fullscreen') {
     const isLoadingProxy = needsWidgetProxy && !widgetProxyUrl;
+    const widgetName = getWidgetName(resource);
 
     return (
       <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col">
+        {/* Widget content - takes full space */}
         <div
-          className="flex-1 p-4 overflow-auto focus-within:ring-2 focus-within:ring-ring"
+          className="flex-1 overflow-auto focus-within:ring-2 focus-within:ring-ring min-h-0"
           tabIndex={0}
           onClick={() => {
             const iframe = document.querySelector('.fixed.inset-0 iframe') as HTMLIFrameElement;
@@ -1019,10 +1075,16 @@ export function UIResourceMessage({
             </Suspense>
           )}
         </div>
-        <WidgetControls
-          mode={displayMode}
-          onModeChange={setDisplayMode}
-          onClose={() => setDisplayMode('inline')}
+
+        {/* Bottom bar with chat input, title and close */}
+        <FullscreenChatInput
+          onSubmit={onSendMessage || onPrompt || (() => {})}
+          onClose={() => {
+            userClosedFullscreenRef.current = true;
+            setDisplayMode('inline');
+          }}
+          widgetName={widgetName}
+          messages={simplifiedMessages}
         />
       </div>
     );
