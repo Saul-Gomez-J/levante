@@ -111,9 +111,9 @@ export function ToolCall({ toolCall, className }: ToolCallProps) {
 
       {/* Drawer lateral con detalles completos */}
       <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
-        <SheetContent side="right" className="w-[900px] sm:max-w-[90vw] overflow-y-auto">
+        <SheetContent side="right" className="w-[30vw] min-w-[400px] max-w-[600px] overflow-y-auto">
           <SheetHeader>
-            <SheetTitle className="flex items-center gap-2">
+            <SheetTitle className="flex items-center gap-2 pr-8">
               <Wrench className="w-5 h-5" />
               {toolCall.name}
             </SheetTitle>
