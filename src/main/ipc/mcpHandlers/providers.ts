@@ -152,5 +152,35 @@ export function registerProviderHandlers() {
     }
   });
 
+  // Get a specific entry by ID from all providers
+  ipcMain.handle('levante/mcp/providers/get-entry', async (_, serverId: string) => {
+    try {
+      const providers = mcpProvidersData.providers as MCPProvider[];
+      const enabledProviders = providers.filter(p => p.enabled);
+
+      for (const provider of enabledProviders) {
+        let entries = await mcpProviderService.getCachedEntries(provider.id);
+
+        if (!entries) {
+          // Sync if no cache
+          entries = await mcpProviderService.syncProvider(provider);
+        }
+
+        const entry = entries.find(e => e.id === serverId);
+        if (entry) {
+          logger.mcp.debug('Found registry entry', { serverId, providerId: provider.id });
+          return { success: true, data: entry };
+        }
+      }
+
+      logger.mcp.warn('Registry entry not found', { serverId });
+      return { success: false, error: `Server not found: ${serverId}` };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      logger.mcp.error('Failed to get registry entry', { serverId, error: message });
+      return { success: false, error: message };
+    }
+  });
+
   logger.mcp.info('MCP provider handlers registered');
 }

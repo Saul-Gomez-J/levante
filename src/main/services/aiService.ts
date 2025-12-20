@@ -695,15 +695,16 @@ export class AIService {
     }
   }
 
-  private async getBuiltInToolsConfig(): Promise<{ mermaidValidation: boolean }> {
+  private async getBuiltInToolsConfig(): Promise<{ mermaidValidation: boolean; mcpDiscovery: boolean }> {
     try {
       const { preferencesService } = await import("./preferencesService");
       const aiPrefs = preferencesService.get('ai') as any;
       return {
-        mermaidValidation: aiPrefs?.mermaidValidation !== false // Enabled by default
+        mermaidValidation: aiPrefs?.mermaidValidation !== false, // Enabled by default
+        mcpDiscovery: aiPrefs?.mcpDiscovery !== false // Enabled by default
       };
     } catch {
-      return { mermaidValidation: true };
+      return { mermaidValidation: true, mcpDiscovery: true };
     }
   }
 
@@ -893,7 +894,8 @@ export class AIService {
           webSearch,
           enableMCP,
           Object.keys(tools).length,
-          builtInToolsConfig.mermaidValidation
+          builtInToolsConfig.mermaidValidation,
+          builtInToolsConfig.mcpDiscovery
         ),
         // Use stopWhen as recommended in AI SDK v5 (not maxSteps)
         // This allows the model to continue generating after tool results
@@ -1515,7 +1517,8 @@ export class AIService {
           webSearch,
           enableMCP,
           Object.keys(tools).length,
-          builtInToolsConfig.mermaidValidation
+          builtInToolsConfig.mermaidValidation,
+          builtInToolsConfig.mcpDiscovery
         ),
         stopWhen: stepCountIs(await calculateMaxSteps(Object.keys(tools).length)),
       });

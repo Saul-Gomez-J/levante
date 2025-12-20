@@ -14,7 +14,7 @@ export interface InputDefinition {
 }
 
 export interface DeepLinkAction {
-  type: 'mcp-add' | 'chat-new';
+  type: 'mcp-add' | 'mcp-configure' | 'chat-new';
   data: Record<string, unknown>;
 }
 
@@ -59,6 +59,11 @@ export class DeepLinkService {
       // Route to appropriate handler
       if (category === 'mcp' && action === 'add') {
         return this.parseMCPAddLink(params);
+      } else if (category === 'mcp' && action === 'configure') {
+        // Format: levante://mcp/configure/{server-id}
+        // The server ID comes after 'configure/' in the pathname
+        const remainingPath = pathname.replace(/^configure\/?/, '');
+        return this.parseMCPConfigureLink(remainingPath, params);
       } else if (category === 'chat' && action === 'new') {
         return this.parseChatNewLink(params);
       }
@@ -303,6 +308,30 @@ export class DeepLinkService {
       data: {
         prompt: decodeURIComponent(prompt),
         autoSend: autoSend === 'true'
+      }
+    };
+  }
+
+  /**
+   * Parse MCP configuration deep link (from discovery tool)
+   * Format: levante://mcp/configure/{server-id}
+   * The server config will be fetched from the registry in the renderer
+   */
+  private parseMCPConfigureLink(serverId: string, _params: Record<string, string>): DeepLinkAction | null {
+    // Decode the server ID in case it contains URL-encoded characters
+    const decodedServerId = decodeURIComponent(serverId).trim();
+
+    if (!decodedServerId) {
+      logger.core.warn('Missing server ID for MCP configure', { serverId });
+      return null;
+    }
+
+    logger.core.info('Parsed MCP configure deep link', { serverId: decodedServerId });
+
+    return {
+      type: 'mcp-configure',
+      data: {
+        serverId: decodedServerId
       }
     };
   }

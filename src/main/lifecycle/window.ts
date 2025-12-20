@@ -8,6 +8,7 @@ import { BrowserWindow, nativeTheme } from "electron";
 import { join } from "path";
 import { getLogger } from "../services/logging";
 import { safeOpenExternal } from "../utils/urlSecurity";
+import { deepLinkService } from "../services/deepLinkService";
 
 const logger = getLogger();
 
@@ -102,6 +103,20 @@ export function createMainWindow(): BrowserWindow {
 
   // Security: Handle external links with protocol validation
   mainWindow.webContents.setWindowOpenHandler((details) => {
+    // Handle levante:// deep links internally (e.g., from mcp_discovery tool)
+    try {
+      const parsedUrl = new URL(details.url);
+      if (parsedUrl.protocol === "levante:") {
+        logger.core.info("Handling internal deep link from click", {
+          url: details.url
+        });
+        deepLinkService.handleDeepLink(details.url);
+        return { action: "deny" };
+      }
+    } catch {
+      // Invalid URL, let safeOpenExternal handle the error
+    }
+
     // Validate and open URL with protocol allowlist (http, https, mailto only)
     // Blocks file://, javascript:, and other dangerous protocols
     safeOpenExternal(details.url, "window-open-handler");

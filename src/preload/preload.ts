@@ -438,6 +438,9 @@ export interface LevanteAPI {
         data?: any[];
         error?: string;
       }>;
+      getEntry: (
+        serverId: string
+      ) => Promise<{ success: boolean; data?: any; error?: string }>;
     };
     // Resource methods
     listResources: (
