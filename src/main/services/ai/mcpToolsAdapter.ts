@@ -538,6 +538,13 @@ async function handleAppsSdkWidget(
             props: widgetData,
             isAppsSdk: true,
             ...(widgetCSP && { widgetCSP }),
+            // Bridge options for widget proxy - provides toolInput/toolOutput to widget
+            bridgeOptions: {
+              toolInput: args,
+              toolOutput: result.structuredContent || {},
+              responseMetadata: result._meta || {},
+              serverId,
+            },
           },
         },
       };

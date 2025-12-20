@@ -279,9 +279,12 @@ function handleProxyPage(widgetId: string, url: URL, res: http.ServerResponse): 
  * This provides the OpenAI Apps SDK API that widgets expect
  */
 function generateOpenAIBridgeScript(widgetId: string, options?: WidgetBridgeOptions): string {
-  // Extract theme from bridgeOptions, default to 'light'
+  // Extract data from bridgeOptions
   const theme = options?.theme || 'light';
   const locale = options?.locale || 'en-US';
+  const toolInput = options?.toolInput || {};
+  const toolOutput = options?.toolOutput || {};
+  const responseMetadata = options?.responseMetadata || {};
 
   return `
 <script>
@@ -314,10 +317,10 @@ function generateOpenAIBridgeScript(widgetId: string, options?: WidgetBridgeOpti
   const _pendingCalls = new Map();
 
   const openaiAPI = {
-    // Tool input/output (can be populated by host via postMessage)
-    toolInput: {},
-    toolOutput: {},
-    toolResponseMetadata: null,
+    // Tool input/output from MCP tool execution
+    toolInput: ${JSON.stringify(toolInput)},
+    toolOutput: ${JSON.stringify(toolOutput)},
+    toolResponseMetadata: ${JSON.stringify(responseMetadata)},
 
     // Display settings
     displayMode: 'inline',
