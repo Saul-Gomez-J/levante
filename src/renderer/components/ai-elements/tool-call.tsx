@@ -6,12 +6,14 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Copy
+  Copy,
+  WrapText
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import CodeMirror from '@uiw/react-codemirror';
 import { json } from '@codemirror/lang-json';
 import { oneDark } from '@codemirror/theme-one-dark';
+import { EditorView } from '@codemirror/view';
 import { useThemeDetector } from '@/hooks/useThemeDetector';
 
 // ═══════════════════════════════════════════════════════
@@ -186,6 +188,7 @@ function ArgumentsSection({ arguments: args }: { arguments: Record<string, any> 
 
 function ResultSection({ result }: { result: NonNullable<ToolCallData['result']> }) {
   const theme = useThemeDetector();
+  const [wrapEnabled, setWrapEnabled] = useState(false);
 
   const content = result.success ? result.content : result.error;
 
@@ -223,6 +226,10 @@ function ResultSection({ result }: { result: NonNullable<ToolCallData['result']>
     contentString = String(content || '');
   }
 
+  // Calculate adaptive height based on content length
+  const lineCount = contentString.split('\n').length;
+  const adaptiveHeight = Math.min(Math.max(lineCount * 20, 300), 600);
+
   const copyToClipboard = () => {
     if (contentString) {
       navigator.clipboard.writeText(contentString);
@@ -245,22 +252,36 @@ function ResultSection({ result }: { result: NonNullable<ToolCallData['result']>
             </>
           )}
         </h4>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={copyToClipboard}
-          className="gap-2"
-        >
-          <Copy className="w-4 h-4" />
-          Copiar
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setWrapEnabled(!wrapEnabled)}
+            className={cn("gap-2", wrapEnabled && "bg-accent")}
+            title={wrapEnabled ? "Desactivar ajuste de línea" : "Activar ajuste de línea"}
+          >
+            <WrapText className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copyToClipboard}
+            className="gap-2"
+          >
+            <Copy className="w-4 h-4" />
+            Copiar
+          </Button>
+        </div>
       </div>
 
       <div className="border rounded-md overflow-hidden">
         <CodeMirror
           value={contentString}
-          height="400px"
-          extensions={isJSON ? [json()] : []}
+          height={`${adaptiveHeight}px`}
+          extensions={isJSON
+            ? (wrapEnabled ? [json(), EditorView.lineWrapping] : [json()])
+            : (wrapEnabled ? [EditorView.lineWrapping] : [])
+          }
           theme={theme === 'dark' ? oneDark : 'light'}
           editable={false}
           basicSetup={{
