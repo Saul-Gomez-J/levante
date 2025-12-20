@@ -115,6 +115,10 @@
       "formula": "Formula: Base Steps + (Number of Tools ÷ 5) × 2",
       "example": "With 24 tools: {{baseSteps}} + (24 ÷ 5) × 2 = {{result}} steps",
       "note": "Prevents infinite loops while allowing complex operations"
+    },
+    "mermaid_validation": {
+      "label": "Mermaid Diagram Generation",
+      "description": "Enable AI to generate and validate Mermaid diagrams"
     }
   },
   "developer_mode": {

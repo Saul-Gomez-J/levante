@@ -52,6 +52,7 @@ import { debugApi } from "./api/debug";
 import { settingsApi } from "./api/settings";
 import { attachmentsApi } from "./api/attachments";
 import { analyticsApi } from "./api/analytics";
+import { mermaidApi } from "./api/mermaid";
 import { widgetApi } from "./api/widget";
 
 // Re-export types for backwards compatibility
@@ -602,6 +603,14 @@ export interface LevanteAPI {
     enableAnalytics: () => Promise<{ success: boolean; error?: string }>;
   };
 
+  // Mermaid functionality
+  mermaid: {
+    onValidate: (
+      callback: (data: { requestId: string; code: string }) => void
+    ) => () => void;
+    sendResult: (data: { requestId: string; result: any }) => void;
+  };
+
   // Widget proxy functionality
   widget: {
     store: (html: string, options?: {
@@ -678,6 +687,8 @@ const api: LevanteAPI = {
   // Analytics API
   analytics: analyticsApi,
 
+  // Mermaid API
+  ...mermaidApi,
   // Widget Protocol API
   widget: widgetApi,
 };

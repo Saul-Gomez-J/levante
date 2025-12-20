@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { CheckCircle, Settings } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAIConfig } from '@/hooks/useAIConfig';
@@ -64,6 +65,22 @@ export const AIConfigSection = () => {
               {t('settings:ai_config.max_steps.description')}
             </p>
           </div>
+        </div>
+
+        <div className="flex items-center justify-between py-2">
+          <div className="space-y-0.5">
+            <Label>{t('settings:ai_config.mermaid_validation.label')}</Label>
+            <p className="text-xs text-muted-foreground">
+              {t('settings:ai_config.mermaid_validation.description')}
+            </p>
+          </div>
+          <Switch
+            checked={config.mermaidValidation}
+            onCheckedChange={(checked) => setConfig(prev => ({
+              ...prev,
+              mermaidValidation: checked
+            }))}
+          />
         </div>
 
         <div className="flex items-center gap-4 pt-2">

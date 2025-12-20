@@ -695,6 +695,18 @@ export class AIService {
     }
   }
 
+  private async getBuiltInToolsConfig(): Promise<{ mermaidValidation: boolean }> {
+    try {
+      const { preferencesService } = await import("./preferencesService");
+      const aiPrefs = preferencesService.get('ai') as any;
+      return {
+        mermaidValidation: aiPrefs?.mermaidValidation !== false // Enabled by default
+      };
+    } catch {
+      return { mermaidValidation: true };
+    }
+  }
+
   async *streamChat(
     request: ChatRequest
   ): AsyncGenerator<ChatStreamChunk, void, unknown> {
@@ -782,9 +794,17 @@ export class AIService {
       const modelProvider = await getModelProvider(model);
 
       // Get MCP tools if enabled
+      // Get MCP tools if enabled
       let tools = {};
+
+      // Get built-in tools (always available, independent of MCP)
+      const { getBuiltInTools } = await import('./ai/builtInTools');
+      const builtInToolsConfig = await this.getBuiltInToolsConfig();
+      const builtInTools = await getBuiltInTools(builtInToolsConfig);
+
       if (enableMCP) {
-        tools = await getMCPTools();
+        const mcpTools = await getMCPTools();
+        tools = { ...builtInTools, ...mcpTools };
         this.logger.aiSdk.debug("Passing tools to streamText", {
           toolCount: Object.keys(tools).length,
           toolNames: Object.keys(tools),
@@ -851,6 +871,8 @@ export class AIService {
             finalToolNames: Object.keys(tools),
           }
         );
+      } else {
+        tools = builtInTools;
       }
 
       const messagesWithFileParts = await this.includeAttachmentsInMessageParts(
@@ -870,7 +892,8 @@ export class AIService {
         system: await buildSystemPrompt(
           webSearch,
           enableMCP,
-          Object.keys(tools).length
+          Object.keys(tools).length,
+          builtInToolsConfig.mermaidValidation
         ),
         // Use stopWhen as recommended in AI SDK v5 (not maxSteps)
         // This allows the model to continue generating after tool results
@@ -1096,7 +1119,7 @@ export class AIService {
   /**
    * Handle inference model (text-to-image, image-to-image, etc.)
    */
-  private async *handleInferenceModel(
+  private async * handleInferenceModel(
     request: ChatRequest,
     taskType: InferenceTask
   ): AsyncGenerator<ChatStreamChunk, void, unknown> {
@@ -1476,6 +1499,9 @@ export class AIService {
         tools = await getMCPTools();
       }
 
+      // Get built-in tools config for system prompt
+      const builtInToolsConfig = await this.getBuiltInToolsConfig();
+
       const messagesWithFileParts = await this.includeAttachmentsInMessageParts(
         messages,
         modelInfo?.capabilities
@@ -1488,7 +1514,8 @@ export class AIService {
         system: await buildSystemPrompt(
           webSearch,
           enableMCP,
-          Object.keys(tools).length
+          Object.keys(tools).length,
+          builtInToolsConfig.mermaidValidation
         ),
         stopWhen: stepCountIs(await calculateMaxSteps(Object.keys(tools).length)),
       });
