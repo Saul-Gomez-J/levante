@@ -471,6 +471,53 @@ Verification against [OpenAI Apps SDK Troubleshooting](https://platform.openai.c
 
 **Troubleshooting Compliance: 16/16 (100%)**
 
+### OpenAI Apps SDK Metadata Optimization Compliance
+
+Verification against [OpenAI Apps SDK Optimize Metadata](https://platform.openai.com/docs/apps-sdk) documentation:
+
+#### Tool Metadata Handling
+
+| Requirement | OpenAI Docs | Levante | Status |
+|-------------|-------------|---------|--------|
+| Tool names | Pair domain with action (`calendar.create_event`) | Preserved with `serverId.toolName` format | ✅ |
+| Tool descriptions | Start with "Use this when..." | Preserved from MCP server definitions | ✅ |
+| Parameter docs | Describe each argument with examples | `inputSchema.properties` passed through | ✅ |
+| Schema sanitization | Valid JSON Schema | Provider-specific sanitizers in schemaSanitizer/ | ✅ |
+| Metadata preservation | Pass through `_meta` | Preserved in mcpLegacyService and mcpUseService | ✅ |
+
+#### Behavior Annotations
+
+| Annotation | OpenAI Docs | Levante | Purpose |
+|------------|-------------|---------|---------|
+| `readOnlyHint` | Annotate on read-only tools | ✅ Extracted from `mcpTool.annotations` | Streamline confirmations |
+| `destructiveHint` | Annotate on non-destructive tools | ✅ Passed to widgets | Warn on data deletion |
+| `idempotentHint` | Annotate on idempotent tools | ✅ Passed to widgets | Safe to retry |
+| `openWorldHint` | Annotate on internal-only tools | ✅ Passed to widgets | Indicates external reach |
+
+#### Data Flow
+
+```
+MCP Server → tools/list with annotations
+    ↓
+mcpLegacyService/mcpUseService → preserves _meta and annotations
+    ↓
+mcpToolsAdapter.ts → extracts to ToolAnnotations interface
+    ↓
+Widget bridge → exposes via window.openai.annotations
+```
+
+#### Key Implementation Files
+
+| File | Responsibility |
+|------|----------------|
+| `src/main/types/mcp.ts:37-46` | `ToolAnnotations` interface definition |
+| `src/main/services/mcp/mcpLegacyService.ts:128` | Preserves `_meta` on tools |
+| `src/main/services/mcp/mcpUseService.ts:258` | Preserves `_meta` on tools |
+| `src/main/services/ai/mcpToolsAdapter.ts:502-506` | Extracts annotations to widget bridge |
+| `src/main/services/ai/schemaSanitizer/` | Provider-specific schema validation |
+
+**Metadata Optimization Compliance: 9/9 (100%)**
+
 ---
 
 ## Implementation Details
