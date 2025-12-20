@@ -29,6 +29,7 @@ function App() {
     config: Partial<MCPServerConfig> | null;
     name: string;
     sourceUrl?: string;
+    inputs?: Record<string, any>;
   }>({ config: null, name: '' })
 
   // Load theme and language from ui-preferences.json
@@ -203,15 +204,24 @@ function App() {
           setCurrentPage('store');
 
           // Extract MCP server data from deep link
-          const { name, config } = action.data as { name: string; config: any };
+          const { name, config, inputs } = action.data as {
+            name: string;
+            config: any;
+            inputs?: Record<string, any>;
+          };
           if (config && config.id) {
-            logger.core.info('Opening MCP confirmation modal from deep link', { serverId: config.id });
+            logger.core.info('Opening MCP confirmation modal from deep link', {
+              serverId: config.id,
+              hasInputs: !!inputs,
+              inputCount: inputs ? Object.keys(inputs).length : 0
+            });
 
             // Open confirmation modal instead of adding directly
             setMcpModalConfig({
               config,
               name: name || 'MCP Server',
-              sourceUrl: undefined // Could be extracted from deep link if needed
+              sourceUrl: undefined, // Could be extracted from deep link if needed
+              inputs
             });
             setMcpModalOpen(true);
           } else {
@@ -392,6 +402,7 @@ function App() {
         config={mcpModalConfig.config}
         serverName={mcpModalConfig.name}
         sourceUrl={mcpModalConfig.sourceUrl}
+        inputs={mcpModalConfig.inputs}
       />
 
       <MainLayout

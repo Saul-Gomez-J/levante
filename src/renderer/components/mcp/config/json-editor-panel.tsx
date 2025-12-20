@@ -20,7 +20,7 @@ interface JSONEditorPanelProps {
 }
 
 export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelProps) {
-  const { getServerById, getRegistryEntryById, updateServer, addServer } = useMCPStore();
+  const { getServerById, getRegistryEntryById, addServer, connectionStatus, disconnectServer, connectServer, loadActiveServers } = useMCPStore();
   const theme = useThemeDetector();
 
   const [jsonText, setJsonText] = useState('');
@@ -231,16 +231,46 @@ export function JSONEditorPanel({ serverId, isOpen, onClose }: JSONEditorPanelPr
 
       if (isNewServer) {
         await addServer(serverConfig);
+        toast.success('Server added successfully');
       } else {
-        await updateServer(serverId, {
+        // Check if server was connected before updating
+        const wasConnected = connectionStatus[serverId] === 'connected';
+
+        // Pass all fields from JSON, ensuring url/baseUrl consistency
+        const updateConfig = {
+          ...validation.data,
           name: serverConfig.name,
-          command: serverConfig.command,
-          args: serverConfig.args,
-          env: serverConfig.env,
-          transport: serverConfig.transport,
-          url: serverConfig.url,
-          headers: serverConfig.headers
-        });
+          transport: transportType,
+          url: serverUrl,
+          baseUrl: serverUrl,
+        };
+        // Remove 'type' if present (backend normalizes to 'transport')
+        delete updateConfig.type;
+
+        const updateResult = await window.levante.mcp.updateServer(serverId, updateConfig);
+
+        if (!updateResult.success) {
+          setJsonError(updateResult.error || 'Failed to update server');
+          return;
+        }
+
+        // Reload servers to get normalized config from backend
+        await loadActiveServers();
+
+        toast.success('Server configuration saved');
+
+        // Reconnect if server was previously connected
+        if (wasConnected) {
+          toast.loading('Reconnecting server with new configuration...', { id: 'reconnect' });
+          try {
+            await disconnectServer(serverId);
+            // Use serverConfig with baseUrl for connection
+            await connectServer({ ...serverConfig, baseUrl: serverUrl });
+            toast.success('Server reconnected successfully', { id: 'reconnect' });
+          } catch (reconnectError) {
+            toast.error('Server updated but failed to reconnect', { id: 'reconnect' });
+          }
+        }
       }
 
       onClose();

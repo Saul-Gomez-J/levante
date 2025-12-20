@@ -232,16 +232,20 @@ function ToolCallPart({ part, messageId, onPrompt }: ToolCallPartProps) {
         toolCall={toolCall}
         className="w-full"
       />
-      {/* Render UI Resources from tool output */}
-      {uiResources.map((resource, resourceIdx) => (
-        <UIResourceMessage
-          key={`${messageId}-ui-${resourceIdx}`}
-          resource={resource}
-          serverId={serverId}
-          className="mt-2"
-          onPrompt={onPrompt}
-        />
-      ))}
+      {/* Render UI Resources from tool output - separated from tool call */}
+      {uiResources.length > 0 && (
+        <div className="my-4">
+          {uiResources.map((resource, resourceIdx) => (
+            <UIResourceMessage
+              key={`${messageId}-ui-${resourceIdx}`}
+              resource={resource}
+              serverId={serverId}
+              className="w-full"
+              onPrompt={onPrompt}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

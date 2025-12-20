@@ -300,7 +300,9 @@
       "failed_system_runtime": "Error al conectar con runtime del sistema",
       "installing_runtime": "Instalando runtime para {{name}}...",
       "runtime_installed": "Runtime instalado y {{name}} conectado!",
-      "failed_install_runtime": "Error al instalar runtime: {{error}}"
+      "failed_install_runtime": "Error al instalar runtime: {{error}}",
+      "server_already_exists": "{{name}} ya está instalado",
+      "server_already_exists_description": "Este servidor ya está en tu configuración. Por favor elimínalo primero si quieres reinstalarlo."
     }
   }
 }

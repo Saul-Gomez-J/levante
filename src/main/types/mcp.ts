@@ -31,6 +31,20 @@ export interface MCPConfiguration {
   disabled?: Record<string, Omit<MCPServerConfig, 'id'>>;
 }
 
+/**
+ * Tool behavior annotations (MCP spec / OpenAI Apps SDK)
+ */
+export interface ToolAnnotations {
+  /** Whether the tool only reads data without making changes */
+  readOnlyHint?: boolean;
+  /** Whether the tool may perform destructive updates */
+  destructiveHint?: boolean;
+  /** Whether the tool can be called multiple times with same result */
+  idempotentHint?: boolean;
+  /** Whether the tool operates on an open world (external systems) */
+  openWorldHint?: boolean;
+}
+
 export interface Tool {
   name: string;
   description: string;
@@ -41,6 +55,8 @@ export interface Tool {
   };
   /** Metadata including widget configuration (e.g., openai/outputTemplate for Skybridge) */
   _meta?: Record<string, any>;
+  /** Tool behavior annotations (MCP spec) */
+  annotations?: ToolAnnotations;
 }
 
 export interface ToolCall {

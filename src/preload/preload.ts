@@ -53,6 +53,7 @@ import { settingsApi } from "./api/settings";
 import { attachmentsApi } from "./api/attachments";
 import { analyticsApi } from "./api/analytics";
 import { mermaidApi } from "./api/mermaid";
+import { widgetApi } from "./api/widget";
 
 // Re-export types for backwards compatibility
 export type {
@@ -597,6 +598,7 @@ export interface LevanteAPI {
       count: number
     ) => Promise<{ success: boolean; error?: string }>;
     trackUser: () => Promise<{ success: boolean; error?: string }>;
+    trackAppOpen: (force?: boolean) => Promise<{ success: boolean; error?: string }>;
     disableAnalytics: () => Promise<{ success: boolean; error?: string }>;
     enableAnalytics: () => Promise<{ success: boolean; error?: string }>;
   };
@@ -607,6 +609,37 @@ export interface LevanteAPI {
       callback: (data: { requestId: string; code: string }) => void
     ) => () => void;
     sendResult: (data: { requestId: string; result: any }) => void;
+  };
+
+  // Widget proxy functionality
+  widget: {
+    store: (html: string, options?: {
+      protocol?: 'mcp-apps' | 'openai-sdk' | 'mcp-ui' | 'none';
+      bridgeOptions?: {
+        toolInput?: Record<string, unknown>;
+        toolOutput?: Record<string, unknown>;
+        responseMetadata?: Record<string, unknown>;
+        locale?: string;
+        theme?: 'light' | 'dark' | 'system';
+        serverId?: string;
+      };
+      baseUrl?: string;
+    } | string) => Promise<{
+      success: boolean;
+      url?: string;
+      widgetId?: string;
+      error?: string;
+    }>;
+    remove: (widgetId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    getProxyInfo: () => Promise<{
+      success: boolean;
+      port?: number;
+      secret?: string;
+      error?: string;
+    }>;
   };
 }
 
@@ -656,6 +689,8 @@ const api: LevanteAPI = {
 
   // Mermaid API
   ...mermaidApi,
+  // Widget Protocol API
+  widget: widgetApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

@@ -28,6 +28,7 @@ import { setupOAuthHandlers } from "../ipc/oauthHandlers";
 import { setupInferenceHandlers } from "../ipc/inferenceHandlers";
 import { setupAttachmentHandlers } from "../ipc/attachmentHandlers";
 import { registerAnalyticsHandlers } from "../ipc/analyticsHandlers";
+import { setupWidgetHandlers } from "../ipc/widgetHandlers";
 
 const logger = getLogger();
 
@@ -127,6 +128,7 @@ export async function registerIPCHandlers(getMainWindow: () => BrowserWindow | n
   setupChatHandlers();
   setupAppHandlers(getMainWindow);
   setupOAuthHandlers();
+  setupWidgetHandlers();
 
   logger.core.info("All IPC handlers registered successfully");
 }

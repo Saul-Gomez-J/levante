@@ -12,6 +12,7 @@ import { deepLinkService } from "./services/deepLinkService";
 import { oauthCallbackServer } from "./services/oauthCallbackServer";
 import { analyticsService } from "./services/analytics";
 import { createApplicationMenu } from "./menu";
+import { widgetProxyService } from "./services/widgetProxy";
 
 // Lifecycle modules
 import { initializeServices, registerIPCHandlers } from "./lifecycle/initialization";
@@ -47,6 +48,9 @@ let mainWindow: BrowserWindow | null = null;
 // App ready event
 app.whenReady().then(async () => {
   try {
+    // Start widget proxy HTTP server for serving widget HTML with permissive CSP
+    await widgetProxyService.start();
+
     // Initialize all services
     await initializeServices();
 
