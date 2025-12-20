@@ -4,6 +4,7 @@
 
 import { useCallback } from 'react';
 import type { UIActionResult } from '@mcp-ui/client';
+import { toast } from 'sonner';
 import { logger } from '@/services/logger';
 
 interface UseUIResourceActionsOptions {
@@ -97,26 +98,148 @@ export function useUIResourceActions(
           }
 
           case 'notify': {
-            // Show notification
-            const { message } = action.payload;
+            // Show notification using sonner toast
+            const { message, type = 'info', title, duration } = action.payload as {
+              message: string;
+              type?: 'success' | 'error' | 'warning' | 'info';
+              title?: string;
+              duration?: number;
+            };
 
-            // For now, just log the notification
-            // TODO: Integrate with toast/notification system
-            logger.mcp.info('UI Resource notification', { message });
-            console.info('[UIResource Notification]', message);
+            logger.mcp.debug('UI Resource notification', { message, type, title });
+
+            const toastOptions = {
+              description: title ? message : undefined,
+              duration: duration ?? 4000,
+            };
+
+            const displayMessage = title || message;
+
+            switch (type) {
+              case 'success':
+                toast.success(displayMessage, toastOptions);
+                break;
+              case 'error':
+                toast.error(displayMessage, toastOptions);
+                break;
+              case 'warning':
+                toast.warning(displayMessage, toastOptions);
+                break;
+              case 'info':
+              default:
+                toast.info(displayMessage, toastOptions);
+                break;
+            }
 
             return { status: 'notified' };
           }
 
           case 'intent': {
-            // Handle custom intent
-            const { intent, params } = action.payload;
+            // Handle custom intent - desktop-applicable actions
+            const { intent, params } = action.payload as {
+              intent: string;
+              params?: Record<string, unknown>;
+            };
 
             logger.mcp.debug('UI Resource intent', { intent, params });
 
-            // Custom intents can be handled by specific handlers
-            // For now, just acknowledge
-            return { status: 'intent_received', data: { intent, params } };
+            switch (intent) {
+              case 'copy': {
+                // Copy text to clipboard
+                const text = params?.text as string;
+                if (!text) {
+                  logger.mcp.warn('Copy intent missing text parameter');
+                  return { status: 'intent_error', data: { error: 'Missing text parameter' } };
+                }
+
+                try {
+                  await navigator.clipboard.writeText(text);
+                  toast.success('Copied to clipboard');
+                  return { status: 'intent_completed', data: { intent: 'copy' } };
+                } catch (error) {
+                  logger.mcp.error('Failed to copy to clipboard', { error });
+                  toast.error('Failed to copy to clipboard');
+                  return { status: 'intent_error', data: { error: 'Clipboard access denied' } };
+                }
+              }
+
+              case 'download': {
+                // Download file - create a blob and trigger download
+                const { url, filename, content, mimeType } = params as {
+                  url?: string;
+                  filename?: string;
+                  content?: string;
+                  mimeType?: string;
+                };
+
+                try {
+                  if (url) {
+                    // Download from URL - open in browser to trigger download
+                    const result = await window.levante.openExternal(url);
+                    if (result.success) {
+                      toast.success(`Downloading ${filename || 'file'}...`);
+                      return { status: 'intent_completed', data: { intent: 'download' } };
+                    } else {
+                      throw new Error(result.error);
+                    }
+                  } else if (content) {
+                    // Download from content - create blob and trigger download
+                    const blob = new Blob([content], { type: mimeType || 'text/plain' });
+                    const downloadUrl = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = downloadUrl;
+                    a.download = filename || 'download.txt';
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(downloadUrl);
+                    toast.success(`Downloaded ${filename || 'file'}`);
+                    return { status: 'intent_completed', data: { intent: 'download' } };
+                  } else {
+                    logger.mcp.warn('Download intent missing url or content parameter');
+                    return { status: 'intent_error', data: { error: 'Missing url or content parameter' } };
+                  }
+                } catch (error) {
+                  logger.mcp.error('Failed to download', { error });
+                  toast.error('Failed to download file');
+                  return { status: 'intent_error', data: { error: String(error) } };
+                }
+              }
+
+              case 'navigate': {
+                // Navigate to URL (opens in external browser for desktop)
+                const url = params?.url as string;
+                if (!url) {
+                  logger.mcp.warn('Navigate intent missing url parameter');
+                  return { status: 'intent_error', data: { error: 'Missing url parameter' } };
+                }
+
+                // Validate URL scheme
+                if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                  logger.mcp.warn('Invalid URL scheme for navigate intent', { url });
+                  return { status: 'intent_error', data: { error: 'Invalid URL scheme' } };
+                }
+
+                const result = await window.levante.openExternal(url);
+                if (result.success) {
+                  return { status: 'intent_completed', data: { intent: 'navigate' } };
+                } else {
+                  logger.mcp.error('Failed to navigate', { url, error: result.error });
+                  toast.error('Failed to open URL');
+                  return { status: 'intent_error', data: { error: result.error } };
+                }
+              }
+
+              case 'select':
+                // Phase 8 feature - not implemented yet
+                logger.mcp.info('Select intent is a Phase 8 feature', { params });
+                return { status: 'intent_not_implemented', data: { intent: 'select' } };
+
+              default:
+                // Unknown intent - log and acknowledge
+                logger.mcp.warn('Unknown intent type', { intent, params });
+                return { status: 'intent_unknown', data: { intent, params } };
+            }
           }
 
           default: {
