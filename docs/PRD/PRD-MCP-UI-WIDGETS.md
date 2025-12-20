@@ -520,6 +520,177 @@ Widget bridge → exposes via window.openai.annotations
 
 ---
 
+## Widget Protocol Compatibility Matrix
+
+### MCP-UI Proxy Architecture Comparison
+
+Comparison of Levante's proxy implementation against [MCP-UI Proxy](https://github.com/nicobailey/mcp-ui-proxy) architecture:
+
+| Feature | MCP-UI Proxy | Levante widgetProxy.ts | Status | Notes |
+|---------|--------------|------------------------|--------|-------|
+| **Architecture** |
+| Double iframe isolation | Host → Proxy → Inner | Host → Proxy → Widget | ✅ Same | Identical nested iframe pattern |
+| Localhost binding | Not specified | `127.0.0.1:random` | ✅ Secure | Random port for each session |
+| Authentication | None documented | 32-byte secret token | ✅ Enhanced | Added security layer |
+| **Proxy Flows** |
+| External URL flow | `?url=<encoded>` | N/A - fetches at tool time | ⚠️ Different | Levante fetches HTML during tool execution |
+| Raw HTML flow | `?contentType=rawhtml` + postMessage | Store in memory + serve | ⚠️ Different | Levante stores HTML with TTL (30 min) |
+| `text/uri-list` support | For external URLs | N/A | ❌ Not needed | Levante resolves URIs at tool call time |
+| **Message Protocol** |
+| Ready signal | `ui-proxy-iframe-ready` | `ui-lifecycle-iframe-ready` | ⚠️ Different | Uses @mcp-ui/client protocol instead |
+| HTML content message | `ui-html-content` | N/A | ❌ Not needed | HTML stored server-side |
+| Render data | `ui-lifecycle-iframe-render-data` | ✅ Supported | ✅ Same | Via @mcp-ui/client |
+| Size change | `ui-size-change` | ✅ Supported | ✅ Same | ResizeObserver + postMessage |
+| **Sandbox Configuration** |
+| `allow-scripts` | ✅ | ✅ | ✅ | Required for widget functionality |
+| `allow-same-origin` | ✅ | ✅ | ✅ | Required for localStorage/APIs |
+| `allow-forms` | ❌ | ✅ | ➕ Extended | Additional capability |
+| `allow-popups` | ❌ | ✅ | ➕ Extended | For openExternal |
+| `allow-modals` | ❌ | ✅ | ➕ Extended | For requestModal |
+| `allow-top-navigation-by-user-activation` | ❌ | ✅ | ➕ Extended | User-initiated navigation |
+| **CSP Configuration** |
+| Permissive CSP | Not documented | Full `unsafe-inline/eval` | ✅ | Required for external widget code |
+| CSP header | Not documented | HTTP header + meta tag | ✅ | Dual injection for reliability |
+| **Additional Features** |
+| Bridge injection | Not supported | ✅ MCP Apps + OpenAI SDK | ➕ Extended | Auto-injects appropriate bridge |
+| Base URL resolution | Not documented | ✅ Dynamic extraction | ➕ Extended | From HTML content or URI |
+| Next.js image proxy | Not supported | ✅ `/_next/image` endpoint | ➕ Extended | For Next.js widgets |
+| Content cleanup | Not documented | ✅ TTL-based (30 min) | ➕ Extended | Memory management |
+
+**MCP-UI Proxy Compatibility: Architecturally equivalent with enhanced capabilities**
+
+#### Key Differences Explained
+
+1. **URL vs Pre-fetched HTML**
+   - MCP-UI proxy expects external URLs to be passed at render time
+   - Levante fetches widget HTML during MCP tool execution and stores it
+   - **Rationale**: Better security (no arbitrary URL loading) and offline resilience
+
+2. **Message Protocol**
+   - MCP-UI proxy uses `ui-proxy-iframe-ready` for raw HTML mode
+   - Levante uses `ui-lifecycle-iframe-ready` from @mcp-ui/client
+   - **Rationale**: Consistency with @mcp-ui/client library we already use
+
+3. **Extended Sandbox Permissions**
+   - Levante adds `allow-forms`, `allow-popups`, `allow-modals`
+   - **Rationale**: Required for full OpenAI Apps SDK compatibility (forms, external links, modals)
+
+---
+
+### MCP Apps (SEP-1865) Compliance Matrix
+
+Verification against [SEP-1865: MCP Apps Proposal](https://github.com/anthropics/mcp/blob/main/proposals/sep-1865.md):
+
+#### Protocol Implementation
+
+| Requirement | SEP-1865 Spec | Levante Implementation | File Location |
+|-------------|---------------|------------------------|---------------|
+| JSON-RPC 2.0 protocol | Required | ✅ Full implementation | `mcpAppsBridge.ts:96-130` |
+| Unique request IDs | Required | ✅ Auto-incrementing `_rpcId` | `mcpAppsBridge.ts:91` |
+| 30s request timeout | Recommended | ✅ Implemented | `mcpAppsBridge.ts:122-128` |
+
+#### API Surface (`window.mcpApp`)
+
+| Property/Method | SEP-1865 | Levante | Status |
+|----------------|----------|---------|--------|
+| `toolInput` | Required | ✅ Injected from tool args | `mcpAppsBridge.ts:140` |
+| `toolResult` | Required | ✅ Injected from tool output | `mcpAppsBridge.ts:141` |
+| `hostContext` | Required | ✅ Theme, locale, displayMode, etc. | `mcpAppsBridge.ts:142` |
+| `callTool(name, args)` | Required | ✅ → JSON-RPC `tools/call` | `mcpAppsBridge.ts:145-148` |
+| `readResource(uri)` | Required | ✅ → JSON-RPC `resources/read` | `mcpAppsBridge.ts:151-154` |
+| `openLink(url)` | Required | ✅ → Notification + window.open | `mcpAppsBridge.ts:157-162` |
+| `sendMessage(text)` | Required | ✅ → Notification `ui/message` | `mcpAppsBridge.ts:165-168` |
+| `resize(w, h)` | Required | ✅ → Notification `ui/size-change` | `mcpAppsBridge.ts:171-173` |
+
+#### Events
+
+| Event | SEP-1865 | Levante | Status |
+|-------|----------|---------|--------|
+| `mcp:tool-input` | Required | ✅ CustomEvent dispatched | `mcpAppsBridge.ts:289` |
+| `mcp:tool-result` | Required | ✅ CustomEvent dispatched | `mcpAppsBridge.ts:295` |
+| `mcp:context-change` | Required | ✅ CustomEvent dispatched | `mcpAppsBridge.ts:303` |
+| `mcp:tool-cancelled` | Required | ✅ CustomEvent dispatched | `mcpAppsBridge.ts:307` |
+| `mcp:teardown` | Required | ✅ CustomEvent dispatched | `mcpAppsBridge.ts:311` |
+
+#### Host Context Properties
+
+| Property | SEP-1865 | Levante | Status |
+|----------|----------|---------|--------|
+| `theme` | 'light' \| 'dark' | ✅ From Levante settings | `mcpAppsBridge.ts:60` |
+| `locale` | IETF BCP 47 | ✅ From navigator.language | `mcpAppsBridge.ts:61` |
+| `displayMode` | 'inline' \| 'pip' \| 'fullscreen' | ✅ Supported | `mcpAppsBridge.ts:62` |
+| `maxHeight` | number | ✅ 600px default | `mcpAppsBridge.ts:63` |
+| `safeArea.insets` | {top,bottom,left,right} | ✅ All zeros (desktop) | `mcpAppsBridge.ts:64` |
+| `userAgent.device.type` | string | ✅ 'desktop' | `mcpAppsBridge.ts:65-68` |
+| `userAgent.capabilities` | {hover,touch} | ✅ Detected | `mcpAppsBridge.ts:67` |
+
+#### Detection & MIME Types
+
+| Requirement | SEP-1865 | Levante | Status |
+|-------------|----------|---------|--------|
+| Detection via `ui/resourceUri` | Primary | ✅ `types.ts:134` | Complete |
+| MIME `text/html;profile=mcp-app` | Suggested | ✅ Detected | Complete |
+| Protocol detection order | Apps → SDK → UI | ✅ Same priority | `types.ts:129-168` |
+
+**MCP Apps (SEP-1865) Compliance: 100%** - All required features implemented
+
+---
+
+### OpenAI Apps SDK Compliance Matrix
+
+Verification against [OpenAI Apps SDK Reference](https://platform.openai.com/docs/apps-sdk):
+
+#### API Surface (`window.openai`)
+
+| Property/Method | OpenAI SDK | Levante | Status |
+|----------------|------------|---------|--------|
+| `toolInput` | Required | ✅ Maps to `mcpApp.toolInput` | Complete |
+| `toolOutput` | Required | ✅ Maps to `mcpApp.toolResult` | Complete |
+| `toolResponseMetadata` | Required | ✅ With annotations merged | Complete |
+| `theme` | Required | ✅ From hostContext | Complete |
+| `locale` | Required | ✅ From hostContext | Complete |
+| `displayMode` | Required | ✅ Synced with hostContext | Complete |
+| `maxHeight` | Required | ✅ 600px default | Complete |
+| `safeArea` | Required | ✅ Desktop insets | Complete |
+| `userAgent` | Required | ✅ Device + capabilities | Complete |
+| `widgetState` | Required | ✅ localStorage persistence | Complete |
+| `widgetSessionId` | Required | ✅ Unique per instance | Complete |
+| `widgetPrefersBorder` | Required | ✅ Passed through | Complete |
+| `invocationStatusText` | Required | ✅ invoking/invoked | Complete |
+| `annotations` | Required | ✅ Tool behavior hints | Complete |
+| `userLocation` | Optional | ✅ When provided | Complete |
+| `callTool(name, args)` | Required | ✅ → mcpApp.callTool | Complete |
+| `sendFollowUpMessage(msg)` | Required | ✅ → mcpApp.sendMessage | Complete |
+| `requestDisplayMode(opts)` | Required | ✅ Notification + update | Complete |
+| `openExternal(opts)` | Required | ✅ → mcpApp.openLink | Complete |
+| `requestClose()` | Required | ✅ Notification | Complete |
+| `setWidgetState(state)` | Required | ✅ localStorage + notify | Complete |
+| `resize(height)` | Required | ✅ → mcpApp.resize | Complete |
+| `requestModal(opts)` | Optional | ✅ Dialog implementation | Complete |
+
+**OpenAI Apps SDK Compliance: 100%** - Full API compatibility
+
+---
+
+### Protocol Support Summary
+
+| Protocol | Library Used | Detection | Bridge | Status |
+|----------|--------------|-----------|--------|--------|
+| **MCP Apps (SEP-1865)** | Custom | `ui/resourceUri` metadata | `mcpAppsBridge.ts` | ✅ 100% |
+| **OpenAI Apps SDK** | Custom | `openai/outputTemplate` metadata | `mcpAppsBridge.ts` | ✅ 100% |
+| **MCP-UI** | `@mcp-ui/client@5.17.1` | `text/html` MIME in resource | `UIResourceRenderer` | ✅ 100% |
+
+#### Dependency Versions
+
+```json
+{
+  "@mcp-ui/client": "^5.17.1",
+  "@mcp-ui/server": "^5.16.3"
+}
+```
+
+---
+
 ## Implementation Details
 
 ### MIME Type Detection
@@ -629,6 +800,52 @@ Relative URLs in widgets are resolved dynamically:
 ### Phase 8: Context Picker ❌
 - [ ] WidgetContextPicker component
 - [ ] Integration with AddContextMenu
+
+#### Phase 8 Details (Future Implementation)
+
+**Objetivo:** Permitir que los widgets MCP actúen como selectores de contexto para añadir contenido al prompt antes de enviarlo.
+
+**Estado actual de AddContextMenu:**
+- ✅ Recursos MCP (listar y seleccionar)
+- ✅ Prompts MCP (con modal de variables)
+- ✅ Subida de archivos
+- ❌ Widgets como selectores de contexto
+
+**Componentes necesarios:**
+
+| Componente | Descripción | Archivo destino |
+|------------|-------------|-----------------|
+| `WidgetContextPicker` | Renderiza widget de selección en modal | `src/renderer/components/chat/WidgetContextPicker.tsx` |
+| Integración AddContextMenu | Añadir opción "Widget Picker" al menú | `src/renderer/components/chat/AddContextMenu.tsx` |
+| IPC handlers | Comunicar selección del widget al chat | `src/main/ipc/widgetHandlers.ts` |
+
+**Caso de uso:**
+Un MCP server expone un widget tipo "file browser" o "calendar picker". El usuario lo abre desde el menú "+", selecciona contenido en el widget, y ese contenido se añade como contexto al prompt (similar a como Claude Desktop permite adjuntar archivos de un proyecto).
+
+**Flujo propuesto:**
+```
+AddContextMenu → "Open Widget Picker" → Modal con widget
+    ↓
+Widget selection → window.mcpApp.selectContext(data)
+    ↓
+Modal closes → Context added to prompt input
+```
+
+**API widget (propuesta):**
+```javascript
+// Nuevo método para Phase 8
+window.mcpApp.selectContext(data: {
+  type: 'file' | 'text' | 'image' | 'custom',
+  content: string | Blob,
+  metadata?: Record<string, unknown>
+});
+```
+
+**Por qué está diferido:**
+- Los widgets actuales funcionan como **output** de herramientas (tool results)
+- Phase 8 requiere widgets como **input** de contexto (antes de enviar mensaje)
+- No hay MCP servers en el test suite actual que requieran esta funcionalidad
+- La funcionalidad core de widgets está al 97% sin esto
 
 ---
 
