@@ -161,6 +161,16 @@
   -webkit-app-region: no-drag;
 }
 
+/* Disable drag on Sheet/Dialog components to allow interactions */
+[role="dialog"],
+[role="dialog"] button,
+[role="dialog"] input,
+[role="dialog"] select,
+[role="dialog"] textarea,
+[data-radix-popper-content-wrapper] {
+  -webkit-app-region: no-drag;
+}
+
 
 
 @layer base {

@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Wrench,
-  ChevronDown,
   CheckCircle2,
   XCircle,
   Clock,
-  Copy
+  Copy,
+  WrapText,
+  Maximize2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import CodeMirror from '@uiw/react-codemirror';
+import { json } from '@codemirror/lang-json';
+import { oneDark } from '@codemirror/theme-one-dark';
+import { EditorView } from '@codemirror/view';
+import { useThemeDetector } from '@/hooks/useThemeDetector';
 
 // ═══════════════════════════════════════════════════════
 // TIPOS
@@ -25,7 +28,7 @@ export interface ToolCallData {
   arguments: Record<string, any>;
   result?: {
     success: boolean;
-    content?: string;
+    content?: any; // Can be object, string, number, etc.
     error?: string;
   };
   status: 'pending' | 'running' | 'success' | 'error';
@@ -72,34 +75,32 @@ const statusConfig = {
 /**
  * ToolCall - Componente de visualización de llamadas a herramientas
  *
- * Diseño: Desplegable sutil que se integra en el flujo del mensaje
- * Patrón: Similar a reasoning.tsx (Collapsible)
+ * Diseño: Título clickeable que abre un Drawer lateral con los detalles
+ * Patrón: Similar a los tool results en Claude Desktop
  *
  * Estados:
- * - Colapsado (default): Solo icono + nombre en gris
- * - Expandido: Muestra argumentos, resultado y metadata
  * - Running: Indicador "Ejecutando..." con pulse
- * - Error: Indicador sutil, detalles en content
+ * - Success: Checkmark verde
+ * - Error: X roja
+ * - Click en título: Abre Drawer con argumentos, resultado y metadata
  *
  * @param toolCall - Datos de la tool call (ver ToolCallData)
  */
 export function ToolCall({ toolCall, className }: ToolCallProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const statusInfo = statusConfig[toolCall.status];
   const StatusIcon = statusInfo.icon;
 
   return (
-    <Collapsible
-      open={isOpen}
-      onOpenChange={setIsOpen}
-      className={cn('not-prose my-2', className)}
-    >
-      {/* TRIGGER: Línea sutil colapsable */}
-      <CollapsibleTrigger
+    <>
+      {/* Título clickeable de la tool */}
+      <button
+        onClick={() => setIsDrawerOpen(true)}
         className={cn(
           'flex items-center gap-2 text-muted-foreground text-sm',
           'hover:text-foreground transition-colors',
-          'w-full text-left group'
+          'w-full text-left group my-2 cursor-pointer',
+          className
         )}
       >
         {/* Icono de herramienta */}
@@ -108,48 +109,35 @@ export function ToolCall({ toolCall, className }: ToolCallProps) {
         {/* Nombre de la tool */}
         <span className="font-medium">{toolCall.name}</span>
 
-        {/* Indicador de estado (solo si running/error) */}
-        {(toolCall.status === 'running' || toolCall.status === 'error') && (
-          <span className="text-xs flex items-center gap-1">
-            <StatusIcon className={cn('w-3 h-3', statusInfo.className)} />
-            {statusInfo.label}
-          </span>
-        )}
+        {/* Indicador de estado */}
+        <StatusIcon className={cn('w-3.5 h-3.5 ml-auto', statusInfo.className)} />
+      </button>
 
-        {/* Chevron indicador */}
-        <ChevronDown
-          className={cn(
-            'w-3.5 h-3.5 ml-auto transition-transform',
-            isOpen ? 'rotate-180' : 'rotate-0'
-          )}
-        />
-      </CollapsibleTrigger>
+      {/* Drawer lateral con detalles completos */}
+      <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
+        <SheetContent side="right" className="w-[30vw] min-w-[400px] max-w-[600px] overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2 pr-8">
+              <Wrench className="w-5 h-5" />
+              {toolCall.name}
+            </SheetTitle>
+          </SheetHeader>
 
-      {/* CONTENT: Detalles expandibles */}
-      <CollapsibleContent
-        className={cn(
-          'mt-2 ml-5', // Indentación para alinear con contenido
-          'data-[state=closed]:fade-out-0',
-          'data-[state=closed]:slide-out-to-top-2',
-          'data-[state=open]:slide-in-from-top-2',
-          'data-[state=closed]:animate-out',
-          'data-[state=open]:animate-in'
-        )}
-      >
-        <div className="rounded-lg bg-muted/30 p-3 space-y-3 text-sm">
-          {/* Sección: Arguments */}
-          <ArgumentsSection arguments={toolCall.arguments} />
+          <div className="mt-6 space-y-6">
+            {/* Sección: Arguments */}
+            <ArgumentsSection arguments={toolCall.arguments} />
 
-          {/* Sección: Result */}
-          {toolCall.result && (
-            <ResultSection result={toolCall.result} />
-          )}
+            {/* Sección: Result */}
+            {toolCall.result && (
+              <ResultSection result={toolCall.result} />
+            )}
 
-          {/* Sección: Metadata */}
-          <MetadataSection toolCall={toolCall} />
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+            {/* Sección: Metadata */}
+            <MetadataSection toolCall={toolCall} />
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 }
 
@@ -201,54 +189,190 @@ function ArgumentsSection({ arguments: args }: { arguments: Record<string, any> 
 }
 
 function ResultSection({ result }: { result: NonNullable<ToolCallData['result']> }) {
+  const theme = useThemeDetector();
+  const [wrapEnabled, setWrapEnabled] = useState(false);
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
+
+  const content = result.success ? result.content : result.error;
+
+  // Detect if content is JSON:
+  // 1. If content is an object (not string) -> it's JSON
+  // 2. If content is a string that looks like JSON -> try to parse it
+  let isJSON = false;
+  let contentString = '';
+
+  if (typeof content === 'object' && content !== null) {
+    // Content is already a JSON object
+    isJSON = true;
+    contentString = JSON.stringify(content, null, 2);
+  } else if (typeof content === 'string') {
+    // Check if string looks like JSON
+    const trimmed = content.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        // Try to parse and format it nicely
+        const parsed = JSON.parse(trimmed);
+        isJSON = true;
+        contentString = JSON.stringify(parsed, null, 2);
+      } catch {
+        // Not valid JSON, treat as plain text
+        isJSON = false;
+        contentString = content;
+      }
+    } else {
+      // Plain text
+      contentString = content;
+    }
+  } else {
+    // Fallback for other types (number, boolean, etc.)
+    contentString = String(content || '');
+  }
+
+  // Calculate adaptive height based on content length
+  const lineCount = contentString.split('\n').length;
+  const adaptiveHeight = Math.min(Math.max(lineCount * 20, 300), 600);
+  // Fullscreen uses larger height to show more content
+  const fullscreenHeight = Math.min(Math.max(lineCount * 20, 600), 2000);
+
   const copyToClipboard = () => {
-    const content = result.success ? result.content : result.error;
-    if (content) {
-      navigator.clipboard.writeText(content);
+    if (contentString) {
+      navigator.clipboard.writeText(contentString);
     }
   };
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          {result.success ? 'Resultado' : 'Error'}
-        </h4>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={copyToClipboard}
-          className="h-6 px-2 text-muted-foreground hover:text-foreground"
-        >
-          <Copy className="w-3 h-3" />
-        </Button>
-      </div>
-
-      <div className={cn(
-        'rounded border p-2',
-        result.success
-          ? 'bg-green-50/50 dark:bg-green-950/20 border-green-200/50 dark:border-green-800/50'
-          : 'bg-red-50/50 dark:bg-red-950/20 border-red-200/50 dark:border-red-800/50'
-      )}>
-        <div className="flex items-start gap-2">
+        <h4 className="text-sm font-semibold flex items-center gap-2">
           {result.success ? (
-            <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+            <>
+              <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+              Resultado
+            </>
           ) : (
-            <XCircle className="w-4 h-4 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+            <>
+              <XCircle className="w-4 h-4 text-red-600 dark:text-red-400" />
+              Error
+            </>
           )}
-          <pre className={cn(
-            'text-xs font-mono whitespace-pre-wrap flex-1 overflow-x-auto',
-            result.success
-              ? 'text-green-800 dark:text-green-200'
-              : 'text-red-800 dark:text-red-200'
-          )}>
-            {result.success
-              ? (typeof result.content === 'string' ? result.content : JSON.stringify(result.content, null, 2))
-              : (typeof result.error === 'string' ? result.error : JSON.stringify(result.error, null, 2))
-            }
-          </pre>
+        </h4>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setWrapEnabled(!wrapEnabled)}
+            className={cn("gap-2", wrapEnabled && "bg-accent")}
+            title={wrapEnabled ? "Desactivar ajuste de línea" : "Activar ajuste de línea"}
+          >
+            <WrapText className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setFullscreenOpen(true)}
+            className="gap-2"
+            title="Vista completa"
+          >
+            <Maximize2 className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={copyToClipboard}
+            className="gap-2"
+          >
+            <Copy className="w-4 h-4" />
+            Copiar
+          </Button>
         </div>
       </div>
+
+      <div className="border rounded-md overflow-hidden">
+        <CodeMirror
+          value={contentString}
+          height={`${adaptiveHeight}px`}
+          extensions={isJSON
+            ? (wrapEnabled ? [json(), EditorView.lineWrapping] : [json()])
+            : (wrapEnabled ? [EditorView.lineWrapping] : [])
+          }
+          theme={theme === 'dark' ? oneDark : 'light'}
+          editable={false}
+          basicSetup={{
+            lineNumbers: true,
+            highlightActiveLineGutter: false,
+            highlightActiveLine: false,
+            foldGutter: true,
+            bracketMatching: true,
+            autocompletion: false,
+          }}
+        />
+      </div>
+
+      {/* Fullscreen Dialog */}
+      <Dialog open={fullscreenOpen} onOpenChange={setFullscreenOpen}>
+        <DialogContent className="max-w-[90vw] h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {result.success ? (
+                <>
+                  <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
+                  Resultado - Vista Completa
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                  Error - Vista Completa
+                </>
+              )}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex-1 flex flex-col gap-3 overflow-auto">
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setWrapEnabled(!wrapEnabled)}
+                className={cn("gap-2", wrapEnabled && "bg-accent")}
+                title={wrapEnabled ? "Desactivar ajuste de línea" : "Activar ajuste de línea"}
+              >
+                <WrapText className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={copyToClipboard}
+                className="gap-2"
+              >
+                <Copy className="w-4 h-4" />
+                Copiar
+              </Button>
+            </div>
+
+            <div className="border rounded-md overflow-hidden">
+              <CodeMirror
+                value={contentString}
+                height={`${fullscreenHeight}px`}
+                extensions={isJSON
+                  ? (wrapEnabled ? [json(), EditorView.lineWrapping] : [json()])
+                  : (wrapEnabled ? [EditorView.lineWrapping] : [])
+                }
+                theme={theme === 'dark' ? oneDark : 'light'}
+                editable={false}
+                basicSetup={{
+                  lineNumbers: true,
+                  highlightActiveLineGutter: false,
+                  highlightActiveLine: false,
+                  foldGutter: true,
+                  bracketMatching: true,
+                  autocompletion: false,
+                }}
+              />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

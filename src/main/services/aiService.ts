@@ -102,9 +102,11 @@ function sanitizeMessagesForModel(messages: UIMessage[]): UIMessage[] {
       }
 
       // Sanitize tool invocation outputs that contain uiResources (MCP-UI)
-      // According to MCP spec:
-      // - content → for LLM (text from content items)
-      // - structuredContent/_meta → for UI only, NEVER send to LLM
+      // According to MCP spec 2025-11-25:
+      // - structuredContent → SEND to LLM (structured JSON for processing)
+      // - content → SEND to LLM (text for backwards compatibility)
+      // - _meta → NEVER send (client metadata, may contain secrets like game words)
+      // - uiResources → NEVER send (only for widget rendering)
       // Note: Tool parts can have type 'tool-invocation' or 'tool-{toolName}' depending on source
       const isToolWithOutput = (
         // AI SDK format: tool-invocation with output-available state
@@ -115,28 +117,46 @@ function sanitizeMessagesForModel(messages: UIMessage[]): UIMessage[] {
       if (isToolWithOutput && part.output) {
         const output = part.output;
         if (output && typeof output === 'object' && 'uiResources' in output) {
-          // Extract text from content array (MCP spec: content items have type and text)
-          let textForModel = '';
+          // Build clean output for LLM - include structuredContent and content text
+          // but strip _meta (client metadata) and uiResources (widget rendering)
+          const cleanOutput: Record<string, unknown> = {};
 
+          // 1. Include structuredContent if present (MCP spec: structured JSON for LLM)
+          if (output.structuredContent) {
+            cleanOutput.structuredContent = output.structuredContent;
+          }
+
+          // 2. Extract text from content array (MCP spec: for backwards compatibility)
           if (Array.isArray(output.content)) {
             const contentTexts = output.content
               .filter((item: any) => item?.type === 'text' && item?.text)
               .map((item: any) => item.text);
 
             if (contentTexts.length > 0) {
-              textForModel = contentTexts.join('\n');
+              cleanOutput.text = contentTexts.join('\n');
             }
           }
 
           // Fallback to output.text if content array didn't provide text
-          if (!textForModel && output.text) {
-            textForModel = output.text;
+          if (!cleanOutput.text && output.text) {
+            cleanOutput.text = output.text;
           }
 
-          // NEVER send structuredContent or _meta to the model - they contain UI-only data
+          // If we have structuredContent, return it (preferred by LLM)
+          // Otherwise fall back to text, or a placeholder
+          let outputForModel: unknown;
+          if (cleanOutput.structuredContent) {
+            // LLM can work with structured data directly
+            outputForModel = cleanOutput.structuredContent;
+          } else if (cleanOutput.text) {
+            outputForModel = cleanOutput.text;
+          } else {
+            outputForModel = '[Widget rendered]';
+          }
+
           return {
             ...part,
-            output: textForModel || '[Widget rendered]',
+            output: outputForModel,
           };
         }
       }

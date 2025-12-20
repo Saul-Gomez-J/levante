@@ -395,32 +395,42 @@ Verification against [OpenAI Apps SDK Security & Privacy](https://platform.opena
 
 #### MCP Spec Data Separation (LLM vs UI)
 
-Verification against [MCP Tools Specification](https://modelcontextprotocol.io/specification/2025-06-18/server/tools):
+Verification against [MCP Tools Specification](https://modelcontextprotocol.io/specification/2025-11-25/server/tools#structured-content):
 
 | Field | MCP Spec Purpose | Levante Implementation | Status |
 |-------|------------------|------------------------|--------|
-| `content` | Sent to LLM for reasoning | ✅ Only text from `content[]` sent to model | ✅ |
-| `structuredContent` | Hidden from LLM, for UI rendering | ✅ Stripped in `sanitizeMessagesForModel()` | ✅ |
-| `_meta` | Metadata for clients, not LLM | ✅ Never sent to model | ✅ |
-| `uiResources` | Widget rendering data | ✅ Stripped from model context | ✅ |
+| `structuredContent` | **SEND to LLM** - structured JSON for processing | ✅ Sent to model for structured reasoning | ✅ |
+| `content` | **SEND to LLM** - text for backwards compatibility | ✅ Text from `content[]` sent as fallback | ✅ |
+| `_meta` | **NEVER send** - client metadata (may contain secrets) | ✅ Never sent to model | ✅ |
+| `uiResources` | **NEVER send** - widget rendering data | ✅ Stripped from model context | ✅ |
+
+**MCP Spec 2025-11-25 Clarification:**
+
+> `structuredContent` is NOT just for UI - it's an integral part of the response sent to the LLM for structured data processing. For backwards compatibility, servers SHOULD also return serialized JSON in a TextContent block.
 
 **Implementation Details:**
 
 ```typescript
 // aiService.ts - sanitizeMessagesForModel()
 // Detects tool parts with output (both 'tool-invocation' and 'tool-{name}' formats)
-// Extracts ONLY text from content[] array for LLM
-// NEVER sends structuredContent, _meta, or uiResources to model
+// Priority: structuredContent → content text → placeholder
+// NEVER sends _meta or uiResources to model (client-only data)
 ```
 
 **Key Files:**
-- `src/main/services/aiService.ts:109-142` - Message sanitization for model consumption
+- `src/main/services/aiService.ts:104-162` - Message sanitization for model consumption
 - `src/main/services/ai/mcpToolsAdapter.ts:419` - Safe text fallback (no secrets in text)
 
-**Verified Behavior:**
-- Game widgets (e.g., "Time's Up") keep secret words hidden from LLM
-- LLM receives only: `"A new card has been drawn! The user now sees the secret word..."`
-- LLM does NOT receive: `{ word: "penguin", ... }` or any `_meta` data
+**Data Flow:**
+1. If `structuredContent` exists → Send to LLM (structured JSON)
+2. If only `content` text exists → Send as fallback (backwards compatibility)
+3. `_meta` → Never sent (client metadata, may contain secrets like game words)
+4. `uiResources` → Never sent (only for widget rendering)
+
+**Security Note:**
+MCP servers that need to hide data from the LLM (e.g., secret game words) should:
+- Put secrets in `_meta` (never sent to LLM)
+- Put public data in `structuredContent` (sent to LLM for reasoning)
 
 #### Destructive Actions & Write Tools
 

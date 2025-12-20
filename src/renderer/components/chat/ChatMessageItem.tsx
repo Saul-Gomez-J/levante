@@ -209,7 +209,7 @@ function ToolCallPart({ part, messageId, onPrompt }: ToolCallPartProps) {
     arguments: part.input || {},
     result: part.state === 'output-available' ? {
       success: true,
-      content: JSON.stringify(part.output),
+      content: part.output, // Keep original type (object or string)
     } : part.state === 'output-error' ? {
       success: false,
       error: part.errorText,
