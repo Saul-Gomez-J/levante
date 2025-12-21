@@ -568,4 +568,115 @@ describe('OAuthDiscoveryService', () => {
             expect(stats.total).toBe(2);
         });
     });
+
+    describe('registerClient', () => {
+        it('should register client successfully', async () => {
+            const mockResponse = {
+                client_id: 'test-client-id',
+                client_secret: 'test-client-secret',
+                client_id_issued_at: Date.now() / 1000,
+            };
+
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => mockResponse,
+            });
+
+            const result = await discoveryService.registerClient(
+                'https://auth.example.com/register',
+                'https://auth.example.com'
+            );
+
+            expect(result.clientId).toBe('test-client-id');
+            expect(result.clientSecret).toBe('test-client-secret');
+            expect(result.authServerId).toBe('https://auth.example.com');
+
+            expect(global.fetch).toHaveBeenCalledWith(
+                'https://auth.example.com/register',
+                expect.objectContaining({
+                    method: 'POST',
+                    headers: expect.objectContaining({
+                        'Content-Type': 'application/json',
+                    }),
+                    body: expect.stringContaining('Levante'),
+                })
+            );
+        });
+
+        it('should throw error if registration fails', async () => {
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: false,
+                status: 400,
+                json: async () => ({
+                    error: 'invalid_redirect_uri',
+                    error_description: 'Invalid redirect URI',
+                }),
+            });
+
+            await expect(
+                discoveryService.registerClient(
+                    'https://auth.example.com/register',
+                    'https://auth.example.com'
+                )
+            ).rejects.toThrow('Invalid redirect URI');
+        });
+
+        it('should throw error if registration response is missing client_id', async () => {
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => ({}), // Missing client_id
+            });
+
+            await expect(
+                discoveryService.registerClient(
+                    'https://auth.example.com/register',
+                    'https://auth.example.com'
+                )
+            ).rejects.toThrow('Registration response missing client_id');
+        });
+
+        it('should throw error if registration endpoint is not HTTPS', async () => {
+            await expect(
+                discoveryService.registerClient(
+                    'http://insecure.example.com/register',
+                    'http://insecure.example.com'
+                )
+            ).rejects.toThrow('Registration endpoint must use HTTPS');
+        });
+
+        it('should allow HTTP for localhost registration', async () => {
+            const mockResponse = { client_id: 'local-client' };
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => mockResponse,
+            });
+
+            const result = await discoveryService.registerClient(
+                'http://127.0.0.1:8080/register',
+                'http://127.0.0.1:8080'
+            );
+
+            expect(result.clientId).toBe('local-client');
+        });
+    });
+
+    describe('supportsClientRegistration', () => {
+        it('should return true if registration_endpoint is present', () => {
+            const metadata: any = {
+                registration_endpoint: 'https://auth.example.com/register',
+            };
+
+            expect(discoveryService.supportsClientRegistration(metadata)).toBe(true);
+        });
+
+        it('should return false if registration_endpoint is missing', () => {
+            const metadata: any = {
+                issuer: 'https://auth.example.com',
+            };
+
+            expect(discoveryService.supportsClientRegistration(metadata)).toBe(
+                false
+            );
+        });
+    });
 });

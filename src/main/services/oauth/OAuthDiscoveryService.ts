@@ -5,8 +5,11 @@ import type {
     WWWAuthenticateParams,
     CachedMetadata,
     DiscoveryResult,
+    OAuthClientRegistrationRequest,
+    OAuthClientRegistrationResponse,
+    OAuthClientCredentials,
 } from './types';
-import { OAuthDiscoveryError } from './types';
+import { OAuthDiscoveryError, ClientRegistrationError } from './types';
 
 /**
  * OAuthDiscoveryService
@@ -598,5 +601,155 @@ export class OAuthDiscoveryService {
         setTimeout(() => {
             cache.delete(key);
         }, ttl);
+    }
+
+    /**
+     * RFC 7591: Dynamic Client Registration
+     *
+     * Registers Levante as an OAuth client with the Authorization Server
+     *
+     * @param registrationEndpoint - The registration endpoint from AS metadata
+     * @param authServerId - The Authorization Server identifier
+     * @returns Client credentials (clientId and optional clientSecret)
+     * @throws ClientRegistrationError if registration fails
+     */
+    async registerClient(
+        registrationEndpoint: string,
+        authServerId: string
+    ): Promise<OAuthClientCredentials> {
+        this.logger.mcp.info('Attempting Dynamic Client Registration', {
+            registrationEndpoint,
+            authServerId,
+        });
+
+        // Validate HTTPS (except localhost)
+        const url = new URL(registrationEndpoint);
+        if (
+            url.protocol === 'http:' &&
+            !['127.0.0.1', 'localhost'].includes(url.hostname)
+        ) {
+            throw new ClientRegistrationError(
+                'Registration endpoint must use HTTPS',
+                'invalid_endpoint'
+            );
+        }
+
+        // Prepare registration request (RFC 7591)
+        const registrationRequest: OAuthClientRegistrationRequest = {
+            client_name: 'Levante',
+            client_uri: 'https://github.com/levante-hub/levante',
+
+            // Loopback redirect without specific port (will be dynamic)
+            redirect_uris: ['http://127.0.0.1/callback'],
+
+            // Grant types for Authorization Code Flow with PKCE
+            grant_types: ['authorization_code', 'refresh_token'],
+
+            // Response type for Authorization Code Flow
+            response_types: ['code'],
+
+            // Public client (no client secret needed for PKCE)
+            token_endpoint_auth_method: 'none',
+
+            // Minimal scopes (server-specific scopes will be requested during authorization)
+            scope: 'mcp:read mcp:write',
+        };
+
+        try {
+            // POST to registration endpoint
+            const response = await fetch(registrationEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                },
+                body: JSON.stringify(registrationRequest),
+            });
+
+            if (!response.ok) {
+                // Parse error response
+                let errorData: any;
+                try {
+                    errorData = await response.json();
+                } catch {
+                    errorData = {
+                        error: 'unknown_error',
+                        error_description: await response.text(),
+                    };
+                }
+
+                this.logger.mcp.error('Client registration failed', {
+                    status: response.status,
+                    error: errorData.error,
+                    description: errorData.error_description,
+                });
+
+                throw new ClientRegistrationError(
+                    errorData.error_description ||
+                    `Registration failed: ${errorData.error}`,
+                    errorData.error || 'registration_failed',
+                    response.status
+                );
+            }
+
+            // Parse successful response
+            const data: OAuthClientRegistrationResponse =
+                (await response.json()) as OAuthClientRegistrationResponse;
+
+            // Validate required fields
+            if (!data.client_id) {
+                throw new ClientRegistrationError(
+                    'Registration response missing client_id',
+                    'invalid_response'
+                );
+            }
+
+            this.logger.mcp.info('Dynamic Client Registration successful', {
+                clientId: data.client_id,
+                hasClientSecret: !!data.client_secret,
+                authServerId,
+            });
+
+            // Build credentials object
+            const credentials: OAuthClientCredentials = {
+                clientId: data.client_id,
+                clientSecret: data.client_secret, // Will be encrypted when saved
+                registeredAt: Date.now(),
+                authServerId,
+                registrationMetadata: {
+                    client_secret_expires_at: data.client_secret_expires_at,
+                    registration_access_token: data.registration_access_token,
+                    registration_client_uri: data.registration_client_uri,
+                },
+            };
+
+            return credentials;
+        } catch (error) {
+            if (error instanceof ClientRegistrationError) {
+                throw error;
+            }
+
+            // Network or parsing error
+            this.logger.mcp.error('Client registration error', {
+                error: error instanceof Error ? error.message : error,
+                registrationEndpoint,
+            });
+
+            throw new ClientRegistrationError(
+                `Failed to register client: ${error instanceof Error ? error.message : 'Unknown error'
+                }`,
+                'network_error'
+            );
+        }
+    }
+
+    /**
+     * Helper: Check if Authorization Server supports Dynamic Client Registration
+     *
+     * @param metadata - Authorization Server metadata
+     * @returns true if registration_endpoint is present
+     */
+    supportsClientRegistration(metadata: AuthorizationServerMetadata): boolean {
+        return !!metadata.registration_endpoint;
     }
 }

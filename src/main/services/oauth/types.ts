@@ -85,7 +85,10 @@ export interface MCPServerConfigWithOAuth {
     headers?: Record<string, string>;
 
     /** Configuración OAuth (opcional) */
-    oauth?: OAuthConfig;
+    oauth?: OAuthConfig & {
+        /** NUEVO Fase 5: Credenciales de cliente registradas dinámicamente */
+        clientCredentials?: OAuthClientCredentials;
+    };
 }
 
 /**
@@ -492,4 +495,93 @@ export interface OAuthServerConfig {
     clientSecret?: string;
     scopes: string[];
     redirectUri?: string;
+}
+
+/**
+ * RFC 7591: Dynamic Client Registration Request - Fase 5
+ */
+export interface OAuthClientRegistrationRequest {
+    /** Human-readable name of the client */
+    client_name: string;
+
+    /** Array of redirect URIs */
+    redirect_uris: string[];
+
+    /** Grant types the client can use */
+    grant_types?: string[];
+
+    /** Response types the client can use */
+    response_types?: string[];
+
+    /** Token endpoint authentication method */
+    token_endpoint_auth_method?: 'none' | 'client_secret_post' | 'client_secret_basic';
+
+    /** Requested scopes */
+    scope?: string;
+
+    /** URL of the client application */
+    client_uri?: string;
+
+    /** Logo URI */
+    logo_uri?: string;
+}
+
+/**
+ * RFC 7591: Dynamic Client Registration Response
+ */
+export interface OAuthClientRegistrationResponse {
+    /** Unique client identifier */
+    client_id: string;
+
+    /** Client secret (only for confidential clients) */
+    client_secret?: string;
+
+    /** Timestamp when client_secret expires (0 = never) */
+    client_secret_expires_at?: number;
+
+    /** Registration access token */
+    registration_access_token?: string;
+
+    /** Registration client URI for updates */
+    registration_client_uri?: string;
+
+    /** Timestamp when the client was registered */
+    client_id_issued_at?: number;
+
+    /** Echo of request fields */
+    client_name?: string;
+    redirect_uris?: string[];
+    grant_types?: string[];
+    response_types?: string[];
+    token_endpoint_auth_method?: string;
+    scope?: string;
+}
+
+/**
+ * Stored client credentials after registration
+ */
+export interface OAuthClientCredentials {
+    clientId: string;
+    clientSecret?: string; // Encrypted if exists
+    registeredAt: number;
+    authServerId: string;
+    registrationMetadata?: {
+        client_secret_expires_at?: number;
+        registration_access_token?: string; // Encrypted
+        registration_client_uri?: string;
+    };
+}
+
+/**
+ * Error de registro de cliente
+ */
+export class ClientRegistrationError extends Error {
+    constructor(
+        message: string,
+        public code: string,
+        public statusCode?: number
+    ) {
+        super(message);
+        this.name = 'ClientRegistrationError';
+    }
 }
