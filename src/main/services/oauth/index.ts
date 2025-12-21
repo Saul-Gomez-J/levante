@@ -4,6 +4,7 @@
  * Fase 1: Token Store Seguro
  * Fase 2: OAuth Flow con PKCE
  * Fase 3: Discovery Automático
+ * Fase 4: HTTP Client & Service
  */
 
 // Fase 1
@@ -17,30 +18,9 @@ export { OAuthStateManager } from './OAuthStateManager';
 // Fase 3
 export { OAuthDiscoveryService } from './OAuthDiscoveryService';
 
-// Types
-export type {
-    OAuthTokens,
-    StoredOAuthTokens,
-    OAuthConfig,
-    MCPServerConfigWithOAuth,
-    UIPreferencesWithOAuth,
-    PKCEParams,
-    AuthorizationUrlParams,
-    TokenExchangeParams,
-    TokenRefreshParams,
-    AuthorizationCallback,
-    LoopbackServerConfig,
-    LoopbackServerResult,
-    StoredState,
-    ProtectedResourceMetadata,
-    AuthorizationServerMetadata,
-    WWWAuthenticateParams,
-    CachedMetadata,
-    DiscoveryResult,
-} from './types';
+// Fase 4
+export { OAuthHttpClient } from './OAuthHttpClient';
+export { OAuthService } from './OAuthService';
 
-export {
-    OAuthTokenStoreError,
-    OAuthFlowError,
-    OAuthDiscoveryError,
-} from './types';
+// Types
+export * from './types';

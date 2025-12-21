@@ -449,3 +449,47 @@ export class OAuthDiscoveryError extends Error {
         this.name = 'OAuthDiscoveryError';
     }
 }
+/**
+ * OAuth HttpClient and Service Types - Fase 4
+ */
+
+/**
+ * OAuthHttpClient error
+ */
+export interface OAuthHttpClientError extends Error {
+    code:
+    | 'NO_TOKENS'
+    | 'NO_REFRESH_TOKEN'
+    | 'REFRESH_FAILED'
+    | 'NO_OAUTH_CONFIG'
+    | 'NETWORK_ERROR'
+    | 'UNAUTHORIZED';
+    details?: Record<string, unknown>;
+}
+
+/**
+ * OAuthService error
+ */
+export interface OAuthServiceError extends Error {
+    code:
+    | 'DISCOVERY_FAILED'
+    | 'AUTHORIZATION_FAILED'
+    | 'TOKEN_EXCHANGE_FAILED'
+    | 'NO_CLIENT_ID'
+    | 'SAVE_FAILED'
+    | 'AUTH_SERVER_NOT_FOUND'
+    | 'MISSING_CLIENT_ID';
+    details?: Record<string, unknown>;
+}
+
+/**
+ * OAuth configuration stored in preferences
+ */
+export interface OAuthServerConfig {
+    enabled: boolean;
+    authServerId: string;
+    clientId: string;
+    clientSecret?: string;
+    scopes: string[];
+    redirectUri?: string;
+}

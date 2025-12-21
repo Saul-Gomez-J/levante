@@ -20,6 +20,7 @@ import type { IMCPService } from "./IMCPService.js";
 import { RuntimeResolver } from "../runtime/RuntimeResolver.js";
 import { RuntimeManager } from "../runtime/runtimeManager.js";
 import { PreferencesService } from "../preferencesService.js";
+import { OAuthService } from "../oauth/OAuthService.js";
 
 // Dynamic import references - populated in initialize()
 let MCPClient: any;
@@ -130,8 +131,38 @@ export class MCPUseService implements IMCPService {
       serverConfig.env = config.env;
     } else if (finalTransport === 'http' || finalTransport === 'sse' || finalTransport === 'streamable-http') {
       serverConfig.url = baseUrl;
-      if (config.headers) {
-        serverConfig.headers = config.headers;
+
+      let headers = { ...(config.headers || {}) };
+
+      // Phase 4: Handle OAuth
+      if (config.oauth?.enabled) {
+        try {
+          this.logger.mcp.debug("Ensuring valid OAuth token for mcp-use", {
+            serverId: config.id,
+          });
+          const oauthService = new OAuthService(new PreferencesService());
+          const tokens = await oauthService.ensureValidToken(config.id);
+
+          headers = {
+            ...headers,
+            Authorization: `${tokens.tokenType} ${tokens.accessToken}`,
+          };
+
+          this.logger.mcp.info("OAuth token added to mcp-use headers", {
+            serverId: config.id,
+          });
+        } catch (oauthError) {
+          this.logger.mcp.error("Failed to get OAuth token for mcp-use", {
+            serverId: config.id,
+            error: oauthError instanceof Error ? oauthError.message : oauthError,
+          });
+          // Continue anyway or throw? The plan for transports.ts throws.
+          throw new Error(`OAuth authentication failed: ${oauthError instanceof Error ? oauthError.message : String(oauthError)}`);
+        }
+      }
+
+      if (Object.keys(headers).length > 0) {
+        serverConfig.headers = headers;
       }
     }
 
@@ -151,8 +182,8 @@ export class MCPUseService implements IMCPService {
 
         executorOpts.memoryLimitMb =
           (codeModeConfig.executorOptions?.memoryLimit ||
-          this.globalPreferences.codeModeDefaults?.vmMemoryLimit ||
-          134217728) / (1024 * 1024); // Convert bytes to MB
+            this.globalPreferences.codeModeDefaults?.vmMemoryLimit ||
+            134217728) / (1024 * 1024); // Convert bytes to MB
       } else if (codeModeConfig.executor === 'e2b') {
         // E2B executor options
         executorOpts.apiKey =
@@ -442,9 +473,8 @@ export class MCPUseService implements IMCPService {
         return {
           valid: true,
           status: "active",
-          message: `Package ${packageName} is available (v${
-            activeEntry.version || "latest"
-          })`,
+          message: `Package ${packageName} is available (v${activeEntry.version || "latest"
+            })`,
         };
       }
 
