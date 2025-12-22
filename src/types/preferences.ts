@@ -1,4 +1,6 @@
 import type { ProviderConfig } from "./models";
+import type { ReasoningConfig } from "./reasoning";
+import { DEFAULT_REASONING_CONFIG } from "./reasoning";
 
 export interface MCPPreferences {
   /** MCP SDK selection */
@@ -49,6 +51,8 @@ export interface UIPreferences {
     baseSteps: number;
     maxSteps: number;
     mermaidValidation: boolean;
+    /** Reasoning model configuration */
+    reasoning?: ReasoningConfig;
   };
   hasAcceptedFreeModelWarning?: boolean;
   developerMode: boolean;
@@ -116,6 +120,7 @@ export const DEFAULT_PREFERENCES: UIPreferences = {
     baseSteps: 5,
     maxSteps: 20,
     mermaidValidation: true,
+    reasoning: DEFAULT_REASONING_CONFIG,
   },
   hasAcceptedFreeModelWarning: false,
   developerMode: false,

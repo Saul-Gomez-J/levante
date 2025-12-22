@@ -10,6 +10,13 @@ import {
 } from "ai";
 import { getLogger } from "./logging";
 import { getModelProvider } from "./ai/providerResolver";
+import {
+  getReasoningConfig,
+  buildProviderOptions,
+  shouldUseReasoningMiddleware as shouldUseReasoningMiddlewareFromResolver,
+} from "./ai/reasoningResolver";
+import type { ProviderConfig } from "../../types/models";
+import type { ReasoningConfig } from "../../types/reasoning";
 import { getMCPTools } from "./ai/mcpToolsAdapter";
 import { buildSystemPrompt } from "./ai/systemPromptBuilder";
 import { isToolUseNotSupportedError } from "./ai/toolErrorDetector";
@@ -176,20 +183,13 @@ function sanitizeMessagesForModel(messages: UIMessage[]): UIMessage[] {
 /**
  * Check if model should use reasoning middleware for <think> tag extraction.
  * DeepSeek R1 models use <think></think> tags to wrap reasoning content.
+ * Delegates to reasoningResolver for centralized model pattern management.
  *
  * @param modelId - The model identifier (e.g., "deepseek-r1", "deepseek-reasoner")
  * @returns true if middleware should be applied
  */
 function shouldUseReasoningMiddleware(modelId: string): boolean {
-  const reasoningModelPatterns = [
-    'deepseek-r1',
-    'deepseek-reasoner',
-    'r1-distill',
-  ];
-
-  return reasoningModelPatterns.some(pattern =>
-    modelId.toLowerCase().includes(pattern)
-  );
+  return shouldUseReasoningMiddlewareFromResolver(modelId);
 }
 
 /**
@@ -215,43 +215,69 @@ function wrapModelForReasoning(model: any, modelId: string) {
 
 /**
  * Get provider-specific options for reasoning models.
+ * Uses the centralized reasoningResolver for multi-provider support.
+ *
+ * Priority for configuration:
+ * 1. Provider-specific settings (provider.settings.reasoning)
+ * 2. Global AI preferences (aiConfig.reasoning)
+ * 3. Default (adaptive mode)
  *
  * @param modelId - The model identifier
+ * @param provider - The provider configuration (optional, for provider-specific settings)
  * @returns Provider options object or undefined
  */
-function getReasoningProviderOptions(modelId: string): any {
-  const lowerModelId = modelId.toLowerCase();
+async function getReasoningProviderOptions(
+  modelId: string,
+  provider?: ProviderConfig
+): Promise<any> {
+  const logger = getLogger();
 
-  // OpenAI GPT-5 and similar reasoning models
-  // We only set reasoningSummary to receive the reasoning text when the model decides to reason.
-  // We do NOT set reasoningEffort - letting the model use its default and decide adaptively:
-  // - GPT-5: defaults to 'medium'
-  // - GPT-5.1/5.2: defaults to 'none' (fully adaptive)
-  // - gpt-5-nano: uses model default
-  // The model activates reasoning based on:
-  // - Task complexity (multi-step problems, analysis, coding)
-  // - Explicit user signals ("think step by step", "analyze carefully", "explain your reasoning")
-  // - Conversation context
-  if (lowerModelId.includes('gpt-5') || lowerModelId.includes('o1') || lowerModelId.includes('o3')) {
-    return {
-      openai: {
-        // Only set reasoningSummary to receive reasoning content when the model decides to reason
-        // Values: 'auto', 'detailed', 'condensed'
-        reasoningSummary: 'detailed',
-      },
-    };
+  try {
+    // Get global reasoning config from AI preferences
+    const { preferencesService } = await import("./preferencesService");
+    const aiConfig = preferencesService.get('ai') as { reasoning?: ReasoningConfig } | undefined;
+    const globalReasoningConfig = aiConfig?.reasoning;
+
+    // If no provider passed, try to find it
+    let resolvedProvider = provider;
+    if (!resolvedProvider) {
+      const providers = (preferencesService.get("providers") as ProviderConfig[]) || [];
+      resolvedProvider = providers.find((p) => {
+        if (p.modelSource === "dynamic") {
+          return p.selectedModelIds?.includes(modelId);
+        } else {
+          return p.models.some(
+            (model) => model.id === modelId && model.isSelected !== false
+          );
+        }
+      });
+    }
+
+    // Get reasoning config with priority resolution
+    const reasoningConfig = resolvedProvider
+      ? getReasoningConfig(modelId, resolvedProvider, globalReasoningConfig)
+      : globalReasoningConfig;
+
+    if (!reasoningConfig || reasoningConfig.mode === 'disabled') {
+      logger.aiSdk.debug('Reasoning disabled or no config', { modelId });
+      return undefined;
+    }
+
+    // Build provider-specific options
+    const providerType = resolvedProvider?.type;
+    if (!providerType) {
+      logger.aiSdk.debug('No provider type found, cannot build reasoning options', { modelId });
+      return undefined;
+    }
+
+    return buildProviderOptions(reasoningConfig, providerType, modelId);
+  } catch (error) {
+    logger.aiSdk.error('Error getting reasoning provider options', {
+      error: error instanceof Error ? error.message : error,
+      modelId,
+    });
+    return undefined;
   }
-
-  // Google Gemini 2.0 thinking models
-  if (lowerModelId.includes('gemini-2.0') || lowerModelId.includes('gemini-3')) {
-    return {
-      google: {
-        thinkingConfig: { includeThoughts: true },
-      },
-    };
-  }
-
-  return undefined;
 }
 
 export class AIService {
@@ -993,8 +1019,8 @@ export class AIService {
         stopWhen: stepCountIs(await calculateMaxSteps(Object.keys(tools).length)),
 
         // Provider-specific options for reasoning models (GPT-5, Gemini 2.0, etc.)
-        providerOptions: (() => {
-          const options = getReasoningProviderOptions(model);
+        providerOptions: await (async () => {
+          const options = await getReasoningProviderOptions(model);
           this.logger.aiSdk.info("🔧 Applying provider options for reasoning", {
             modelId: model,
             providerOptions: options,
@@ -1719,7 +1745,7 @@ export class AIService {
           builtInToolsConfig.mermaidValidation
         ),
         stopWhen: stepCountIs(await calculateMaxSteps(Object.keys(tools).length)),
-        providerOptions: getReasoningProviderOptions(model),
+        providerOptions: await getReasoningProviderOptions(model),
       });
 
       return {
