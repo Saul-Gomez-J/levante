@@ -223,10 +223,21 @@ function getReasoningProviderOptions(modelId: string): any {
   const lowerModelId = modelId.toLowerCase();
 
   // OpenAI GPT-5 and similar reasoning models
+  // We only set reasoningSummary to receive the reasoning text when the model decides to reason.
+  // We do NOT set reasoningEffort - letting the model use its default and decide adaptively:
+  // - GPT-5: defaults to 'medium'
+  // - GPT-5.1/5.2: defaults to 'none' (fully adaptive)
+  // - gpt-5-nano: uses model default
+  // The model activates reasoning based on:
+  // - Task complexity (multi-step problems, analysis, coding)
+  // - Explicit user signals ("think step by step", "analyze carefully", "explain your reasoning")
+  // - Conversation context
   if (lowerModelId.includes('gpt-5') || lowerModelId.includes('o1') || lowerModelId.includes('o3')) {
     return {
       openai: {
-        reasoningSummary: 'detailed', // 'auto', 'detailed', or 'condensed'
+        // Only set reasoningSummary to receive reasoning content when the model decides to reason
+        // Values: 'auto', 'detailed', 'condensed'
+        reasoningSummary: 'detailed',
       },
     };
   }
@@ -982,7 +993,14 @@ export class AIService {
         stopWhen: stepCountIs(await calculateMaxSteps(Object.keys(tools).length)),
 
         // Provider-specific options for reasoning models (GPT-5, Gemini 2.0, etc.)
-        providerOptions: getReasoningProviderOptions(model),
+        providerOptions: (() => {
+          const options = getReasoningProviderOptions(model);
+          this.logger.aiSdk.info("🔧 Applying provider options for reasoning", {
+            modelId: model,
+            providerOptions: options,
+          });
+          return options;
+        })(),
 
         // Callback for each chunk - measure TTFB
         onChunk: ({ chunk }) => {
@@ -998,7 +1016,9 @@ export class AIService {
         },
 
         // Callback when stream finishes - log final metrics
-        onFinish: ({ usage, finishReason }) => {
+        onFinish: (finishData: any) => {
+          const { usage, finishReason } = finishData;
+
           const totalTime = Date.now() - streamStartTime;
           const ttfb = firstChunkTime ? firstChunkTime - streamStartTime : null;
 
@@ -1056,14 +1076,13 @@ export class AIService {
             break;
 
           case "reasoning-delta":
-            // OpenAI uses 'text' instead of 'delta' for reasoning chunks
-            const reasoningDelta = (chunk as any).text || (chunk as any).delta;
+            // AI SDK uses 'text' field for reasoning chunks
+            const reasoningDelta = (chunk as any).text;
             const reasoningId = (chunk as any).id;
 
             this.logger.aiSdk.debug("Reasoning chunk received", {
               id: reasoningId,
               deltaLength: reasoningDelta?.length,
-              delta: reasoningDelta,
             });
 
             if (reasoningDelta && reasoningId) {
@@ -1072,10 +1091,9 @@ export class AIService {
               const accumulatedText = currentText + reasoningDelta;
               reasoningBlocks.set(reasoningId, accumulatedText);
 
-              this.logger.aiSdk.info("📤 Yielding accumulated reasoning", {
+              this.logger.aiSdk.debug("Yielding accumulated reasoning", {
                 reasoningId,
                 accumulatedLength: accumulatedText.length,
-                deltaLength: reasoningDelta.length,
               });
 
               // Yield the full accumulated text
@@ -1235,6 +1253,40 @@ export class AIService {
             };
             return;
         }
+      }
+
+      // After stream completes, check if reasoning is available in result
+      // Some models (GPT-5) don't stream reasoning incrementally but provide it at the end
+      await result.text; // Wait for completion
+
+      this.logger.aiSdk.info("🔍 Checking result for reasoning", {
+        resultKeys: Object.keys(result),
+        hasReasoningText: !!(result as any).reasoningText,
+        hasReasoning: !!(result as any).reasoning,
+        reasoningTextType: typeof (result as any).reasoningText,
+        reasoningType: typeof (result as any).reasoning,
+        reasoningTextValue: (result as any).reasoningText,
+        reasoningValue: (result as any).reasoning,
+        reasoningTextKeys: (result as any).reasoningText ? Object.keys((result as any).reasoningText) : null,
+        reasoningKeys: (result as any).reasoning ? Object.keys((result as any).reasoning) : null,
+      });
+
+      const reasoningText = (result as any).reasoningText || (result as any).reasoning;
+
+      if (reasoningText) {
+        this.logger.aiSdk.info("📝 Reasoning found in finishData", {
+          reasoningLength: typeof reasoningText === 'string' ? reasoningText.length : JSON.stringify(reasoningText).length,
+          reasoningType: typeof reasoningText,
+          reasoningPreview: typeof reasoningText === 'string' ? reasoningText.substring(0, 100) : null,
+        });
+
+        // Send reasoning as final chunk before done
+        yield {
+          reasoning: typeof reasoningText === 'string' ? reasoningText : JSON.stringify(reasoningText),
+          reasoningId: 'finish-reasoning',
+        };
+      } else {
+        this.logger.aiSdk.debug("No reasoning found in finishData");
       }
 
       yield { done: true };

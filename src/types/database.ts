@@ -38,6 +38,7 @@ export interface Message {
   content: string;
   tool_calls?: string | null; // JSON string or null
   attachments?: string | null; // JSON string of MessageAttachment[] or null
+  reasoning?: string | null; // JSON string of { text: string, duration?: number } or null
   created_at: number;
 }
 
@@ -102,6 +103,7 @@ export interface CreateMessageInput {
   content: string;
   tool_calls?: object[] | null; // Will be JSON stringified or null
   attachments?: MessageAttachment[] | null; // File attachments (images, audio)
+  reasoning?: { text: string; duration?: number } | null; // Reasoning content from AI models
 }
 
 export interface CreateProviderInput {

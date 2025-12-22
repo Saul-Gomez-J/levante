@@ -396,6 +396,37 @@ export const useChatStore = create<ChatStore>()(
             }));
           }
 
+          // Extract reasoning from parts (GPT-5, Gemini 2.0, DeepSeek R1, etc.)
+          const reasoningParts = message.parts.filter((p: any) => p.type === 'data-reasoning');
+
+          let reasoningData = null;
+          if (reasoningParts.length > 0) {
+            // Combine all reasoning text
+            const combinedText = reasoningParts
+              .map((p: any) => p.data?.text || '')
+              .filter((text: string) => {
+                // Filter out empty strings, whitespace-only, and empty object representations
+                const trimmed = text.trim();
+                return trimmed.length > 0 && trimmed !== '{}' && trimmed !== '[]';
+              })
+              .join('\n\n');
+
+            // Only persist if there's actual reasoning content
+            if (combinedText.length > 0) {
+              const reasoningPart = reasoningParts[0] as any;
+              reasoningData = {
+                text: combinedText,
+                duration: reasoningPart.data?.duration, // Optional duration in seconds
+              };
+
+              logger.database.debug('Persisting message with reasoning', {
+                messageId: message.id,
+                reasoningLength: reasoningData.text.length,
+                duration: reasoningData.duration,
+              });
+            }
+          }
+
           // Debug: Log attachments being persisted
           if (attachments) {
             logger.core.info('💾 Persisting message WITH attachments', {
@@ -411,6 +442,7 @@ export const useChatStore = create<ChatStore>()(
             content: content || '', // Fallback to empty string if no text
             tool_calls: toolCallsData,
             attachments: attachments,
+            reasoning: reasoningData,
           };
 
           const result = await window.levante.db.messages.create(input);
@@ -527,6 +559,30 @@ export const useChatStore = create<ChatStore>()(
                 }
               } catch (err) {
                 logger.database.warn('Failed to parse tool calls', {
+                  messageId: dbMsg.id,
+                  error: err,
+                });
+              }
+            }
+
+            // Add reasoning part (GPT-5, Gemini 2.0, DeepSeek R1, etc.)
+            if (dbMsg.reasoning) {
+              try {
+                const reasoning = JSON.parse(dbMsg.reasoning);
+                parts.push({
+                  type: 'data-reasoning',
+                  data: {
+                    text: reasoning.text,
+                    duration: reasoning.duration,
+                  },
+                });
+                logger.database.debug('💭 Loaded reasoning from DB', {
+                  messageId: dbMsg.id,
+                  reasoningLength: reasoning.text?.length || 0,
+                  duration: reasoning.duration,
+                });
+              } catch (err) {
+                logger.database.warn('Failed to parse reasoning', {
                   messageId: dbMsg.id,
                   error: err,
                 });

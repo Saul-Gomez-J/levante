@@ -110,30 +110,54 @@ export function ChatMessageItem({ message, isStreaming, onPrompt, onSendMessage,
             return null;
           })()}
 
+          {/* Render all reasoning parts as a single component */}
+          {(() => {
+            const reasoningParts = message.parts?.filter((p: any) => p?.type === 'data-reasoning') || [];
+
+            if (reasoningParts.length > 0) {
+              // Combine all reasoning text from multiple blocks
+              // Filter out empty strings and empty objects like "{}"
+              const combinedReasoning = reasoningParts
+                .map((p: any) => p.data?.text || '')
+                .filter(text => {
+                  // Skip empty strings, whitespace-only, and empty object representations
+                  const trimmed = text.trim();
+                  return trimmed.length > 0 && trimmed !== '{}' && trimmed !== '[]';
+                })
+                .join('\n\n---\n\n'); // Separate multiple reasoning blocks with a divider
+
+              // Only show reasoning component if there's actual content
+              if (combinedReasoning && combinedReasoning.trim().length > 0) {
+                return (
+                  <Reasoning
+                    key={`${message.id}-reasoning`}
+                    className="w-full"
+                    isStreaming={isStreaming}
+                  >
+                    <ReasoningTrigger />
+                    <ReasoningContent>
+                      {combinedReasoning}
+                    </ReasoningContent>
+                  </Reasoning>
+                );
+              }
+            }
+            return null;
+          })()}
+
           {message.parts?.map((part: any, i: number) => {
             try {
+              // Skip reasoning parts (already rendered above)
+              if (part?.type === 'data-reasoning') {
+                return null;
+              }
+
               // Text content
               if (part?.type === 'text' && part?.text) {
                 return (
                   <Response key={`${message.id}-${i}`}>
                     {part.text}
                   </Response>
-                );
-              }
-
-              // Reasoning (data part)
-              if (part?.type === 'data-reasoning') {
-                return (
-                  <Reasoning
-                    key={`${message.id}-${i}`}
-                    className="w-full"
-                    isStreaming={isStreaming}
-                  >
-                    <ReasoningTrigger />
-                    <ReasoningContent>
-                      {part.data?.text || ''}
-                    </ReasoningContent>
-                  </Reasoning>
                 );
               }
 

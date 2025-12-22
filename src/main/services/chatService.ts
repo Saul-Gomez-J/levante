@@ -239,11 +239,13 @@ export class ChatService {
       const now = Date.now();
 
       const attachmentsString = input.attachments ? JSON.stringify(input.attachments) : null;
+      const reasoningString = input.reasoning ? JSON.stringify(input.reasoning) : null;
 
       this.logger.database.debug('Inserting message into database', {
         messageId: id,
         hasAttachments: !!attachmentsString,
-        attachmentsLength: attachmentsString?.length || 0
+        attachmentsLength: attachmentsString?.length || 0,
+        hasReasoning: !!reasoningString,
       });
 
       const message: Message = {
@@ -253,22 +255,51 @@ export class ChatService {
         content: input.content,
         tool_calls: input.tool_calls ? JSON.stringify(input.tool_calls) : null,
         attachments: attachmentsString,
+        reasoning: reasoningString,
         created_at: now
       };
 
-      await databaseService.execute(
-        `INSERT INTO messages (id, session_id, role, content, tool_calls, attachments, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [
-          message.id as InValue,
-          message.session_id as InValue,
-          message.role as InValue,
-          message.content as InValue,
-          message.tool_calls as InValue,
-          message.attachments as InValue,
-          message.created_at as InValue
-        ]
-      );
+      // Try to insert with reasoning column first (new schema)
+      // If it fails, retry without reasoning column (old schema)
+      try {
+        await databaseService.execute(
+          `INSERT INTO messages (id, session_id, role, content, tool_calls, attachments, reasoning, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            message.id as InValue,
+            message.session_id as InValue,
+            message.role as InValue,
+            message.content as InValue,
+            message.tool_calls as InValue,
+            message.attachments as InValue,
+            message.reasoning as InValue,
+            message.created_at as InValue
+          ]
+        );
+      } catch (error: any) {
+        // If error is about missing column, retry without reasoning
+        if (error?.message?.includes('no such column: reasoning') ||
+            error?.message?.includes('table messages has no column named reasoning')) {
+          this.logger.database.warn('Reasoning column not found, inserting without it (migration pending)', {
+            messageId: id
+          });
+          await databaseService.execute(
+            `INSERT INTO messages (id, session_id, role, content, tool_calls, attachments, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              message.id as InValue,
+              message.session_id as InValue,
+              message.role as InValue,
+              message.content as InValue,
+              message.tool_calls as InValue,
+              message.attachments as InValue,
+              message.created_at as InValue
+            ]
+          );
+        } else {
+          throw error; // Re-throw if it's a different error
+        }
+      }
 
       this.logger.database.info('Message created successfully', {
         messageId: id,
@@ -308,20 +339,21 @@ export class ChatService {
       );
       const total = countResult.rows[0][0] as number;
 
-      // Get messages
+      // Get messages (using SELECT * for compatibility with old/new schema)
       const result = await databaseService.execute(
         'SELECT * FROM messages WHERE session_id = ? ORDER BY created_at ASC LIMIT ? OFFSET ?',
         [session_id as InValue, limit as InValue, offset as InValue]
       );
-      
+
       const messages: Message[] = result.rows.map(row => ({
         id: row[0] as string,
         session_id: row[1] as string,
         role: row[2] as 'user' | 'assistant' | 'system',
         content: row[3] as string,
         tool_calls: row[4] as string,
-        created_at: row[5] as number,
-        attachments: row[6] as string
+        attachments: row[5] as string,
+        reasoning: (row[6] as string) || null, // May be undefined in old schema
+        created_at: row[7] as number
       }));
 
       const paginatedResult: PaginatedResult<Message> = {
@@ -363,15 +395,16 @@ export class ChatService {
       params.push(limit as InValue);
 
       const result = await databaseService.execute(sql, params);
-      
+
       const messages: Message[] = result.rows.map(row => ({
         id: row[0] as string,
         session_id: row[1] as string,
         role: row[2] as 'user' | 'assistant' | 'system',
         content: row[3] as string,
         tool_calls: row[4] as string,
-        created_at: row[5] as number,
-        attachments: row[6] as string
+        attachments: row[5] as string,
+        reasoning: (row[6] as string) || null, // May be undefined in old schema
+        created_at: row[7] as number
       }));
 
       this.logger.database.debug('Search completed', { found: messages.length, query: searchQuery });
