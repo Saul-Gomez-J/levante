@@ -24,6 +24,13 @@ export interface MCPServerConfig {
   runtime?: RuntimeConfig;
   /** Per-server code mode override (only applies to mcp-use) */
   codeMode?: boolean | CodeModeConfig;
+  /** OAuth configuration (Phase 4) */
+  oauth?: {
+    enabled: boolean;
+    authServerId?: string;
+    clientId?: string;
+    scopes?: string[];
+  };
 }
 
 export interface MCPConfiguration {

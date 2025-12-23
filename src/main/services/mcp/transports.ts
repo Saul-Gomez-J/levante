@@ -6,35 +6,56 @@ import type { MCPServerConfig } from "../../types/mcp.js";
 import { getLogger } from "../logging";
 import { resolveCommand, detectNodePaths, getEnhancedPath } from "./commandResolver.js";
 import { loadMCPRegistry } from "./registry.js";
+import { preferencesService } from "../preferencesService";
+import { OAuthService } from "../oauth/OAuthService";
 
 const logger = getLogger();
 
+/**
+ * Create MCP transport with optional OAuth support
+ */
 export async function createTransport(config: MCPServerConfig): Promise<{
   client: Client;
   transport: any;
 }> {
-  // Normalize config for compatibility with different MCP formats
-  // Accept both "transport"/"type" and "baseUrl"/"url"
   const transportType = config.transport || (config as any).type;
   const baseUrl = config.baseUrl || (config as any).url;
 
-  // Create client with capabilities
-  // Note: MCP SDK 1.17+ changed ClientCapabilities structure
+  logger.mcp.debug("Creating transport", {
+    serverId: config.id,
+    transport: transportType,
+    oauth: config.oauth?.enabled || false,
+  });
+
+  // Check if OAuth is enabled
+  if (config.oauth?.enabled && isHttpTransport(transportType)) {
+    logger.mcp.info("Creating OAuth-enabled transport", {
+      serverId: config.id,
+    });
+    return createOAuthTransport(config, transportType, baseUrl);
+  }
+
+  // Standard transport (no OAuth)
+  return createStandardTransport(config, transportType, baseUrl);
+}
+
+/**
+ * Create standard transport without OAuth
+ *
+ * @private
+ */
+async function createStandardTransport(
+  config: MCPServerConfig,
+  transportType: string,
+  baseUrl?: string
+) {
   const client = new Client(
-    {
-      name: "Levante-MCP-Client",
-      version: "1.0.0",
-    },
-    {
-      capabilities: {
-        sampling: {},
-        roots: { listChanged: true },
-      },
-    }
+    { name: "Levante-MCP-Client", version: "1.0.0" },
+    { capabilities: { sampling: {}, roots: { listChanged: true } } }
   );
 
-  // Create transport based on config
   let transport;
+
   switch (transportType) {
     case "stdio":
       if (!config.command) {
@@ -72,20 +93,13 @@ export async function createTransport(config: MCPServerConfig): Promise<{
       break;
 
     case "http":
+    case "streamable-http":
       if (!baseUrl) {
         throw new Error("Base URL is required for HTTP transport");
       }
 
-      logger.mcp.debug("Creating HTTP transport", {
-        serverId: config.id,
-        baseUrl: baseUrl,
-        hasHeaders: !!(config.headers && Object.keys(config.headers).length > 0),
-      });
-
       transport = new StreamableHTTPClientTransport(new URL(baseUrl), {
-        requestInit: {
-          headers: config.headers || {},
-        },
+        requestInit: { headers: config.headers || {} },
       });
       break;
 
@@ -94,24 +108,112 @@ export async function createTransport(config: MCPServerConfig): Promise<{
         throw new Error("Base URL is required for SSE transport");
       }
 
-      logger.mcp.debug("Creating SSE transport", {
-        serverId: config.id,
-        baseUrl: baseUrl,
-        hasHeaders: !!(config.headers && Object.keys(config.headers).length > 0),
-      });
-
       transport = new SSEClientTransport(new URL(baseUrl), {
-        requestInit: {
-          headers: config.headers || {},
-        },
+        requestInit: { headers: config.headers || {} },
       });
       break;
 
     default:
-      throw new Error(`Unknown transport type: ${transportType}`);
+      throw new Error(`Unsupported transport: ${transportType}`);
   }
 
   return { client, transport };
+}
+
+/**
+ * Create OAuth-enabled transport
+ *
+ * @private
+ */
+async function createOAuthTransport(
+  config: MCPServerConfig,
+  transportType: string,
+  baseUrl?: string
+) {
+  if (!baseUrl) {
+    throw new Error(`Base URL is required for OAuth transport: ${transportType}`);
+  }
+
+  const oauthService = new OAuthService(preferencesService);
+
+  try {
+    // 1. Ensure valid token
+    logger.mcp.debug("Ensuring valid OAuth token", {
+      serverId: config.id,
+    });
+
+    const tokens = await oauthService.ensureValidToken(config.id);
+
+    logger.mcp.debug("Valid token obtained", {
+      serverId: config.id,
+      expiresAt: new Date(tokens.expiresAt).toISOString(),
+    });
+
+    // 2. Create headers with Authorization
+    const headers = {
+      ...config.headers,
+      Authorization: `${tokens.tokenType} ${tokens.accessToken}`,
+    };
+
+    logger.mcp.debug("Authorization header added", {
+      serverId: config.id,
+      tokenType: tokens.tokenType,
+      tokenPreview: tokens.accessToken.substring(0, 8) + "...",
+    });
+
+    // 3. Create client
+    const client = new Client(
+      { name: "Levante-MCP-Client", version: "1.0.0" },
+      { capabilities: { sampling: {}, roots: { listChanged: true } } }
+    );
+
+    // 4. Create transport with OAuth headers
+    let transport;
+
+    switch (transportType) {
+      case "http":
+      case "streamable-http":
+        transport = new StreamableHTTPClientTransport(new URL(baseUrl), {
+          requestInit: { headers },
+        });
+        break;
+
+      case "sse":
+        transport = new SSEClientTransport(new URL(baseUrl), {
+          requestInit: { headers },
+        });
+        break;
+
+      default:
+        throw new Error(`Unsupported OAuth transport: ${transportType}`);
+    }
+
+    logger.mcp.info("OAuth transport created successfully", {
+      serverId: config.id,
+      transport: transportType,
+    });
+
+    return { client, transport };
+  } catch (error) {
+    logger.mcp.error("Failed to create OAuth transport", {
+      serverId: config.id,
+      error: error instanceof Error ? error.message : error,
+    });
+
+    throw new Error(
+      `OAuth transport creation failed: ${error instanceof Error ? error.message : String(error)
+      }`
+    );
+  }
+}
+
+/**
+ * Check if transport type supports OAuth
+ *
+ * @private
+ */
+function isHttpTransport(transport: string): boolean {
+  return ["http", "sse", "streamable-http"].includes(transport);
 }
 
 export async function handleConnectionError(

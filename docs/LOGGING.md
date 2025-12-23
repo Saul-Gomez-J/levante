@@ -37,6 +37,7 @@ DEBUG_DATABASE=true    # Database operations and migrations
 DEBUG_IPC=false        # Inter-process communication
 DEBUG_PREFERENCES=false # Settings and configuration
 DEBUG_CORE=true        # Application lifecycle and errors
+DEBUG_OAUTH=false      # OAuth flow, authorization, token lifecycle
 
 # Log level control (optional)
 LOG_LEVEL=debug        # debug | info | warn | error
@@ -52,6 +53,19 @@ LOG_LEVEL=debug        # debug | info | warn | error
 | `ipc` | Inter-process communication | IPC calls, preload bridge operations |
 | `preferences` | Settings and configuration management | Preference loading, keychain operations |
 | `core` | General application lifecycle and errors | App startup, window management, critical errors |
+| `oauth` | OAuth discovery, authorization, token lifecycle | Authorization flow, token refresh/revocation, callback server events |
+
+## Environment Flags
+
+- `DEBUG_ENABLED` — Master switch for all debug logging
+- `DEBUG_AI_SDK` — AI service operations
+- `DEBUG_MCP` — MCP server management and tool execution
+- `DEBUG_DATABASE` — Database operations and migrations
+- `DEBUG_IPC` — Inter-process communication
+- `DEBUG_PREFERENCES` — Settings/configuration management
+- `DEBUG_CORE` — Application lifecycle and critical errors
+- `DEBUG_OAUTH` — OAuth flow, discovery, authorization, token lifecycle
+- `LOG_LEVEL` — Minimum log level (`debug` | `info` | `warn` | `error`)
 
 ## API Reference
 
@@ -232,6 +246,45 @@ logger.aiSdk.info('API request sent', {
 });
 ```
 
+### OAuth Logging Examples
+
+**Main process (OAuthService)**
+
+```typescript
+logger.oauth.debug('Step 1: Discovering authorization server', {
+  serverId,
+  mcpServerUrl,
+});
+
+logger.oauth.info('Authorization server discovered', {
+  serverId,
+  authServerId,
+  hasMetadata: !!metadata,
+});
+
+logger.oauth.warn('Client registration not supported, using static credentials', {
+  serverId,
+});
+
+logger.oauth.error('OAuth authorization failed', {
+  serverId,
+  error: error.message,
+  step: 'token_exchange',
+});
+```
+
+**Renderer (oauthStore)**
+
+```typescript
+logger.oauth.info('OAuth required for server', {
+  serverId,
+});
+
+logger.oauth.error('Failed to load OAuth servers', {
+  error: error.message,
+});
+```
+
 ## Configuration Examples
 
 ### Development Setup
@@ -243,6 +296,7 @@ DEBUG_DATABASE=true
 DEBUG_IPC=false
 DEBUG_PREFERENCES=false
 DEBUG_CORE=true
+DEBUG_OAUTH=true
 LOG_LEVEL=debug
 ```
 
@@ -255,6 +309,7 @@ DEBUG_DATABASE=false
 DEBUG_IPC=false
 DEBUG_PREFERENCES=false
 DEBUG_CORE=true
+DEBUG_OAUTH=false
 LOG_LEVEL=warn
 ```
 
@@ -267,6 +322,7 @@ DEBUG_DATABASE=false
 DEBUG_IPC=false
 DEBUG_PREFERENCES=false
 DEBUG_CORE=true
+DEBUG_OAUTH=false
 LOG_LEVEL=debug
 ```
 
@@ -279,6 +335,7 @@ DEBUG_DATABASE=false
 DEBUG_IPC=false
 DEBUG_PREFERENCES=false
 DEBUG_CORE=true
+DEBUG_OAUTH=true
 LOG_LEVEL=debug
 ```
 

@@ -47,6 +47,7 @@ export class Logger implements LoggerService {
   public readonly models: CategoryLogger;
   public readonly core: CategoryLogger;
   public readonly analytics: CategoryLogger;
+  public readonly oauth: CategoryLogger;
 
   constructor() {
     this.configService = new LoggerConfigService();
@@ -61,6 +62,7 @@ export class Logger implements LoggerService {
     this.models = new CategoryLoggerImpl('models', this);
     this.core = new CategoryLoggerImpl('core', this);
     this.analytics = new CategoryLoggerImpl('analytics', this);
+    this.oauth = new CategoryLoggerImpl('oauth', this);
   }
 
   private setupTransports(): void {

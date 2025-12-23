@@ -20,6 +20,7 @@ import type { IMCPService } from "./IMCPService.js";
 import { RuntimeResolver } from "../runtime/RuntimeResolver.js";
 import { RuntimeManager } from "../runtime/runtimeManager.js";
 import { PreferencesService } from "../preferencesService.js";
+import { OAuthService } from "../oauth/OAuthService.js";
 
 // Dynamic import references - populated in initialize()
 let MCPClient: any;
@@ -37,6 +38,7 @@ export class MCPUseService implements IMCPService {
   private sessions: Map<string, MCPSession> = new Map();
   private globalPreferences: MCPPreferences;
   private runtimeResolver: RuntimeResolver;
+  private oauthAttempts: Map<string, { count: number; lastAttempt: number }> = new Map();
   private static mcpUseLoaded = false;
 
   constructor(preferences: MCPPreferences) {
@@ -123,6 +125,9 @@ export class MCPUseService implements IMCPService {
       transport: finalTransport,
     };
 
+    // Track OAuth token usage across all transports
+    let hasOAuthToken = false;
+
     // Add transport-specific configuration
     if (finalTransport === 'stdio') {
       serverConfig.command = config.command;
@@ -130,8 +135,88 @@ export class MCPUseService implements IMCPService {
       serverConfig.env = config.env;
     } else if (finalTransport === 'http' || finalTransport === 'sse' || finalTransport === 'streamable-http') {
       serverConfig.url = baseUrl;
-      if (config.headers) {
-        serverConfig.headers = config.headers;
+
+      let headers = { ...(config.headers || {}) };
+
+      // Phase 4: Try to use existing OAuth token if available
+      try {
+        const preferencesService = new PreferencesService();
+        await preferencesService.initialize();
+        const oauthService = new OAuthService(preferencesService);
+
+        const tokens = await oauthService.getExistingToken(config.id);
+        if (tokens) {
+          this.logger.mcp.debug("Using existing OAuth token", { serverId: config.id });
+          // IMPORTANT: mcp-use adds "Bearer " prefix automatically, so pass token without prefix
+          // TEMP: full token log for debugging connectivity issues; remove after verification
+          this.logger.mcp.warn('DEBUG FULL OAUTH TOKEN (temporary)', {
+            serverId: config.id,
+            tokenType: tokens.tokenType,
+            accessToken: tokens.accessToken,
+          });
+          // Use authToken (mcp-use will add "Bearer " prefix automatically)
+          (serverConfig as any).authToken = tokens.accessToken;
+          hasOAuthToken = true;
+        } else {
+          this.logger.mcp.debug("No OAuth tokens found", {
+            serverId: config.id
+          });
+        }
+      } catch (error) {
+        this.logger.mcp.debug("No OAuth token available, will connect without auth", {
+          serverId: config.id
+        });
+      }
+
+      // If using HTTP-based transport and no OAuth token, check if server requires OAuth
+      // This preliminary check allows us to obtain the WWW-Authenticate header
+      // which mcp-use might not provide if it detects auth requirements internally
+      // IMPORTANT: Use the exact same URL that will be passed to mcp-use transport
+      if (!hasOAuthToken) {
+        this.logger.mcp.debug('Performing preliminary OAuth check (no token present)', {
+          serverId: config.id,
+          transport: finalTransport,
+          url: baseUrl
+        });
+
+        try {
+          // Pass both transportUrl (exact URL for preflight) and baseUrl (for error metadata)
+          await this.checkOAuthRequirement(config.id, baseUrl, baseUrl);
+          // If no error thrown, OAuth is not required or check failed non-critically
+          this.logger.mcp.debug('Preliminary OAuth check passed, proceeding with connection', {
+            serverId: config.id
+          });
+        } catch (error: any) {
+          // If OAuth is required, this error will be caught by the outer try-catch
+          // and handled by the IPC handler which will initiate the OAuth flow
+          if (error.code === 'OAUTH_REQUIRED' || error.code === 'OAUTH_LIMIT_EXCEEDED') {
+            this.logger.mcp.info('OAuth required, aborting connection attempt', {
+              serverId: config.id,
+              errorCode: error.code
+            });
+            throw error;
+          }
+          // Other errors are logged but don't stop the connection attempt
+          this.logger.mcp.debug('Preliminary OAuth check error ignored', {
+            serverId: config.id,
+            error: error.message
+          });
+        }
+      }
+
+      if (Object.keys(headers).length > 0) {
+        serverConfig.headers = headers;
+      }
+
+      // DEBUG: Log OAuth configuration details (without exposing full token)
+      if (hasOAuthToken) {
+        const authTokenPreview = ((serverConfig as any).authToken || '').substring(0, 20) + '...[REDACTED]';
+        this.logger.mcp.debug('OAuth token configured for connection (mcp-use will add Bearer prefix)', {
+          serverId: config.id,
+          authTokenConfigured: !!(serverConfig as any).authToken,
+          authTokenPreview,
+          note: 'Token passed without Bearer prefix - mcp-use adds it automatically'
+        });
       }
     }
 
@@ -151,8 +236,8 @@ export class MCPUseService implements IMCPService {
 
         executorOpts.memoryLimitMb =
           (codeModeConfig.executorOptions?.memoryLimit ||
-          this.globalPreferences.codeModeDefaults?.vmMemoryLimit ||
-          134217728) / (1024 * 1024); // Convert bytes to MB
+            this.globalPreferences.codeModeDefaults?.vmMemoryLimit ||
+            134217728) / (1024 * 1024); // Convert bytes to MB
       } else if (codeModeConfig.executor === 'e2b') {
         // E2B executor options
         executorOpts.apiKey =
@@ -190,10 +275,34 @@ export class MCPUseService implements IMCPService {
             [config.id]: serverConfig
           }
         };
+
+        // DEBUG: Log complete server config structure (sanitize sensitive data)
+        const sanitizedConfig = { ...serverConfig };
+        if ((sanitizedConfig as any).authToken) {
+          (sanitizedConfig as any).authToken =
+            (sanitizedConfig as any).authToken.substring(0, 20) + '...[REDACTED]';
+        }
+        this.logger.mcp.debug('Creating mcp-use client with config', {
+          serverId: config.id,
+          attempt,
+          serverConfig: sanitizedConfig,
+          hasAuthToken: !!(serverConfig as any).authToken,
+          note: hasOAuthToken ? 'OAuth token set (no Bearer prefix - added by mcp-use)' : undefined
+        });
+
         const client = new MCPClient(clientConfig, clientOptions);
 
-        // Create and initialize session
-        const session = await client.createSession(config.id, true);
+        // Create and initialize session with timeout to prevent hanging on auth required
+        const createSessionWithTimeout = async (timeoutMs: number) => {
+          return Promise.race([
+            client.createSession(config.id, true),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('Connection timeout - authentication may be required')), timeoutMs)
+            )
+          ]);
+        };
+
+        const session = await createSessionWithTimeout(10000); // 10 second timeout
 
         this.clients.set(config.id, client);
         this.sessions.set(config.id, session);
@@ -206,6 +315,49 @@ export class MCPUseService implements IMCPService {
         });
         return; // Success - exit the retry loop
       } catch (error) {
+        // DEBUG: Log complete error to understand what mcp-use is throwing
+        this.logger.mcp.debug("Connection error caught", {
+          serverId: config.id,
+          errorType: typeof error,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorStatus: (error as any)?.status,
+          errorStatusCode: (error as any)?.statusCode,
+          errorResponseStatus: (error as any)?.response?.status,
+          errorKeys: error && typeof error === 'object' ? Object.keys(error) : [],
+        });
+
+        if (this.is401Error(error)) {
+          if (!this.canAttemptOAuth(config.id)) {
+            this.logger.mcp.error('Too many OAuth attempts', { serverId: config.id });
+          } else {
+            this.logger.mcp.info("Received 401 during connection (fallback detection)", {
+              serverId: config.id,
+              url: baseUrl,
+              note: 'Preliminary OAuth check should have caught this'
+            });
+
+            const wwwAuth = this.extractWWWAuthenticate(error);
+
+            if (wwwAuth) {
+              await this.initiateOAuthFlow(config.id, baseUrl, wwwAuth);
+
+              throw {
+                code: 'OAUTH_REQUIRED',
+                message: 'OAuth authorization required',
+                serverId: config.id,
+                mcpServerUrl: baseUrl,
+                wwwAuth
+              };
+            } else {
+              // If we detected 401 but no WWW-Authenticate header (should be rare now)
+              this.logger.mcp.warn('Detected 401 error but no WWW-Authenticate header available', {
+                serverId: config.id,
+                errorMessage: error instanceof Error ? error.message : String(error)
+              });
+            }
+          }
+        }
+
         lastError = error instanceof Error ? error : new Error(String(error));
         const errorMessage = lastError.message;
 
@@ -442,9 +594,8 @@ export class MCPUseService implements IMCPService {
         return {
           valid: true,
           status: "active",
-          message: `Package ${packageName} is available (v${
-            activeEntry.version || "latest"
-          })`,
+          message: `Package ${packageName} is available (v${activeEntry.version || "latest"
+            })`,
         };
       }
 
@@ -466,6 +617,218 @@ export class MCPUseService implements IMCPService {
         message: "Unable to validate package due to registry loading error",
       };
     }
+  }
+
+  /**
+   * Detects if an error represents a 401 unauthorized response.
+   */
+  private is401Error(error: any): boolean {
+    const message = error?.message && typeof error.message === 'string' ? error.message.toLowerCase() : '';
+
+    return (
+      error?.status === 401 ||
+      error?.statusCode === 401 ||
+      error?.response?.status === 401 ||
+      message.includes('401') ||
+      message.includes('unauthorized') ||
+      // Detect mcp-use authentication patterns
+      (message.includes('authentication') && (
+        message.includes('required') ||
+        message.includes('timeout') ||
+        message.includes('may be required')
+      ))
+    );
+  }
+
+  /**
+   * Extract WWW-Authenticate header from various error shapes.
+   */
+  private extractWWWAuthenticate(error: any): string | undefined {
+    return (
+      error?.headers?.['www-authenticate'] ||
+      error?.headers?.['WWW-Authenticate'] ||
+      error?.response?.headers?.['www-authenticate'] ||
+      error?.response?.headers?.['WWW-Authenticate'] ||
+      undefined
+    );
+  }
+
+  /**
+   * Checks if the MCP server requires OAuth by making a preliminary HTTP GET request.
+   * This is necessary because mcp-use may detect authentication requirements internally
+   * without making an actual HTTP request, preventing us from obtaining the WWW-Authenticate header.
+   *
+   * IMPORTANT: This method only DETECTS OAuth requirements and throws OAUTH_REQUIRED error.
+   * It does NOT initiate the OAuth flow itself to avoid duplication - the IPC handler
+   * or retry loop will handle initiating OAuth based on the error code.
+   *
+   * @param serverId - Server identifier
+   * @param transportUrl - Exact URL used by the transport (same URL passed to mcp-use)
+   * @param baseUrl - Base MCP server URL (used in error metadata)
+   * @throws Error with code 'OAUTH_REQUIRED' if OAuth flow should be initiated
+   */
+  private async checkOAuthRequirement(
+    serverId: string,
+    transportUrl: string,
+    baseUrl: string
+  ): Promise<void> {
+    try {
+      this.logger.mcp.debug('Checking OAuth requirement with preliminary HTTP request', {
+        serverId,
+        transportUrl,
+        baseUrl
+      });
+
+      // Make a simple GET request to the exact transport URL
+      // This ensures we get the same 401 response that mcp-use would receive
+      const response = await fetch(transportUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json, text/event-stream',
+          'User-Agent': 'Levante-MCP-Client/1.0'
+        },
+        // Don't follow redirects automatically
+        redirect: 'manual'
+      });
+
+      this.logger.mcp.debug('Preliminary HTTP response received', {
+        serverId,
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      // Check if response is 401 Unauthorized
+      if (response.status === 401) {
+        // Extract WWW-Authenticate header
+        const wwwAuth = response.headers.get('WWW-Authenticate') ||
+          response.headers.get('www-authenticate');
+
+        this.logger.mcp.info('Server requires OAuth authentication (401 received)', {
+          serverId,
+          hasWWWAuth: !!wwwAuth,
+          wwwAuthPreview: wwwAuth ? wwwAuth.substring(0, 100) : undefined
+        });
+
+        // DEBUG: Log complete WWW-Authenticate header for debugging
+        if (wwwAuth) {
+          this.logger.mcp.debug('🔍 RAW WWW-Authenticate header (complete)', {
+            serverId,
+            headerLength: wwwAuth.length,
+            rawHeader: wwwAuth
+          });
+        }
+
+        if (wwwAuth) {
+          // Check if we can attempt OAuth
+          if (!this.canAttemptOAuth(serverId)) {
+            const error = new Error('Too many OAuth attempts for this server');
+            (error as any).code = 'OAUTH_LIMIT_EXCEEDED';
+            throw error;
+          }
+
+          // DO NOT initiate OAuth here - just throw the error with metadata
+          // The IPC handler will initiate OAuth to avoid duplication
+          this.logger.mcp.info('OAuth requirement detected, throwing OAUTH_REQUIRED error', {
+            serverId,
+            note: 'OAuth flow will be initiated by IPC handler'
+          });
+
+          // Throw error to stop connection attempt and signal OAuth requirement
+          const oauthError = new Error('OAuth authorization required');
+          (oauthError as any).code = 'OAUTH_REQUIRED';
+          (oauthError as any).serverId = serverId;
+          (oauthError as any).mcpServerUrl = baseUrl;
+          (oauthError as any).wwwAuth = wwwAuth;
+          throw oauthError;
+        } else {
+          // 401 without WWW-Authenticate - unusual but possible
+          this.logger.mcp.warn('Received 401 without WWW-Authenticate header', {
+            serverId
+          });
+        }
+      } else if (response.status >= 200 && response.status < 300) {
+        // Server is accessible without authentication
+        this.logger.mcp.debug('Server accessible without OAuth', {
+          serverId,
+          status: response.status
+        });
+      } else if (response.status >= 300 && response.status < 400) {
+        // Redirect - log but continue with normal connection attempt
+        this.logger.mcp.debug('Server returned redirect', {
+          serverId,
+          status: response.status,
+          location: response.headers.get('Location')
+        });
+      } else {
+        // Other error status - log but continue with normal connection attempt
+        this.logger.mcp.debug('Server returned non-401 error status', {
+          serverId,
+          status: response.status
+        });
+      }
+
+      // If we reach here, no OAuth is required or detected
+    } catch (error: any) {
+      // If it's our OAuth error, re-throw it
+      if (error.code === 'OAUTH_REQUIRED' || error.code === 'OAUTH_LIMIT_EXCEEDED') {
+        throw error;
+      }
+
+      // For network errors or other issues, log and continue
+      // The normal connection attempt will handle these errors
+      this.logger.mcp.debug('Preliminary OAuth check failed, continuing with normal connection', {
+        serverId,
+        error: error.message,
+        errorType: error.constructor.name
+      });
+    }
+  }
+
+  /**
+   * Emit OAuth required event to renderer when 401 is detected.
+   */
+  private async initiateOAuthFlow(
+    serverId: string,
+    mcpServerUrl: string,
+    wwwAuth: string
+  ): Promise<void> {
+    const { BrowserWindow } = await import('electron');
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+
+    if (mainWindow) {
+      mainWindow.webContents.send('levante/oauth/required', {
+        serverId,
+        mcpServerUrl,
+        wwwAuth
+      });
+    }
+  }
+
+  /**
+   * Simple rate limiting for OAuth attempts.
+   */
+  private canAttemptOAuth(serverId: string): boolean {
+    const now = Date.now();
+    const attempt = this.oauthAttempts.get(serverId);
+
+    if (!attempt) {
+      this.oauthAttempts.set(serverId, { count: 1, lastAttempt: now });
+      return true;
+    }
+
+    if (now - attempt.lastAttempt > 5 * 60 * 1000) {
+      this.oauthAttempts.set(serverId, { count: 1, lastAttempt: now });
+      return true;
+    }
+
+    if (attempt.count >= 3) {
+      return false;
+    }
+
+    attempt.count++;
+    attempt.lastAttempt = now;
+    return true;
   }
 
   // ==========================================
