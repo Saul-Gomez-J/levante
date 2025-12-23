@@ -120,6 +120,10 @@
     "mermaid_validation": {
       "label": "Mermaid Diagram Generation",
       "description": "Enable AI to generate and validate Mermaid diagrams"
+    },
+    "mcp_discovery": {
+      "label": "MCP Server Discovery",
+      "description": "Allow AI to suggest and recommend MCP servers from the shop when you need additional capabilities"
     }
   },
   "developer_mode": {

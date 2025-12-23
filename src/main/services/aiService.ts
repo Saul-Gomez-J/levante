@@ -822,16 +822,17 @@ export class AIService {
     }
   }
 
-  private async getBuiltInToolsConfig(_modelId?: string): Promise<{ mermaidValidation: boolean }> {
+  private async getBuiltInToolsConfig(): Promise<{ mermaidValidation: boolean; mcpDiscovery: boolean }> {
     try {
       const { preferencesService } = await import("./preferencesService");
       const aiPrefs = preferencesService.get('ai') as any;
 
       return {
-        mermaidValidation: aiPrefs?.mermaidValidation !== false // Enabled by default
+        mermaidValidation: aiPrefs?.mermaidValidation !== false, // Enabled by default
+        mcpDiscovery: aiPrefs?.mcpDiscovery !== false // Enabled by default
       };
     } catch {
-      return { mermaidValidation: true };
+      return { mermaidValidation: true, mcpDiscovery: true };
     }
   }
 
@@ -936,7 +937,7 @@ export class AIService {
 
       // Get built-in tools (always available, independent of MCP)
       const { getBuiltInTools } = await import('./ai/builtInTools');
-      const builtInToolsConfig = await this.getBuiltInToolsConfig(model);
+      const builtInToolsConfig = await this.getBuiltInToolsConfig();
       const builtInTools = await getBuiltInTools(builtInToolsConfig);
 
       if (enableMCP) {
@@ -1030,7 +1031,8 @@ export class AIService {
           webSearch,
           enableMCP,
           Object.keys(tools).length,
-          builtInToolsConfig.mermaidValidation
+          builtInToolsConfig.mermaidValidation,
+          builtInToolsConfig.mcpDiscovery
         ),
         // Use stopWhen as recommended in AI SDK v5 (not maxSteps)
         // This allows the model to continue generating after tool results
@@ -1757,7 +1759,7 @@ export class AIService {
       }
 
       // Get built-in tools config for system prompt
-      const builtInToolsConfig = await this.getBuiltInToolsConfig(model);
+      const builtInToolsConfig = await this.getBuiltInToolsConfig();
 
       const messagesWithFileParts = await this.includeAttachmentsInMessageParts(
         messages,
@@ -1772,7 +1774,8 @@ export class AIService {
           webSearch,
           enableMCP,
           Object.keys(tools).length,
-          builtInToolsConfig.mermaidValidation
+          builtInToolsConfig.mermaidValidation,
+          builtInToolsConfig.mcpDiscovery
         ),
         stopWhen: stepCountIs(await calculateMaxSteps(Object.keys(tools).length)),
         providerOptions: await getReasoningProviderOptions(model, undefined, Object.keys(tools).length > 0),

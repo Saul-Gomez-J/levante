@@ -10,7 +10,8 @@ export async function buildSystemPrompt(
   webSearch: boolean,
   enableMCP: boolean,
   toolCount: number,
-  mermaidValidation: boolean = true
+  mermaidValidation: boolean = true,
+  mcpDiscoveryEnabled: boolean = true
 ): Promise<string> {
   // Add current date information
   const currentDate = new Date();
@@ -171,6 +172,38 @@ If you are requested to generate a Mermaid diagram or decide to generate one:
 4. Output the diagram in a markdown code block with the \`mermaid\` language identifier.`;
   }
 
+  // Add MCP Discovery capabilities (if enabled)
+  if (mcpDiscoveryEnabled) {
+    systemPrompt += `
+
+MCP DISCOVERY:
+You have access to the \`mcp_discovery\` tool to search for MCP servers in the Levante MCP Shop.
+
+Use this tool when:
+- Users ask about adding capabilities, integrations, or tools you don't currently have
+- Users want to connect to external services (GitHub, databases, file systems, email, etc.)
+- Users ask "Can you access X?" or "Is there a tool for Y?"
+- You cannot fulfill a user's request with your current tools
+
+When presenting discovery results to users:
+1. Show each server with its name and a brief description
+2. Include the configure URL as a markdown link - it will render as a clickable button
+3. Use this exact format: [Configure ServerName](configureUrl)
+4. Mention if the server requires API keys or authentication
+5. Offer to help once the user has configured the server
+
+Example response format:
+"To access GitHub, I found this MCP server you can configure:
+
+**GitHub** - Access GitHub repositories, issues, and pull requests
+
+[Configure GitHub](levante://mcp/configure/github)
+
+*Requires: GitHub Personal Access Token*
+
+Click the button above to add it. Once configured, I'll be able to help you with GitHub operations."`;
+  }
+
   // Debug log for final system prompt
   logger.aiSdk.debug('Final system prompt generated', {
     enabled: personalization?.enabled || false,
@@ -183,6 +216,7 @@ If you are requested to generate a Mermaid diagram or decide to generate one:
     enableMCP,
     toolCount,
     mermaidValidation,
+    mcpDiscoveryEnabled,
     promptLength: systemPrompt.length,
     fullPrompt: systemPrompt
   });

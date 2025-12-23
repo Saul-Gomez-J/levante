@@ -230,6 +230,61 @@ function App() {
               duration: 5000
             });
           }
+        } else if (action.type === 'mcp-configure') {
+          // Handle MCP configure deep link (from discovery tool)
+          const { serverId } = action.data as { serverId: string };
+
+          logger.core.info('Handling MCP configure from discovery', { serverId });
+
+          // Fetch the server entry from registry (modal opens in current page context)
+          const result = await window.levante.mcp.providers.getEntry(serverId);
+
+          if (result.success && result.data) {
+            const entry = result.data;
+
+            logger.core.info('Found registry entry for MCP configure', {
+              serverId: entry.id,
+              name: entry.name,
+              transport: entry.transport.type
+            });
+
+            // Build the config from registry entry template
+            const config: Partial<MCPServerConfig> = {
+              id: entry.id,
+              name: entry.name,
+              transport: entry.transport.type,
+              ...(entry.configuration.template || {})
+            };
+
+            // Convert fields to inputs format for the modal
+            const inputs: Record<string, any> = {};
+            if (entry.configuration.fields && entry.configuration.fields.length > 0) {
+              for (const field of entry.configuration.fields) {
+                inputs[field.key] = {
+                  label: field.label,
+                  required: field.required,
+                  type: field.type,
+                  default: field.defaultValue,
+                  description: field.description
+                };
+              }
+            }
+
+            // Open the modal
+            setMcpModalConfig({
+              config,
+              name: entry.name,
+              sourceUrl: entry.metadata?.homepage || entry.metadata?.repository,
+              inputs: Object.keys(inputs).length > 0 ? inputs : undefined
+            });
+            setMcpModalOpen(true);
+          } else {
+            logger.core.error('Failed to find MCP server in registry', { serverId, error: result.error });
+            toast.error('MCP server not found', {
+              description: `Could not find server: ${serverId}`,
+              duration: 5000
+            });
+          }
         } else if (action.type === 'chat-new') {
           const { prompt, autoSend } = action.data as { prompt: string; autoSend: boolean };
 

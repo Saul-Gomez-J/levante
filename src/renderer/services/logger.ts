@@ -8,6 +8,7 @@ export interface RendererLoggerService {
   preferences: CategoryLogger;
   models: CategoryLogger;
   core: CategoryLogger;
+  oauth: CategoryLogger;
   
   log(category: LogCategory, level: LogLevel, message: string, context?: LogContext): void;
   isEnabled(category: LogCategory, level: LogLevel): Promise<boolean>;
@@ -46,6 +47,7 @@ export class RendererLogger implements RendererLoggerService {
   public readonly preferences: CategoryLogger;
   public readonly models: CategoryLogger;
   public readonly core: CategoryLogger;
+  public readonly oauth: CategoryLogger;
 
   constructor() {
     // Initialize category loggers
@@ -56,6 +58,7 @@ export class RendererLogger implements RendererLoggerService {
     this.preferences = new RendererCategoryLogger('preferences', this);
     this.models = new RendererCategoryLogger('models', this);
     this.core = new RendererCategoryLogger('core', this);
+    this.oauth = new RendererCategoryLogger('oauth', this);
   }
 
   public log(category: LogCategory, level: LogLevel, message: string, context?: LogContext): void {

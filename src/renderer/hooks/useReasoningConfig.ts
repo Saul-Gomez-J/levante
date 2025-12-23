@@ -55,7 +55,7 @@ export const useReasoningConfig = () => {
       // Use existing config or defaults for required fields
       const currentAiConfig = currentAiResult.success && currentAiResult.data
         ? currentAiResult.data
-        : { baseSteps: 5, maxSteps: 20, mermaidValidation: true };
+        : { baseSteps: 5, maxSteps: 20, mermaidValidation: true, mcpDiscovery: true };
 
       const newAiConfig = {
         ...currentAiConfig,

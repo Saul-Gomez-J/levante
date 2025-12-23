@@ -51,6 +51,8 @@ export interface UIPreferences {
     baseSteps: number;
     maxSteps: number;
     mermaidValidation: boolean;
+    /** Enable MCP discovery tool for AI to search available servers */
+    mcpDiscovery: boolean;
     /** Reasoning model configuration */
     reasoningText?: ReasoningConfig;
   };
@@ -120,6 +122,7 @@ export const DEFAULT_PREFERENCES: UIPreferences = {
     baseSteps: 5,
     maxSteps: 20,
     mermaidValidation: true,
+    mcpDiscovery: true,
     reasoningText: DEFAULT_REASONING_CONFIG,
   },
   hasAcceptedFreeModelWarning: false,

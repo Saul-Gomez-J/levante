@@ -3,6 +3,7 @@ import { UIPreferences, PreferenceKey, DEFAULT_PREFERENCES, PreferenceChangeEven
 import { getLogger } from './logging';
 import { directoryService } from './directoryService';
 import { encryptProvidersApiKeys, decryptProvidersApiKeys } from '../utils/encryption';
+import type { UIPreferencesWithOAuth } from './oauth/types';
 
 export class PreferencesService {
   private logger = getLogger();
@@ -189,7 +190,11 @@ export class PreferencesService {
           }
         }
       });
-
+      // Ensure oauthTokens exists
+      const current = this.store.store;
+      if (!current.oauthTokens) {
+        this.store.set('oauthTokens', {});
+      }
       this.initialized = true;
       this.logger.preferences.info("PreferencesService initialized", { storePath: this.store.path });
     } catch (error) {
@@ -206,7 +211,7 @@ export class PreferencesService {
     }
   }
 
-  get<K extends PreferenceKey>(key: K): UIPreferences[K] {
+  get<T = any>(key: string): T | undefined {
     this.ensureInitialized();
     let value = this.store.get(key);
 
@@ -223,15 +228,18 @@ export class PreferencesService {
     const isModelRelated = key === 'providers' || key === 'activeProvider';
     const logger = isModelRelated ? this.logger.models : this.logger.preferences;
 
+    // Don't log tokens or sensitive data
+    const isSensitive = key.startsWith('oauthTokens') || key === 'providers';
+
     logger.debug("Retrieved preference", {
       key,
-      value: isModelRelated ? this.summarizeModelData(value) : value
+      value: isSensitive ? '***' : (isModelRelated ? this.summarizeModelData(value) : value)
     });
 
-    return value;
+    return value as T;
   }
 
-  set<K extends PreferenceKey>(key: K, value: UIPreferences[K]): void {
+  set(key: string, value: any): void {
     this.ensureInitialized();
     const previousValue = this.store.get(key);
 
@@ -241,8 +249,8 @@ export class PreferencesService {
 
     // Handle security settings change - convert existing API keys
     if (key === 'security') {
-      const newSecuritySettings = value as UIPreferences['security'];
-      const previousSecuritySettings = previousValue as UIPreferences['security'] || { encryptApiKeys: false };
+      const newSecuritySettings = value as any;
+      const previousSecuritySettings = previousValue as any || { encryptApiKeys: false };
 
       // If encryption setting changed, convert all existing API keys
       if (newSecuritySettings.encryptApiKeys !== previousSecuritySettings.encryptApiKeys) {
@@ -276,19 +284,22 @@ export class PreferencesService {
     const isModelRelated = key === 'providers' || key === 'activeProvider';
     const logger = isModelRelated ? this.logger.models : this.logger.preferences;
 
+    // Don't log tokens or sensitive data
+    const isSensitive = key.startsWith('oauthTokens') || key === 'providers' || key === 'security';
+
     logger.debug("Setting preference", {
       key,
-      previousValue: isModelRelated ? this.summarizeModelData(previousValue) : previousValue,
-      newValue: isModelRelated ? this.summarizeModelData(value) : value
+      previousValue: isSensitive ? '***' : (isModelRelated ? this.summarizeModelData(previousValue) : previousValue),
+      newValue: isSensitive ? '***' : (isModelRelated ? this.summarizeModelData(value) : value)
     });
 
     this.store.set(key, valueToStore);
 
     // Broadcast change to all renderer processes
-    const changeEvent: PreferenceChangeEvent<K> = {
-      key,
-      value,
-      previousValue
+    const changeEvent: PreferenceChangeEvent<any> = {
+      key: key as any,
+      value: value,
+      previousValue: previousValue
     };
 
     const windows = BrowserWindow.getAllWindows();
@@ -310,7 +321,7 @@ export class PreferencesService {
     });
   }
 
-  getAll(): UIPreferences {
+  getAll(): UIPreferencesWithOAuth {
     this.ensureInitialized();
     const preferences = { ...this.store.store };
 
@@ -323,15 +334,19 @@ export class PreferencesService {
       preferences.providers = decryptProvidersApiKeys(preferences.providers);
     }
 
-    this.logger.preferences.debug("Retrieved all preferences", { count: Object.keys(preferences).length });
-    return preferences;
+    // Ensure oauthTokens exists in the returned object
+    return {
+      ...preferences,
+      oauthTokens: preferences.oauthTokens || {},
+    } as UIPreferencesWithOAuth;
   }
 
   reset(): void {
     this.ensureInitialized();
     this.logger.preferences.info("Resetting all preferences to defaults");
     this.store.clear();
-
+    // Ensure oauthTokens exists after reset
+    this.store.set('oauthTokens', {});
     // Broadcast reset event
     const windows = BrowserWindow.getAllWindows();
     windows.forEach(window => {
@@ -347,12 +362,12 @@ export class PreferencesService {
     });
   }
 
-  has(key: PreferenceKey): boolean {
+  has(key: string): boolean {
     this.ensureInitialized();
     return this.store.has(key);
   }
 
-  delete(key: PreferenceKey): void {
+  delete(key: string): void {
     this.ensureInitialized();
     this.logger.preferences.debug("Deleting preference", { key });
     this.store.delete(key);

@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useMCPStore } from '@/stores/mcpStore';
+import { useOAuthStore } from '@/stores/oauthStore';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -152,7 +153,34 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
       // Server is disabled → enable it (connect + move to mcpServers)
       try {
         await connectServer(server);
+        toast.success(t('messages.connected', { name: server.name || serverId }));
       } catch (error: any) {
+        // Handle OAuth required error
+        if (error.code === 'OAUTH_REQUIRED') {
+          logger.mcp.info('OAuth required for MCP server', {
+            serverId,
+            mcpServerUrl: error.metadata?.mcpServerUrl
+          });
+
+          // Trigger OAuth dialog by calling the store
+          const { handleOAuthRequired } = useOAuthStore.getState();
+          handleOAuthRequired({
+            serverId: error.serverConfig?.id || serverId,
+            mcpServerUrl: error.metadata?.mcpServerUrl || '',
+            wwwAuth: error.metadata?.wwwAuth || ''
+          });
+
+          toast.info(
+            t('messages.oauth_required', {
+              name: server.name || serverId
+            }) || 'OAuth authorization required. Please check the authorization dialog.',
+            {
+              duration: 5000
+            }
+          );
+          return;
+        }
+
         // Handle runtime-specific errors
         if (error.errorCode === 'RUNTIME_CHOICE_REQUIRED' || error.errorCode === 'RUNTIME_NOT_FOUND') {
           setRuntimeDialogState({
@@ -162,10 +190,17 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
             serverConfig: error.serverConfig || server,
             metadata: error.metadata || {},
           });
-        } else {
-          // Other errors are already handled by store
-          logger.mcp.error('Failed to toggle server', { serverId, error: error.message });
+          return;
         }
+
+        // Other errors
+        logger.mcp.error('Failed to toggle server', { serverId, error: error.message });
+        toast.error(
+          t('messages.connection_failed', {
+            name: server.name || serverId,
+            error: error.message
+          }) || `Failed to connect: ${error.message}`
+        );
       }
     } else {
       // Server not configured yet, open config modal
@@ -323,11 +358,26 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
         toast.success(t('messages.added', { name: registryEntry.name }), { id: toastId });
       } catch (connectError: any) {
         // Server is saved but connection failed
-        // This can happen if runtime installation fails
+        // This can happen if runtime installation fails or OAuth is required
         logger.mcp.warn('Server added but connection failed', {
           serverId: entryId,
           error: connectError.message
         });
+
+        if (connectError.code === 'OAUTH_REQUIRED') {
+          // Trigger OAuth dialog
+          const { handleOAuthRequired } = useOAuthStore.getState();
+          handleOAuthRequired({
+            serverId: connectError.serverConfig?.id || serverConfig.id,
+            mcpServerUrl: connectError.metadata?.mcpServerUrl || '',
+            wwwAuth: connectError.metadata?.wwwAuth || ''
+          });
+
+          toast.info('OAuth authorization required. Please check the authorization dialog.', {
+            id: toastId
+          });
+          return;
+        }
 
         if (connectError.message === 'RUNTIME_NOT_FOUND') {
           toast.error(t('messages.runtime_not_available'), { id: toastId });
@@ -820,6 +870,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
           }
         }}
       />
+
     </div>
   );
 }

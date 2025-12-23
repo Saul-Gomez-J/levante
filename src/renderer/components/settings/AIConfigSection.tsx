@@ -67,6 +67,18 @@ export const AIConfigSection = () => {
           </div>
         </div>
 
+        <div className="bg-muted/50 p-3 rounded-md text-sm">
+          <p className="font-medium mb-1">{t('settings:ai_config.how_it_works.title')}</p>
+          <ul className="text-muted-foreground space-y-1 text-xs">
+            <li>• {t('settings:ai_config.how_it_works.formula')}</li>
+            <li>• {t('settings:ai_config.how_it_works.example', {
+              baseSteps: config.baseSteps,
+              result: Math.min(Math.max(config.baseSteps + Math.floor(24 / 5) * 2, config.baseSteps), config.maxSteps)
+            })}</li>
+            <li>• {t('settings:ai_config.how_it_works.note')}</li>
+          </ul>
+        </div>
+
         <div className="flex items-center justify-between py-2">
           <div className="space-y-0.5">
             <Label>{t('settings:ai_config.mermaid_validation.label')}</Label>
@@ -79,6 +91,22 @@ export const AIConfigSection = () => {
             onCheckedChange={(checked) => setConfig(prev => ({
               ...prev,
               mermaidValidation: checked
+            }))}
+          />
+        </div>
+
+        <div className="flex items-center justify-between py-2">
+          <div className="space-y-0.5">
+            <Label>{t('settings:ai_config.mcp_discovery.label')}</Label>
+            <p className="text-xs text-muted-foreground">
+              {t('settings:ai_config.mcp_discovery.description')}
+            </p>
+          </div>
+          <Switch
+            checked={config.mcpDiscovery}
+            onCheckedChange={(checked) => setConfig(prev => ({
+              ...prev,
+              mcpDiscovery: checked
             }))}
           />
         </div>
@@ -99,18 +127,6 @@ export const AIConfigSection = () => {
               {t('settings:personalization.saved')}
             </div>
           )}
-        </div>
-
-        <div className="bg-muted/50 p-3 rounded-md text-sm">
-          <p className="font-medium mb-1">{t('settings:ai_config.how_it_works.title')}</p>
-          <ul className="text-muted-foreground space-y-1 text-xs">
-            <li>• {t('settings:ai_config.how_it_works.formula')}</li>
-            <li>• {t('settings:ai_config.how_it_works.example', {
-              baseSteps: config.baseSteps,
-              result: Math.min(Math.max(config.baseSteps + Math.floor(24 / 5) * 2, config.baseSteps), config.maxSteps)
-            })}</li>
-            <li>• {t('settings:ai_config.how_it_works.note')}</li>
-          </ul>
         </div>
       </div>
     </SettingsSection>
