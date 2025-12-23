@@ -147,6 +147,25 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
         // Track MCP activation
         window.levante.analytics?.trackMCP?.(config.name || config.id, 'active').catch(() => { });
       } else {
+        // Check for OAuth required error first
+        if ((result as any).errorCode === 'OAUTH_REQUIRED') {
+          const enrichedError = new Error(result.error || 'OAuth authorization required');
+          (enrichedError as any).code = 'OAUTH_REQUIRED';
+          (enrichedError as any).metadata = (result as any).metadata;
+          (enrichedError as any).serverConfig = config;
+
+          // Set error state
+          set(state => ({
+            connectionStatus: {
+              ...state.connectionStatus,
+              [config.id]: 'error'
+            },
+            error: 'OAuth authorization required'
+          }));
+
+          throw enrichedError;
+        }
+
         // Check for runtime-specific errors that need UI intervention
         if ((result as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' || (result as any).errorCode === 'RUNTIME_NOT_FOUND') {
           // Throw enriched error for UI to catch and show dialog
@@ -166,8 +185,10 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
         }));
       }
     } catch (error) {
-      // Re-throw runtime errors for UI handling
-      if ((error as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' || (error as any).errorCode === 'RUNTIME_NOT_FOUND') {
+      // Re-throw OAuth and runtime errors for UI handling
+      if ((error as any).code === 'OAUTH_REQUIRED' ||
+          (error as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' ||
+          (error as any).errorCode === 'RUNTIME_NOT_FOUND') {
         throw error;
       }
 

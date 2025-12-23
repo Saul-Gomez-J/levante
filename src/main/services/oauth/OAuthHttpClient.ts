@@ -128,13 +128,22 @@ export class OAuthHttpClient {
 
     /**
      * Refresh access token using refresh token
-     *
-     * @private
      */
-    private async refreshToken(
+    async refreshToken(
         serverId: string,
-        oldTokens: OAuthTokens
+        oldTokens?: OAuthTokens
     ): Promise<OAuthTokens> {
+        if (!oldTokens) {
+            oldTokens = await this.tokenStore.getTokens(serverId);
+            if (!oldTokens) {
+                throw this.createError(
+                    'NO_TOKENS',
+                    'No tokens available to refresh',
+                    { serverId }
+                );
+            }
+        }
+
         if (!oldTokens.refreshToken) {
             throw this.createError(
                 'NO_REFRESH_TOKEN',

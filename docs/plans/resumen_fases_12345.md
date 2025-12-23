@@ -1,4 +1,4 @@
-# Resumen de Fases 1, 2, 3, 4 y 5 - Implementación OAuth para Levante
+# Resumen de Fases 1 a 6 - Implementación OAuth Completa para Levante
 
 ## Información del Documento
 
@@ -169,14 +169,54 @@ npm test src/main/services/oauth/__tests__
 
 ---
 
-## Próximos Pasos
+## Fase 6: Revocación de Tokens y UI
 
-### Fase 6: Revocación y UI
-- Implementar RFC 7009 para revocar tokens.
-- Crear los paneles de UI para gestionar conexiones OAuth activas.
+### Objetivo
+
+Implementar la revocación segura de tokens (RFC 7009) y conectar toda la lógica de backend con la interfaz de usuario mediante IPC y Stores de estado.
+
+### Logros de la Fase 6
+
+- ✅ **Revocación (RFC 7009)**: Implementación de `revokeToken` en `OAuthFlowManager` para invalidar tokens en el servidor antes de desconectar.
+- ✅ **IPC Completo**: Capa de comunicación robusta en `oauthHandlers.ts` exponiendo `authorize`, `disconnect`, `status`, `refresh`, y `list`.
+- ✅ **Estado Reactivo**: `oauthStore` (Zustand) para gestionar el estado de las conexiones OAuth en tiempo real.
+- ✅ **UI Components**:
+  - `OAuthConnectionDialog`: Modal para iniciar el flujo de autorización.
+  - `OAuthPermissionsView`: Vista detallada de scopes, expiración y estado.
+  - `OAuthStatusIndicator`: Indicador visual del estado de la conexión.
+- ✅ **Integración en Settings**: Panel de gestión en la sección de configuración de MCP.
+
+---
+
+## Integración Final
+
+El sistema OAuth de Levante está ahora completamente operativo:
+
+1. **Discovery (Fase 3)** detecta autenticación requerida.
+2. **Dynamic Registration (Fase 5)** registra el cliente automáticamente si es necesario.
+3. **PKCE Flow (Fase 2)** realiza la autenticación segura.
+4. **Token Store (Fase 1)** guarda las credenciales encriptadas.
+5. **HTTP Client (Fase 4)** inyecta y refresca tokens automáticamente en las peticiones MCP.
+6. **UI & Revocation (Fase 6)** permite al usuario gestionar y revocar estas conexiones.
+
+### Uso en el Frontend
+
+```typescript
+import { useOAuth } from '@/hooks/useOAuth';
+
+function MyComponent() {
+  const { authorize, disconnect, status } = useOAuth();
+
+  // Iniciar autorización
+  const handleConnect = () => authorize({
+     serverId: 'github',
+     mcpServerUrl: 'https://mcp.github.com'
+  });
+}
+```
 
 ---
 
 **Última actualización**: 2025-12-21
-**Versión**: 1.2 (Fase 5 Completada)
+**Versión**: 1.3 (Fase 6 Completada - Sistema Terminado)
 **Autor**: Arquitectura Levante

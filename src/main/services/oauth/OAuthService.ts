@@ -28,6 +28,7 @@ export interface AuthorizeParams {
     mcpServerUrl: string;
     scopes?: string[];
     clientId?: string;  // Optional: from Dynamic Registration in Phase 5
+    wwwAuthHeader?: string;
 }
 
 export interface AuthorizeResult {
@@ -73,6 +74,7 @@ export class OAuthService {
             mcpServerUrl,
             scopes = ['mcp:read', 'mcp:write'],
             clientId: providedClientId,
+            wwwAuthHeader,
         } = params;
 
         logger.core.info('Starting OAuth authorization flow', {
@@ -88,7 +90,10 @@ export class OAuthService {
             });
 
             const { authorizationServer: authServerId, metadata } =
-                await this.discoveryService.discoverFromUnauthorized(mcpServerUrl);
+                await this.discoveryService.discoverFromUnauthorized(
+                    mcpServerUrl,
+                    wwwAuthHeader
+                );
 
             logger.core.info('Authorization server discovered', {
                 serverId,
@@ -96,13 +101,24 @@ export class OAuthService {
                 hasRegistration: !!metadata.registration_endpoint,
             });
 
-            // Step 2: Dynamic Client Registration (if needed)
+            // Step 2: Pre-allocate redirect server port (for DCR consistency)
+            logger.core.info('Step 2: Pre-allocating redirect server port');
+
+            // Start redirect server to get the port we'll use
+            const redirectServer = this.flowManager['redirectServer'];
+            const { redirectUri } = await redirectServer.start();
+
+            logger.core.debug('Redirect server started', {
+                redirectUri,
+            });
+
+            // Step 3: Dynamic Client Registration (if needed)
             let clientId = providedClientId;
             let clientSecret: string | undefined;
 
             if (!clientId) {
                 logger.core.info(
-                    'Step 2: No client_id provided, checking for Dynamic Client Registration'
+                    'Step 3: No client_id provided, checking for Dynamic Client Registration'
                 );
 
                 // Check if AS supports Dynamic Client Registration
@@ -115,7 +131,8 @@ export class OAuthService {
                         const credentials =
                             await this.discoveryService.registerClient(
                                 metadata.registration_endpoint!,
-                                authServerId
+                                authServerId,
+                                [redirectUri] // Pass the pre-allocated redirect URI
                             );
 
                         clientId = credentials.clientId;
@@ -129,6 +146,9 @@ export class OAuthService {
                             hasClientSecret: !!clientSecret,
                         });
                     } catch (registrationError) {
+                        // Cleanup redirect server
+                        await redirectServer.stop();
+
                         // Dynamic Registration failed
                         logger.core.error('Dynamic Client Registration failed', {
                             error:
@@ -147,6 +167,9 @@ export class OAuthService {
                         };
                     }
                 } else {
+                    // Cleanup redirect server
+                    await redirectServer.stop();
+
                     // No Dynamic Registration available
                     logger.core.warn(
                         'Dynamic Client Registration not supported by Authorization Server'
@@ -158,39 +181,43 @@ export class OAuthService {
                     };
                 }
             } else {
-                logger.core.info('Step 2: Using provided client_id', {
+                logger.core.info('Step 3: Using provided client_id', {
                     clientId: this.sanitizeForLog(clientId),
                 });
             }
 
-            // Step 3: Authorization flow (PKCE)
-            logger.core.debug('Step 3: Starting authorization flow', {
+            // Step 4: Authorization flow (PKCE) - reuse existing redirect server
+            logger.core.debug('Step 4: Starting authorization flow', {
                 serverId,
             });
 
-            const { code, verifier } = await this.flowManager.authorize({
+            const authResult = await this.flowManager.authorize({
                 serverId,
                 authorizationEndpoint: metadata.authorization_endpoint,
                 clientId,
                 scopes: scopes || metadata.scopes_supported || ['mcp:read', 'mcp:write'],
                 resource: mcpServerUrl,
+                existingRedirectUri: redirectUri, // Reuse the same redirect URI
             });
+
+            // Cleanup redirect server now that we have the auth code
+            await redirectServer.stop();
 
             logger.core.info('Authorization code received', {
                 serverId,
             });
 
-            // Step 4: Token exchange
-            logger.core.debug('Step 4: Exchanging code for tokens', {
+            // Step 5: Token exchange
+            logger.core.debug('Step 5: Exchanging code for tokens', {
                 serverId,
             });
 
             const tokens = await this.flowManager.exchangeCodeForTokens({
                 tokenEndpoint: metadata.token_endpoint,
-                code,
-                redirectUri: `http://127.0.0.1/callback`, // From loopback server
+                code: authResult.code,
+                redirectUri: authResult.redirectUri, // Use the exact redirect URI from the flow
                 clientId,
-                codeVerifier: verifier,
+                codeVerifier: authResult.verifier,
                 clientSecret, // Include if we have it from Dynamic Registration
             });
 
@@ -199,8 +226,8 @@ export class OAuthService {
                 expiresAt: new Date(tokens.expiresAt).toISOString(),
             });
 
-            // Step 5: Save tokens and configuration
-            logger.core.debug('Step 5: Saving tokens and config', {
+            // Step 6: Save tokens and configuration
+            logger.core.debug('Step 6: Saving tokens and config', {
                 serverId,
             });
 
@@ -213,7 +240,7 @@ export class OAuthService {
                 clientId,
                 clientSecret,
                 scopes: tokens.scope?.split(' ') || scopes,
-                redirectUri: 'http://127.0.0.1/callback',
+                redirectUri: authResult.redirectUri,
             });
 
             logger.core.info('OAuth authorization flow completed successfully', {
@@ -239,11 +266,44 @@ export class OAuthService {
     }
 
     /**
-     * Ensure valid token exists for server
-     * Used by transports before making requests
+     * Obtiene un token existente sin forzar autorización
+     * Retorna null si no hay token o está expirado
+     */
+    async getExistingToken(serverId: string): Promise<OAuthTokens | null> {
+        try {
+            const tokens = await this.tokenStore.getTokens(serverId);
+
+            if (!tokens) {
+                return null;
+            }
+
+            // Si está expirado pero tiene refresh token, intentar refrescar
+            if (this.tokenStore.isTokenExpired(tokens) && tokens.refreshToken) {
+                logger.core.debug('Token expired, attempting refresh', { serverId });
+                return await this.httpClient.refreshToken(serverId);
+            }
+
+            return tokens;
+        } catch (error) {
+            logger.core.debug('No existing token available', {
+                serverId,
+                error: error instanceof Error ? error.message : error
+            });
+            return null;
+        }
+    }
+
+    /**
+     * Obtiene el token válido o lanza error (usado internamente)
      */
     async ensureValidToken(serverId: string): Promise<OAuthTokens> {
-        return this.httpClient.ensureValidToken(serverId);
+        const token = await this.getExistingToken(serverId);
+
+        if (!token) {
+            throw new Error(`No valid OAuth token for server: ${serverId}`);
+        }
+
+        return token;
     }
 
     /**
@@ -264,30 +324,101 @@ export class OAuthService {
     }
 
     /**
-     * Disconnect server and optionally revoke tokens
+     * Disconnect server and optionally revoke tokens (Fase 6)
      */
     async disconnect(params: DisconnectParams): Promise<void> {
-        const { serverId, revokeTokens = false } = params;
+        const { serverId, revokeTokens = true } = params; // Default: true
 
         logger.core.info('Disconnecting OAuth server', {
             serverId,
             revokeTokens,
         });
 
-        // Phase 6: Token revocation
-        if (revokeTokens) {
-            logger.core.warn('Token revocation not yet implemented (Phase 6)', {
+        try {
+            // Fase 6: Token revocation
+            if (revokeTokens) {
+                logger.core.info('Attempting token revocation', { serverId });
+
+                // Get tokens
+                const tokens = await this.tokenStore.getTokens(serverId);
+
+                // Get OAuth config
+                const config = (await this.preferencesService.get(
+                    `mcpServers.${serverId}.oauth`
+                )) as any;
+
+                if (tokens && config?.authServerId) {
+                    try {
+                        // Get auth server metadata
+                        const metadata = await this.discoveryService.fetchServerMetadata(
+                            config.authServerId
+                        );
+
+                        // Check if revocation is supported
+                        if (metadata.revocation_endpoint) {
+                            // Revocar refresh token primero (invalida también el access token en muchos AS)
+                            if (tokens.refreshToken) {
+                                await this.flowManager.revokeToken({
+                                    revocationEndpoint: metadata.revocation_endpoint,
+                                    token: tokens.refreshToken,
+                                    tokenTypeHint: 'refresh_token',
+                                    clientId: config.clientId!,
+                                    clientSecret: config.clientSecret,
+                                });
+
+                                logger.core.info('Refresh token revoked', { serverId });
+                            }
+
+                            // Revocar access token
+                            await this.flowManager.revokeToken({
+                                revocationEndpoint: metadata.revocation_endpoint,
+                                token: tokens.accessToken,
+                                tokenTypeHint: 'access_token',
+                                clientId: config.clientId!,
+                                clientSecret: config.clientSecret,
+                            });
+
+                            logger.core.info('Access token revoked', { serverId });
+                        } else {
+                            logger.core.warn(
+                                'Authorization server does not support token revocation',
+                                {
+                                    serverId,
+                                    authServerId: config.authServerId,
+                                }
+                            );
+                        }
+                    } catch (revocationError) {
+                        // Log error but continue with disconnect
+                        logger.core.error(
+                            'Token revocation failed, continuing with disconnect',
+                            {
+                                serverId,
+                                error:
+                                    revocationError instanceof Error
+                                        ? revocationError.message
+                                        : revocationError,
+                            }
+                        );
+                    }
+                }
+            }
+
+            // Delete tokens (siempre, incluso si revocación falló)
+            await this.tokenStore.deleteTokens(serverId);
+
+            // Remove OAuth config
+            await this.preferencesService.set(`mcpServers.${serverId}.oauth`, undefined);
+
+            logger.core.info('Server disconnected successfully', { serverId });
+        } catch (error) {
+            logger.core.error('Error during disconnect', {
                 serverId,
+                error: error instanceof Error ? error.message : error,
             });
+
+            throw error;
         }
-
-        // Delete tokens
-        await this.tokenStore.deleteTokens(serverId);
-
-        // Remove OAuth config
-        await this.preferencesService.set(`mcpServers.${serverId}.oauth`, undefined);
-
-        logger.core.info('Server disconnected', { serverId });
     }
 
     /**

@@ -88,13 +88,100 @@ export interface LevanteAPI {
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
   onDeepLink: (callback: (action: DeepLinkAction) => void) => () => void;
   oauth: {
+    // ========================================
+    // MCP OAuth Methods
+    // ========================================
+
+    // Authorize OAuth flow
+    authorize: (params: {
+      serverId: string;
+      mcpServerUrl: string;
+      scopes?: string[];
+      clientId?: string;
+      wwwAuthHeader?: string;
+    }) => Promise<{
+      success: boolean;
+      error?: string;
+      tokens?: {
+        expiresAt: number;
+        scope?: string;
+      };
+    }>;
+
+    // Disconnect and revoke
+    disconnect: (params: {
+      serverId: string;
+      revokeTokens?: boolean;
+    }) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+
+    // Get status
+    status: (params: {
+      serverId: string;
+    }) => Promise<{
+      success: boolean;
+      data?: {
+        hasConfig: boolean;
+        hasTokens: boolean;
+        isTokenValid: boolean;
+        expiresAt?: number;
+        scopes?: string[];
+        authServerId?: string;
+      };
+      error?: string;
+    }>;
+
+    // Refresh token
+    refresh: (params: {
+      serverId: string;
+    }) => Promise<{
+      success: boolean;
+      error?: string;
+      tokens?: {
+        expiresAt: number;
+        scope?: string;
+      };
+    }>;
+
+    // List OAuth servers
+    list: () => Promise<{
+      success: boolean;
+      data?: Array<{
+        serverId: string;
+        hasConfig: boolean;
+        hasTokens: boolean;
+        isTokenValid: boolean;
+      }>;
+      error?: string;
+    }>;
+
+    // Listen for OAuth-required events from the main process
+    onOAuthRequired: (
+      callback: (data: {
+        serverId: string;
+        mcpServerUrl: string;
+        wwwAuth: string;
+      }) => void
+    ) => () => void;
+
+    // ========================================
+    // OpenRouter OAuth Methods
+    // ========================================
+
+    // Start local OAuth callback server
     startServer: () => Promise<{
       success: boolean;
       port?: number;
       callbackUrl?: string;
       error?: string;
     }>;
+
+    // Stop OAuth callback server
     stopServer: () => Promise<{ success: boolean; error?: string }>;
+
+    // Listen for OAuth callbacks
     onCallback: (
       callback: (data: {
         success: boolean;
@@ -596,6 +683,7 @@ export interface LevanteAPI {
       count: number
     ) => Promise<{ success: boolean; error?: string }>;
     trackUser: () => Promise<{ success: boolean; error?: string }>;
+    trackAppOpen: (force?: boolean) => Promise<{ success: boolean; error?: string }>;
     disableAnalytics: () => Promise<{ success: boolean; error?: string }>;
     enableAnalytics: () => Promise<{ success: boolean; error?: string }>;
   };

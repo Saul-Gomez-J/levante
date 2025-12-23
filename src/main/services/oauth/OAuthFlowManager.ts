@@ -9,6 +9,7 @@ import type {
     TokenExchangeParams,
     TokenRefreshParams,
     OAuthTokens,
+    TokenRevocationParams,
 } from './types';
 import { OAuthFlowError } from './types';
 
@@ -112,7 +113,7 @@ export class OAuthFlowManager {
     /**
      * Ejecuta el flujo completo de autorización
      * 1. Genera PKCE
-     * 2. Inicia loopback server
+     * 2. Inicia loopback server (o usa uno existente)
      * 3. Abre browser
      * 4. Espera callback
      * 5. Valida state
@@ -124,11 +125,13 @@ export class OAuthFlowManager {
         clientId: string;
         scopes: string[];
         resource?: string;
-    }): Promise<{ code: string; verifier: string }> {
+        existingRedirectUri?: string; // If provided, skips server start
+    }): Promise<{ code: string; verifier: string; redirectUri: string }> {
         try {
             this.logger.core.info('Starting OAuth authorization flow', {
                 serverId: params.serverId,
                 authorizationEndpoint: params.authorizationEndpoint,
+                usingExistingServer: !!params.existingRedirectUri,
             });
 
             // 1. Generar PKCE
@@ -137,8 +140,17 @@ export class OAuthFlowManager {
             // 2. Generar state
             const state = this.stateManager.generateState();
 
-            // 3. Iniciar loopback server
-            const { redirectUri } = await this.redirectServer.start();
+            // 3. Iniciar loopback server (o usar existente)
+            let redirectUri: string;
+            if (params.existingRedirectUri) {
+                redirectUri = params.existingRedirectUri;
+                this.logger.core.debug('Using existing redirect server', {
+                    redirectUri,
+                });
+            } else {
+                const result = await this.redirectServer.start();
+                redirectUri = result.redirectUri;
+            }
 
             // 4. Almacenar state
             this.stateManager.storeState(
@@ -170,8 +182,10 @@ export class OAuthFlowManager {
             // 7. Esperar callback
             const callback = await this.redirectServer.waitForCallback();
 
-            // 8. Detener server
-            await this.redirectServer.stop();
+            // 8. Detener server (solo si lo iniciamos nosotros)
+            if (!params.existingRedirectUri) {
+                await this.redirectServer.stop();
+            }
 
             // 9. Validar state
             const storedState = this.stateManager.validateAndRetrieveState(
@@ -185,6 +199,7 @@ export class OAuthFlowManager {
             return {
                 code: callback.code,
                 verifier: storedState.codeVerifier,
+                redirectUri: storedState.redirectUri,
             };
         } catch (error) {
             // Cleanup
@@ -402,5 +417,82 @@ export class OAuthFlowManager {
      */
     cleanup(): void {
         this.stateManager.cleanExpiredStates();
+    }
+
+    /**
+     * Revoca un token (access o refresh) según RFC 7009
+     *
+     * @param params - Parámetros de revocación
+     */
+    async revokeToken(params: TokenRevocationParams): Promise<void> {
+        try {
+            this.logger.core.info('Revoking token', {
+                revocationEndpoint: params.revocationEndpoint,
+                tokenTypeHint: params.tokenTypeHint,
+            });
+
+            // Construir body según RFC 7009
+            const body = new URLSearchParams({
+                token: params.token,
+                client_id: params.clientId,
+            });
+
+            // Token type hint (opcional pero recomendado)
+            if (params.tokenTypeHint) {
+                body.set('token_type_hint', params.tokenTypeHint);
+            }
+
+            // Client secret (solo confidential clients)
+            if (params.clientSecret) {
+                body.set('client_secret', params.clientSecret);
+            }
+
+            // Hacer request
+            const response = await fetch(params.revocationEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    Accept: 'application/json',
+                },
+                body: body.toString(),
+            });
+
+            // RFC 7009: El servidor DEBE responder con 200 OK
+            // incluso si el token era inválido o ya estaba revocado
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                this.logger.core.error('Token revocation failed', {
+                    status: response.status,
+                    error: data.error,
+                    errorDescription: data.error_description,
+                });
+
+                throw new OAuthFlowError(
+                    `Token revocation failed: ${data.error_description || data.error || response.statusText}`,
+                    'TOKEN_REVOCATION_FAILED',
+                    {
+                        status: response.status,
+                        error: data.error,
+                        errorDescription: data.error_description,
+                    }
+                );
+            }
+
+            this.logger.core.info('Token revoked successfully');
+        } catch (error) {
+            if (error instanceof OAuthFlowError) {
+                throw error;
+            }
+
+            this.logger.core.error('Token revocation error', {
+                error: error instanceof Error ? error.message : error,
+            });
+
+            throw new OAuthFlowError(
+                'Failed to revoke token',
+                'TOKEN_REVOCATION_FAILED',
+                { error }
+            );
+        }
     }
 }

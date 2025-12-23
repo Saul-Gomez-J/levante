@@ -53,50 +53,105 @@ export class OAuthDiscoveryService {
                 return cached;
             }
 
-            // Construir metadata URL
-            const metadataUrl = this.buildMetadataUrl(
+            const metadataUrls = this.buildProtectedResourceMetadataUrls(resourceUrl);
+            this.logger.mcp.debug('Fetching protected resource metadata (candidates)', {
                 resourceUrl,
-                this.PROTECTED_RESOURCE_PATH
-            );
-
-            this.logger.mcp.debug('Fetching protected resource metadata', {
-                metadataUrl,
+                metadataUrls,
             });
 
-            // Fetch metadata
-            const response = await fetch(metadataUrl, {
-                method: 'GET',
-                headers: {
-                    Accept: 'application/json',
-                },
-            });
+            let lastError: OAuthDiscoveryError | null = null;
 
-            if (!response.ok) {
-                throw new OAuthDiscoveryError(
-                    `Failed to fetch protected resource metadata: ${response.status} ${response.statusText}`,
-                    'METADATA_FETCH_FAILED',
-                    {
-                        status: response.status,
-                        statusText: response.statusText,
-                        url: metadataUrl,
+            for (const metadataUrl of metadataUrls) {
+                try {
+                    this.logger.mcp.debug('Attempting protected resource metadata fetch', {
+                        metadataUrl,
+                    });
+
+                    const response = await fetch(metadataUrl, {
+                        method: 'GET',
+                        headers: {
+                            Accept: 'application/json',
+                        },
+                    });
+
+                    if (!response.ok) {
+                        const errorCode =
+                            response.status === 404 || response.status === 410
+                                ? 'METADATA_NOT_SUPPORTED'
+                                : 'METADATA_FETCH_FAILED';
+
+                        const error = new OAuthDiscoveryError(
+                            `Failed to fetch protected resource metadata: ${response.status} ${response.statusText}`,
+                            errorCode,
+                            {
+                                status: response.status,
+                                statusText: response.statusText,
+                                url: metadataUrl,
+                            }
+                        );
+
+                        lastError = error;
+
+                        if (errorCode === 'METADATA_NOT_SUPPORTED') {
+                            this.logger.mcp.warn('Protected resource metadata endpoint not supported', {
+                                metadataUrl,
+                                status: response.status,
+                            });
+                            // Try next candidate
+                            continue;
+                        }
+
+                        this.logger.mcp.error('Protected resource metadata fetch failed', {
+                            metadataUrl,
+                            status: response.status,
+                        });
+                        // Try next candidate as well
+                        continue;
                     }
-                );
+
+                    const metadata = (await response.json()) as ProtectedResourceMetadata;
+
+                    // Validar metadata
+                    this.validateProtectedResourceMetadata(metadata, resourceUrl);
+
+                    // Cache metadata
+                    this.saveToCache(this.resourceCache, resourceUrl, metadata);
+
+                    this.logger.mcp.info('Authorization servers discovered', {
+                        resourceUrl,
+                        authorizationServers: metadata.authorization_servers,
+                        metadataUrl,
+                    });
+
+                    return metadata;
+                } catch (error) {
+                    if (error instanceof OAuthDiscoveryError) {
+                        lastError = error;
+                    } else {
+                        lastError = new OAuthDiscoveryError(
+                            'Failed to fetch protected resource metadata',
+                            'NETWORK_ERROR',
+                            { error, url: metadataUrl }
+                        );
+                    }
+
+                    this.logger.mcp.warn('Protected resource metadata fetch attempt failed', {
+                        metadataUrl,
+                        error: error instanceof Error ? error.message : error,
+                    });
+                    // Try next candidate
+                }
             }
 
-            const metadata = (await response.json()) as ProtectedResourceMetadata;
+            if (lastError) {
+                throw lastError;
+            }
 
-            // Validar metadata
-            this.validateProtectedResourceMetadata(metadata, resourceUrl);
-
-            // Cache metadata
-            this.saveToCache(this.resourceCache, resourceUrl, metadata);
-
-            this.logger.mcp.info('Authorization servers discovered', {
-                resourceUrl,
-                authorizationServers: metadata.authorization_servers,
-            });
-
-            return metadata;
+            throw new OAuthDiscoveryError(
+                'Failed to fetch protected resource metadata',
+                'METADATA_FETCH_FAILED',
+                { resourceUrl, metadataUrls }
+            );
         } catch (error) {
             if (error instanceof OAuthDiscoveryError) {
                 throw error;
@@ -206,8 +261,10 @@ export class OAuthDiscoveryService {
      */
     parseWWWAuthenticate(header: string): WWWAuthenticateParams {
         try {
-            this.logger.core.debug('Parsing WWW-Authenticate header', {
+            // DEBUG: Log raw header
+            this.logger.core.debug('🔍 Parsing WWW-Authenticate header (RAW)', {
                 headerLength: header.length,
+                rawHeader: header
             });
 
             const result: WWWAuthenticateParams = {};
@@ -216,16 +273,21 @@ export class OAuthDiscoveryService {
             const schemeMatch = header.match(/^(\w+)\s+/);
             if (schemeMatch) {
                 result.scheme = schemeMatch[1];
+                this.logger.core.debug('Scheme extracted', { scheme: result.scheme });
             }
 
             // Extraer parámetros
             // Formato: key="value" o key=value
             const paramRegex = /(\w+)=(?:"([^"]*)"|([^\s,]*))/g;
             let match;
+            const extractedParams: Record<string, string> = {};
 
             while ((match = paramRegex.exec(header)) !== null) {
                 const key = match[1];
                 const value = match[2] || match[3]; // Quoted o unquoted
+
+                // DEBUG: Log cada parámetro extraído
+                extractedParams[key] = value;
 
                 switch (key) {
                     case 'realm':
@@ -249,8 +311,17 @@ export class OAuthDiscoveryService {
                 }
             }
 
-            this.logger.core.debug('WWW-Authenticate header parsed', {
+            // DEBUG: Log all extracted params
+            this.logger.core.debug('🔍 All parameters extracted from WWW-Authenticate', {
+                extractedParams,
+                paramCount: Object.keys(extractedParams).length
+            });
+
+            this.logger.core.debug('WWW-Authenticate header parsed (FINAL RESULT)', {
                 scheme: result.scheme,
+                realm: result.realm,
+                as_uri: result.as_uri,
+                resource_metadata: result.resource_metadata,
                 hasResourceMetadata: !!result.resource_metadata,
                 hasAsUri: !!result.as_uri,
                 hasError: !!result.error,
@@ -288,33 +359,105 @@ export class OAuthDiscoveryService {
 
             // 1. Parse WWW-Authenticate header si existe
             let asUri: string | undefined;
+            let resourceMetadataHint: string | undefined;
             if (wwwAuthenticateHeader) {
+                this.logger.mcp.debug('🔍 About to parse WWW-Authenticate header', {
+                    headerLength: wwwAuthenticateHeader.length,
+                    headerPreview: wwwAuthenticateHeader.substring(0, 200)
+                });
+
                 const parsed = this.parseWWWAuthenticate(wwwAuthenticateHeader);
                 asUri = parsed.as_uri;
+                resourceMetadataHint = parsed.resource_metadata;
 
-                this.logger.mcp.debug('WWW-Authenticate parsed', {
+                this.logger.mcp.debug('🔍 WWW-Authenticate parsing completed', {
                     asUri,
+                    hasAsUri: !!asUri,
                     resourceMetadata: parsed.resource_metadata,
+                    hasResourceMetadata: !!parsed.resource_metadata,
+                    scheme: parsed.scheme,
+                    realm: parsed.realm,
+                    allParsedKeys: Object.keys(parsed)
                 });
             }
 
-            // 2. Discover authorization servers
-            const protectedResource = await this.discoverAuthServer(resourceUrl);
+            // 2. Determinar authorization server URL
+            let authServerUrl: string | undefined;
 
-            // 3. Seleccionar authorization server
-            // Prioridad: as_uri del header > primer servidor en la lista
-            const authServerUrl =
-                asUri || protectedResource.authorization_servers[0];
+            if (asUri) {
+                // Si tenemos as_uri en WWW-Authenticate, usarlo directamente
+                // NO necesitamos hacer discovery adicional (RFC 6750)
+                authServerUrl = asUri;
+                this.logger.mcp.info('Using as_uri from WWW-Authenticate header', {
+                    authServerUrl,
+                    note: 'Skipping .well-known/oauth-protected-resource discovery',
+                });
+            }
+
+            // 2b. Si hay resource_metadata en el header, úsalo para descubrir el issuer
+            if (!authServerUrl && resourceMetadataHint) {
+                this.logger.mcp.info('Using resource_metadata from WWW-Authenticate header', {
+                    resourceMetadataUrl: resourceMetadataHint,
+                });
+
+                try {
+                    const metadata = await this.fetchProtectedResourceMetadata(
+                        resourceMetadataHint,
+                        resourceUrl
+                    );
+
+                    authServerUrl = metadata.authorization_servers?.[0];
+
+                    this.logger.mcp.info('Authorization server discovered from resource_metadata', {
+                        authServerUrl,
+                    });
+                } catch (metadataError) {
+                    this.logger.mcp.warn('Failed to use resource_metadata hint, continuing discovery', {
+                        resourceMetadataUrl: resourceMetadataHint,
+                        error: metadataError instanceof Error ? metadataError.message : metadataError,
+                    });
+                }
+            }
+
+            // 2c. Fallback: Intentar discovery desde protected resource metadata (RFC 9728)
+            if (!authServerUrl) {
+                this.logger.mcp.info('No as_uri/resource_metadata, attempting RFC 9728 discovery');
+
+                try {
+                    const protectedResource = await this.discoverAuthServer(resourceUrl);
+                    authServerUrl = protectedResource.authorization_servers[0];
+
+                    this.logger.mcp.info('Authorization server discovered from protected resource', {
+                        authServerUrl,
+                    });
+                } catch (discoveryError) {
+                    this.logger.mcp.warn('Protected resource discovery failed, will try origin auth-server', {
+                        resourceUrl,
+                        error: discoveryError instanceof Error ? discoveryError.message : discoveryError,
+                    });
+                }
+            }
+
+            // 2d. Fallback final: intentar auth-server well-known en el origin
+            if (!authServerUrl) {
+                const origin = new URL(resourceUrl).origin;
+                this.logger.mcp.info('Falling back to authorization server well-known at origin', {
+                    resourceUrl,
+                    origin,
+                });
+
+                authServerUrl = origin;
+            }
 
             if (!authServerUrl) {
                 throw new OAuthDiscoveryError(
-                    'No authorization server found',
+                    'No authorization server found (no hints and no fallback available)',
                     'INVALID_METADATA',
-                    { protectedResource }
+                    { resourceUrl }
                 );
             }
 
-            // 4. Fetch authorization server metadata
+            // 3. Fetch authorization server metadata
             const metadata = await this.fetchServerMetadata(authServerUrl);
 
             this.logger.mcp.info('Discovery completed', {
@@ -405,6 +548,60 @@ export class OAuthDiscoveryService {
         const url = new URL(baseUrl);
         url.pathname = path;
         return url.toString();
+    }
+
+    /**
+     * Construye las URLs posibles para metadata de protected resource,
+     * probando primero la variante path-aware y luego la raíz.
+     */
+    private buildProtectedResourceMetadataUrls(resourceUrl: string): string[] {
+        const parsed = new URL(resourceUrl);
+        const origin = parsed.origin;
+        const normalizedPath = parsed.pathname.replace(/\/$/, '');
+        const urls: string[] = [];
+
+        if (normalizedPath && normalizedPath !== '/') {
+            urls.push(`${origin}${this.PROTECTED_RESOURCE_PATH}${normalizedPath}`);
+        }
+
+        urls.push(`${origin}${this.PROTECTED_RESOURCE_PATH}`);
+        return urls;
+    }
+
+    /**
+     * Fetch de metadata de protected resource desde una URL específica (hint).
+     */
+    private async fetchProtectedResourceMetadata(
+        metadataUrl: string,
+        resourceUrl: string
+    ): Promise<ProtectedResourceMetadata> {
+        this.logger.mcp.debug('Fetching protected resource metadata (hint)', {
+            metadataUrl,
+            resourceUrl,
+        });
+
+        const response = await fetch(metadataUrl, {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+        });
+
+        if (!response.ok) {
+            throw new OAuthDiscoveryError(
+                `Failed to fetch protected resource metadata from hint: ${response.status} ${response.statusText}`,
+                response.status === 404 || response.status === 410
+                    ? 'METADATA_NOT_SUPPORTED'
+                    : 'METADATA_FETCH_FAILED',
+                {
+                    status: response.status,
+                    statusText: response.statusText,
+                    url: metadataUrl,
+                }
+            );
+        }
+
+        const metadata = (await response.json()) as ProtectedResourceMetadata;
+        this.validateProtectedResourceMetadata(metadata, resourceUrl);
+        return metadata;
     }
 
     /**
@@ -615,11 +812,13 @@ export class OAuthDiscoveryService {
      */
     async registerClient(
         registrationEndpoint: string,
-        authServerId: string
+        authServerId: string,
+        redirectUris?: string[]
     ): Promise<OAuthClientCredentials> {
         this.logger.mcp.info('Attempting Dynamic Client Registration', {
             registrationEndpoint,
             authServerId,
+            redirectUris,
         });
 
         // Validate HTTPS (except localhost)
@@ -639,8 +838,9 @@ export class OAuthDiscoveryService {
             client_name: 'Levante',
             client_uri: 'https://github.com/levante-hub/levante',
 
-            // Loopback redirect without specific port (will be dynamic)
-            redirect_uris: ['http://127.0.0.1/callback'],
+            // Use provided redirect_uris or fallback to loopback without port
+            // If redirect_uris is provided, it should include the exact port from the pre-allocated server
+            redirect_uris: redirectUris || ['http://127.0.0.1/callback'],
 
             // Grant types for Authorization Code Flow with PKCE
             grant_types: ['authorization_code', 'refresh_token'],

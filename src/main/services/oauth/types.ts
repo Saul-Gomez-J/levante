@@ -284,6 +284,7 @@ export class OAuthFlowError extends Error {
             | 'AUTHORIZATION_DENIED'
             | 'TOKEN_EXCHANGE_FAILED'
             | 'TOKEN_REFRESH_FAILED'
+            | 'TOKEN_REVOCATION_FAILED'
             | 'LOOPBACK_SERVER_FAILED'
             | 'CALLBACK_TIMEOUT'
             | 'INVALID_RESPONSE',
@@ -441,6 +442,7 @@ export class OAuthDiscoveryError extends Error {
         message: string,
         public readonly code:
             | 'METADATA_FETCH_FAILED'
+            | 'METADATA_NOT_SUPPORTED'
             | 'INVALID_METADATA'
             | 'PKCE_NOT_SUPPORTED'
             | 'NETWORK_ERROR'
@@ -584,4 +586,35 @@ export class ClientRegistrationError extends Error {
         super(message);
         this.name = 'ClientRegistrationError';
     }
+}
+
+/**
+ * Parámetros para revocación de token (RFC 7009)
+ */
+export interface TokenRevocationParams {
+    /** Revocation endpoint del AS */
+    revocationEndpoint: string;
+
+    /** Token a revocar (access o refresh) */
+    token: string;
+
+    /** Hint del tipo de token */
+    tokenTypeHint?: 'access_token' | 'refresh_token';
+
+    /** Client ID */
+    clientId: string;
+
+    /** Client secret (solo confidential clients) */
+    clientSecret?: string;
+}
+
+/**
+ * Parámetros para desconectar un servidor (Fase 6)
+ */
+export interface DisconnectParams {
+    /** ID del servidor a desconectar */
+    serverId: string;
+
+    /** Si se deben revocar los tokens en el AS (default: true) */
+    revokeTokens?: boolean;
 }

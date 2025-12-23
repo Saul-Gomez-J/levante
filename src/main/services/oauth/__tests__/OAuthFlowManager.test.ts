@@ -210,4 +210,76 @@ describe('OAuthFlowManager', () => {
             expect(tokens.refreshToken).toBe('new-refresh-token');
         });
     });
+
+    describe('Token Revocation (Fase 6)', () => {
+        it('should revoke access token', async () => {
+            const mockRevocationEndpoint = 'https://auth.example.com/revoke';
+
+            // Mock fetch
+            global.fetch = vi.fn().mockResolvedValueOnce(
+                new Response(null, { status: 200 })
+            );
+
+            await flowManager.revokeToken({
+                revocationEndpoint: mockRevocationEndpoint,
+                token: 'mock-access-token',
+                tokenTypeHint: 'access_token',
+                clientId: 'test-client',
+            });
+
+            // Verify fetch was called correctly
+            expect(global.fetch).toHaveBeenCalledWith(
+                mockRevocationEndpoint,
+                expect.objectContaining({
+                    method: 'POST',
+                    headers: expect.objectContaining({
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    }),
+                    body: expect.stringContaining('token=mock-access-token'),
+                })
+            );
+        });
+
+        it('should revoke refresh token with client secret', async () => {
+            global.fetch = vi.fn().mockResolvedValueOnce(
+                new Response(null, { status: 200 })
+            );
+
+            await flowManager.revokeToken({
+                revocationEndpoint: 'https://auth.example.com/revoke',
+                token: 'mock-refresh-token',
+                tokenTypeHint: 'refresh_token',
+                clientId: 'test-client',
+                clientSecret: 'test-secret',
+            });
+
+            const fetchCall = (global.fetch as any).mock.calls[0];
+            const body = fetchCall[1].body;
+
+            expect(body).toContain('token=mock-refresh-token');
+            expect(body).toContain('token_type_hint=refresh_token');
+            expect(body).toContain('client_secret=test-secret');
+        });
+
+        it('should throw error if revocation fails', async () => {
+            global.fetch = vi.fn().mockResolvedValueOnce(
+                new Response(
+                    JSON.stringify({
+                        error: 'invalid_token',
+                        error_description: 'Token is invalid',
+                    }),
+                    { status: 400 }
+                )
+            );
+
+            await expect(
+                flowManager.revokeToken({
+                    revocationEndpoint: 'https://auth.example.com/revoke',
+                    token: 'invalid-token',
+                    tokenTypeHint: 'access_token',
+                    clientId: 'test-client',
+                })
+            ).rejects.toThrow('Token revocation failed');
+        });
+    });
 });

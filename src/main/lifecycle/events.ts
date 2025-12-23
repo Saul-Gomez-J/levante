@@ -13,6 +13,7 @@ import { getLogger } from "../services/logging";
 import { deepLinkService } from "../services/deepLinkService";
 import { gracefulShutdown } from "./shutdown";
 import { createMainWindow } from "./window";
+import { oauthCallbackServer } from '../services/oauthCallbackServer';
 import { cleanupAppHandlers } from "../ipc/appHandlers";
 
 const logger = getLogger();
@@ -30,6 +31,10 @@ export function registerAppEvents(getMainWindow: () => BrowserWindow | null): vo
     logger.core.debug("App activated");
     if (BrowserWindow.getAllWindows().length === 0) {
       const mainWindow = createMainWindow();
+
+      // Configure OAuth callback server with main window reference
+      oauthCallbackServer.setMainWindow(mainWindow);
+
       // Notify caller about new window
       logger.core.info("Created new window on activate");
     }
