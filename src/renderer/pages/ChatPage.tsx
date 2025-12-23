@@ -850,11 +850,11 @@ const ChatPage = () => {
         (<>
           <Conversation className="flex-1">
             <ConversationContent className="max-w-3xl mx-auto p-0 pl-4 pr-2 py-4">
-              {messages.map((message) => (
+              {messages.map((message, index) => (
                 <ChatMessageItem
                   key={message.id}
                   message={message}
-                  isStreaming={status === 'streaming'}
+                  isStreaming={status === 'streaming' && index === messages.length - 1}
                   onPrompt={setInput}
                   onSendMessage={handleSendMessage}
                   chatMessages={messages}

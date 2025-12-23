@@ -22,15 +22,17 @@
       "Bash(find:*)",
       "Bash(grep:*)",
       "WebFetch(domain:docs.turso.tech)",
-      "WebFetch(domain:openrouter.ai)"
+      "WebFetch(domain:openrouter.ai)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)"
     ],
     "deny": [],
     "ask": []
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "context7",
     "sequential-thinking",
     "time"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }
