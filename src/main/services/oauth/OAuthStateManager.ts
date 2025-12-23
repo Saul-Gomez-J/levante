@@ -24,7 +24,7 @@ export class OAuthStateManager {
         // 16 bytes = 128 bits
         const state = crypto.randomBytes(16).toString('hex');
 
-        this.logger.core.debug('State parameter generated', {
+        this.logger.oauth.debug('State parameter generated', {
             statePreview: state.substring(0, 8) + '...',
         });
 
@@ -50,7 +50,7 @@ export class OAuthStateManager {
             redirectUri,
         });
 
-        this.logger.core.debug('State stored', {
+        this.logger.oauth.debug('State stored', {
             serverId,
             statePreview: state.substring(0, 8) + '...',
             expiresAt: new Date(expiresAt).toISOString(),
@@ -70,7 +70,7 @@ export class OAuthStateManager {
         const stored = this.states.get(state);
 
         if (!stored) {
-            this.logger.core.warn('Invalid state parameter', {
+            this.logger.oauth.warn('Invalid state parameter', {
                 statePreview: state.substring(0, 8) + '...',
             });
             throw new OAuthFlowError(
@@ -81,7 +81,7 @@ export class OAuthStateManager {
 
         // Verificar expiración
         if (Date.now() >= stored.expiresAt) {
-            this.logger.core.warn('Expired state parameter', {
+            this.logger.oauth.warn('Expired state parameter', {
                 serverId: stored.serverId,
                 expiredAt: new Date(stored.expiresAt).toISOString(),
             });
@@ -95,7 +95,7 @@ export class OAuthStateManager {
             );
         }
 
-        this.logger.core.debug('State validated successfully', {
+        this.logger.oauth.debug('State validated successfully', {
             serverId: stored.serverId,
         });
 
@@ -112,7 +112,7 @@ export class OAuthStateManager {
         const existed = this.states.delete(state);
 
         if (existed) {
-            this.logger.core.debug('State deleted', {
+            this.logger.oauth.debug('State deleted', {
                 statePreview: state.substring(0, 8) + '...',
             });
         }
@@ -134,7 +134,7 @@ export class OAuthStateManager {
         }
 
         if (cleanedCount > 0) {
-            this.logger.core.info('Expired states cleaned', { count: cleanedCount });
+            this.logger.oauth.info('Expired states cleaned', { count: cleanedCount });
         }
 
         return cleanedCount;
@@ -153,6 +153,6 @@ export class OAuthStateManager {
     clearAll(): void {
         const count = this.states.size;
         this.states.clear();
-        this.logger.core.debug('All states cleared', { count });
+        this.logger.oauth.debug('All states cleared', { count });
     }
 }

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { logger } from '@/services/logger';
 
 /**
  * OAuth Server Status
@@ -26,6 +27,11 @@ interface OAuthState {
         mcpServerUrl: string;
         wwwAuth: string;
     } | null;
+    autoAuthorizeFromRequired: (params: {
+        serverId: string;
+        mcpServerUrl: string;
+        wwwAuth: string;
+    }) => Promise<void>;
 
     // Actions
     authorize: (params: {
@@ -62,6 +68,25 @@ export const useOAuthStore = create<OAuthState>((set, get) => ({
     loading: {},
     errors: {},
     pendingAuth: null,
+    autoAuthorizeFromRequired: async (params) => {
+        const { serverId, mcpServerUrl, wwwAuth } = params;
+        logger.oauth.info('Starting automatic OAuth authorization', { serverId });
+
+        try {
+            await useOAuthStore.getState().authorize({
+                serverId,
+                mcpServerUrl,
+                scopes: undefined, // backend will pick parsed scopes or defaults
+                clientId: undefined, // force DCR if none provided
+                wwwAuthHeader: wwwAuth,
+            });
+        } catch (error) {
+            logger.oauth.error('Automatic OAuth authorization failed', {
+                serverId,
+                error: error instanceof Error ? error.message : error,
+            });
+        }
+    },
 
     /**
      * Start OAuth authorization flow
@@ -231,7 +256,9 @@ export const useOAuthStore = create<OAuthState>((set, get) => ({
 
             set({ servers });
         } catch (error) {
-            console.error('Failed to load OAuth servers:', error);
+            logger.oauth.error('Failed to load OAuth servers', {
+                error: error instanceof Error ? error.message : error
+            });
         }
     },
 
@@ -250,12 +277,15 @@ export const useOAuthStore = create<OAuthState>((set, get) => ({
     handleOAuthRequired: (params) => {
         const { serverId } = params;
 
-        console.log('[OAuth] OAuth required for server:', serverId);
+        logger.oauth.info('OAuth required for server', { serverId });
 
         set((state) => ({
             pendingAuth: params,
             errors: { ...state.errors, [serverId]: null },
         }));
+
+        // Start authorization automatically (headless)
+        void get().autoAuthorizeFromRequired(params);
     },
 
     clearPendingAuth: () => set({ pendingAuth: null }),

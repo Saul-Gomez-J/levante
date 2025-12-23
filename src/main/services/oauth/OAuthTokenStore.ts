@@ -25,7 +25,7 @@ export class OAuthTokenStore {
     private encrypt(value: string): string {
         try {
             if (!safeStorage.isEncryptionAvailable()) {
-                this.logger.core.warn('Encryption not available, storing in plaintext');
+                this.logger.oauth.warn('Encryption not available, storing in plaintext');
                 throw new TokenStoreError(
                     'Encryption not available on this system',
                     'ENCRYPTION_FAILED'
@@ -37,7 +37,7 @@ export class OAuthTokenStore {
 
             return `${this.ENCRYPTED_PREFIX}${base64}`;
         } catch (error) {
-            this.logger.core.error('Failed to encrypt token', {
+            this.logger.oauth.error('Failed to encrypt token', {
                 error: error instanceof Error ? error.message : error,
             });
             if (error instanceof TokenStoreError) {
@@ -68,7 +68,7 @@ export class OAuthTokenStore {
             const decrypted = safeStorage.decryptString(buffer);
             return decrypted;
         } catch (error) {
-            this.logger.core.error('Failed to decrypt token', {
+            this.logger.oauth.error('Failed to decrypt token', {
                 error: error instanceof Error ? error.message : error,
             });
             if (error instanceof TokenStoreError) {
@@ -87,7 +87,7 @@ export class OAuthTokenStore {
      */
     async saveTokens(serverId: string, tokens: OAuthTokens): Promise<void> {
         try {
-            this.logger.core.info('Saving OAuth tokens', { serverId });
+            this.logger.oauth.info('Saving OAuth tokens', { serverId });
 
             // Encriptar tokens sensibles
             const stored: StoredOAuthTokens = {
@@ -104,13 +104,13 @@ export class OAuthTokenStore {
             // Guardar en preferences
             await this.preferencesService.set(`oauthTokens.${serverId}`, stored);
 
-            this.logger.core.debug('OAuth tokens saved successfully', {
+            this.logger.oauth.debug('OAuth tokens saved successfully', {
                 serverId,
                 hasRefreshToken: !!tokens.refreshToken,
                 expiresAt: new Date(tokens.expiresAt).toISOString(),
             });
         } catch (error) {
-            this.logger.core.error('Failed to save OAuth tokens', {
+            this.logger.oauth.error('Failed to save OAuth tokens', {
                 serverId,
                 error: error instanceof Error ? error.message : error,
             });
@@ -129,7 +129,7 @@ export class OAuthTokenStore {
             );
 
             if (!stored) {
-                this.logger.core.debug('No OAuth tokens found', { serverId });
+                this.logger.oauth.debug('No OAuth tokens found', { serverId });
                 return null;
             }
 
@@ -144,7 +144,7 @@ export class OAuthTokenStore {
                 scope: stored.scope,
             };
 
-            this.logger.core.debug('OAuth tokens retrieved', {
+            this.logger.oauth.debug('OAuth tokens retrieved', {
                 serverId,
                 hasRefreshToken: !!tokens.refreshToken,
                 isExpired: this.isTokenExpired(tokens),
@@ -156,7 +156,7 @@ export class OAuthTokenStore {
                 throw error;
             }
 
-            this.logger.core.error('Failed to get OAuth tokens', {
+            this.logger.oauth.error('Failed to get OAuth tokens', {
                 serverId,
                 error: error instanceof Error ? error.message : error,
             });
@@ -169,7 +169,7 @@ export class OAuthTokenStore {
      */
     async deleteTokens(serverId: string): Promise<void> {
         try {
-            this.logger.core.info('Deleting OAuth tokens', { serverId });
+            this.logger.oauth.info('Deleting OAuth tokens', { serverId });
 
             // Obtener todas las preferencias
             const allPrefs = await this.preferencesService.getAll();
@@ -180,9 +180,9 @@ export class OAuthTokenStore {
                 await this.preferencesService.set('oauthTokens', allPrefs.oauthTokens);
             }
 
-            this.logger.core.debug('OAuth tokens deleted', { serverId });
+            this.logger.oauth.debug('OAuth tokens deleted', { serverId });
         } catch (error) {
-            this.logger.core.error('Failed to delete OAuth tokens', {
+            this.logger.oauth.error('Failed to delete OAuth tokens', {
                 serverId,
                 error: error instanceof Error ? error.message : error,
             });
@@ -202,7 +202,7 @@ export class OAuthTokenStore {
         const expired = now >= expiresWithBuffer;
 
         if (expired) {
-            this.logger.core.debug('Token expired', {
+            this.logger.oauth.debug('Token expired', {
                 expiresAt: new Date(tokens.expiresAt).toISOString(),
                 now: new Date(now).toISOString(),
                 secondsUntilExpiry: Math.floor((tokens.expiresAt - now) / 1000),
@@ -221,7 +221,7 @@ export class OAuthTokenStore {
             const tokens = allPrefs.oauthTokens || {};
             return Object.keys(tokens);
         } catch (error) {
-            this.logger.core.error('Failed to get tokenized servers', {
+            this.logger.oauth.error('Failed to get tokenized servers', {
                 error: error instanceof Error ? error.message : error,
             });
             return [];
@@ -234,7 +234,7 @@ export class OAuthTokenStore {
      */
     async cleanExpiredTokens(): Promise<number> {
         try {
-            this.logger.core.info('Cleaning expired OAuth tokens');
+            this.logger.oauth.info('Cleaning expired OAuth tokens');
 
             const serverIds = await this.getAllTokenizedServers();
             let cleanedCount = 0;
@@ -249,10 +249,10 @@ export class OAuthTokenStore {
                 }
             }
 
-            this.logger.core.info('Expired tokens cleaned', { count: cleanedCount });
+            this.logger.oauth.info('Expired tokens cleaned', { count: cleanedCount });
             return cleanedCount;
         } catch (error) {
-            this.logger.core.error('Failed to clean expired tokens', {
+            this.logger.oauth.error('Failed to clean expired tokens', {
                 error: error instanceof Error ? error.message : error,
             });
             return 0;

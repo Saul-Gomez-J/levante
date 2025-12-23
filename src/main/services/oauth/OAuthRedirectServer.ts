@@ -45,7 +45,7 @@ export class OAuthRedirectServer {
             // Encontrar puerto disponible
             this.port = await this.findAvailablePort(finalConfig.port);
 
-            this.logger.core.info('Starting OAuth redirect server', {
+            this.logger.oauth.info('Starting OAuth redirect server', {
                 port: this.port,
                 hostname: finalConfig.hostname,
             });
@@ -78,14 +78,14 @@ export class OAuthRedirectServer {
             // Iniciar servidor
             await new Promise<void>((resolve, reject) => {
                 this.server!.listen(this.port, finalConfig.hostname, () => {
-                    this.logger.core.debug('OAuth redirect server listening', {
+                    this.logger.oauth.debug('OAuth redirect server listening', {
                         port: this.port,
                     });
                     resolve();
                 });
 
                 this.server!.on('error', (error) => {
-                    this.logger.core.error('OAuth redirect server error', {
+                    this.logger.oauth.error('OAuth redirect server error', {
                         error: error.message,
                     });
                     reject(
@@ -105,7 +105,7 @@ export class OAuthRedirectServer {
                 redirectUri,
             };
         } catch (error) {
-            this.logger.core.error('Failed to start OAuth redirect server', {
+            this.logger.oauth.error('Failed to start OAuth redirect server', {
                 error: error instanceof Error ? error.message : error,
             });
             throw error;
@@ -139,11 +139,11 @@ export class OAuthRedirectServer {
      */
     async stop(): Promise<void> {
         if (this.server) {
-            this.logger.core.info('Stopping OAuth redirect server');
+            this.logger.oauth.info('Stopping OAuth redirect server');
 
             await new Promise<void>((resolve) => {
                 this.server!.close(() => {
-                    this.logger.core.debug('OAuth redirect server stopped');
+                    this.logger.oauth.debug('OAuth redirect server stopped');
                     resolve();
                 });
             });
@@ -170,13 +170,13 @@ export class OAuthRedirectServer {
                 const port = address.port;
 
                 server.close(() => {
-                    this.logger.core.debug('Found available port', { port });
+                    this.logger.oauth.debug('Found available port', { port });
                     resolve(port);
                 });
             });
 
             server.on('error', (error) => {
-                this.logger.core.error('Failed to find available port', {
+                this.logger.oauth.error('Failed to find available port', {
                     error: error.message,
                 });
                 reject(error);
@@ -197,7 +197,7 @@ export class OAuthRedirectServer {
 
             // Validar path
             if (url.pathname !== expectedPath) {
-                this.logger.core.warn('Invalid callback path', {
+                this.logger.oauth.warn('Invalid callback path', {
                     expected: expectedPath,
                     received: url.pathname,
                 });
@@ -213,7 +213,7 @@ export class OAuthRedirectServer {
             const error = url.searchParams.get('error');
             const errorDescription = url.searchParams.get('error_description');
 
-            this.logger.core.debug('OAuth callback received', {
+            this.logger.oauth.debug('OAuth callback received', {
                 hasCode: !!code,
                 hasState: !!state,
                 hasError: !!error,
@@ -221,7 +221,7 @@ export class OAuthRedirectServer {
 
             // Check for error response
             if (error) {
-                this.logger.core.warn('OAuth authorization denied', {
+                this.logger.oauth.warn('OAuth authorization denied', {
                     error,
                     errorDescription,
                 });
@@ -246,7 +246,7 @@ export class OAuthRedirectServer {
 
             // Validar parámetros requeridos
             if (!code || !state) {
-                this.logger.core.error('Missing required callback parameters', {
+                this.logger.oauth.error('Missing required callback parameters', {
                     hasCode: !!code,
                     hasState: !!state,
                 });
@@ -272,7 +272,7 @@ export class OAuthRedirectServer {
                 state,
             });
         } catch (error) {
-            this.logger.core.error('Error handling OAuth callback', {
+            this.logger.oauth.error('Error handling OAuth callback', {
                 error: error instanceof Error ? error.message : error,
             });
 

@@ -48,7 +48,7 @@ export class OAuthFlowManager {
                 .update(verifier)
                 .digest('base64url');
 
-            this.logger.core.debug('PKCE generated', {
+            this.logger.oauth.debug('PKCE generated', {
                 verifierLength: verifier.length,
                 challengeLength: challenge.length,
             });
@@ -59,7 +59,7 @@ export class OAuthFlowManager {
                 method: 'S256',
             };
         } catch (error) {
-            this.logger.core.error('Failed to generate PKCE', {
+            this.logger.oauth.error('Failed to generate PKCE', {
                 error: error instanceof Error ? error.message : error,
             });
             throw new OAuthFlowError(
@@ -91,7 +91,7 @@ export class OAuthFlowManager {
                 url.searchParams.set('resource', params.resource);
             }
 
-            this.logger.core.debug('Authorization URL created', {
+            this.logger.oauth.debug('Authorization URL created', {
                 endpoint: params.authorizationEndpoint,
                 clientId: params.clientId,
                 scopes: params.scopes,
@@ -99,7 +99,7 @@ export class OAuthFlowManager {
 
             return url.toString();
         } catch (error) {
-            this.logger.core.error('Failed to create authorization URL', {
+            this.logger.oauth.error('Failed to create authorization URL', {
                 error: error instanceof Error ? error.message : error,
             });
             throw new OAuthFlowError(
@@ -128,7 +128,7 @@ export class OAuthFlowManager {
         existingRedirectUri?: string; // If provided, skips server start
     }): Promise<{ code: string; verifier: string; redirectUri: string }> {
         try {
-            this.logger.core.info('Starting OAuth authorization flow', {
+            this.logger.oauth.info('Starting OAuth authorization flow', {
                 serverId: params.serverId,
                 authorizationEndpoint: params.authorizationEndpoint,
                 usingExistingServer: !!params.existingRedirectUri,
@@ -144,7 +144,7 @@ export class OAuthFlowManager {
             let redirectUri: string;
             if (params.existingRedirectUri) {
                 redirectUri = params.existingRedirectUri;
-                this.logger.core.debug('Using existing redirect server', {
+                this.logger.oauth.debug('Using existing redirect server', {
                     redirectUri,
                 });
             } else {
@@ -172,7 +172,7 @@ export class OAuthFlowManager {
                 resource: params.resource,
             });
 
-            this.logger.core.info('Opening browser for authorization', {
+            this.logger.oauth.info('Opening browser for authorization', {
                 serverId: params.serverId,
             });
 
@@ -192,7 +192,7 @@ export class OAuthFlowManager {
                 callback.state
             );
 
-            this.logger.core.info('Authorization successful', {
+            this.logger.oauth.info('Authorization successful', {
                 serverId: storedState.serverId,
             });
 
@@ -205,7 +205,7 @@ export class OAuthFlowManager {
             // Cleanup
             await this.redirectServer.stop();
 
-            this.logger.core.error('Authorization flow failed', {
+            this.logger.oauth.error('Authorization flow failed', {
                 serverId: params.serverId,
                 error: error instanceof Error ? error.message : error,
             });
@@ -221,7 +221,7 @@ export class OAuthFlowManager {
         params: TokenExchangeParams
     ): Promise<OAuthTokens> {
         try {
-            this.logger.core.info('Exchanging code for tokens', {
+            this.logger.oauth.info('Exchanging code for tokens', {
                 tokenEndpoint: params.tokenEndpoint,
             });
 
@@ -253,7 +253,7 @@ export class OAuthFlowManager {
             const data = await response.json();
 
             if (!response.ok) {
-                this.logger.core.error('Token exchange failed', {
+                this.logger.oauth.error('Token exchange failed', {
                     status: response.status,
                     error: data.error,
                     errorDescription: data.error_description,
@@ -283,7 +283,7 @@ export class OAuthFlowManager {
             const expiresIn = data.expires_in || 3600; // Default 1 hora
             const expiresAt = Date.now() + expiresIn * 1000;
 
-            this.logger.core.info('Tokens received successfully', {
+            this.logger.oauth.info('Tokens received successfully', {
                 hasRefreshToken: !!data.refresh_token,
                 expiresIn,
                 tokenType: data.token_type,
@@ -301,7 +301,7 @@ export class OAuthFlowManager {
                 throw error;
             }
 
-            this.logger.core.error('Token exchange error', {
+            this.logger.oauth.error('Token exchange error', {
                 error: error instanceof Error ? error.message : error,
             });
 
@@ -318,7 +318,7 @@ export class OAuthFlowManager {
      */
     async refreshAccessToken(params: TokenRefreshParams): Promise<OAuthTokens> {
         try {
-            this.logger.core.info('Refreshing access token', {
+            this.logger.oauth.info('Refreshing access token', {
                 tokenEndpoint: params.tokenEndpoint,
             });
 
@@ -353,7 +353,7 @@ export class OAuthFlowManager {
             const data = await response.json();
 
             if (!response.ok) {
-                this.logger.core.error('Token refresh failed', {
+                this.logger.oauth.error('Token refresh failed', {
                     status: response.status,
                     error: data.error,
                     errorDescription: data.error_description,
@@ -383,7 +383,7 @@ export class OAuthFlowManager {
             const expiresIn = data.expires_in || 3600;
             const expiresAt = Date.now() + expiresIn * 1000;
 
-            this.logger.core.info('Token refreshed successfully', {
+            this.logger.oauth.info('Token refreshed successfully', {
                 hasNewRefreshToken: !!data.refresh_token,
                 expiresIn,
             });
@@ -400,7 +400,7 @@ export class OAuthFlowManager {
                 throw error;
             }
 
-            this.logger.core.error('Token refresh error', {
+            this.logger.oauth.error('Token refresh error', {
                 error: error instanceof Error ? error.message : error,
             });
 
@@ -426,7 +426,7 @@ export class OAuthFlowManager {
      */
     async revokeToken(params: TokenRevocationParams): Promise<void> {
         try {
-            this.logger.core.info('Revoking token', {
+            this.logger.oauth.info('Revoking token', {
                 revocationEndpoint: params.revocationEndpoint,
                 tokenTypeHint: params.tokenTypeHint,
             });
@@ -461,7 +461,7 @@ export class OAuthFlowManager {
             // incluso si el token era inválido o ya estaba revocado
             if (!response.ok) {
                 const data = await response.json().catch(() => ({}));
-                this.logger.core.error('Token revocation failed', {
+                this.logger.oauth.error('Token revocation failed', {
                     status: response.status,
                     error: data.error,
                     errorDescription: data.error_description,
@@ -478,13 +478,13 @@ export class OAuthFlowManager {
                 );
             }
 
-            this.logger.core.info('Token revoked successfully');
+            this.logger.oauth.info('Token revoked successfully');
         } catch (error) {
             if (error instanceof OAuthFlowError) {
                 throw error;
             }
 
-            this.logger.core.error('Token revocation error', {
+            this.logger.oauth.error('Token revocation error', {
                 error: error instanceof Error ? error.message : error,
             });
 

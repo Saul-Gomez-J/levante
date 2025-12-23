@@ -14,7 +14,6 @@ import { toast, Toaster } from 'sonner'
 import '@/i18n/config' // Initialize i18n
 import type { DeepLinkAction } from '@preload/preload'
 import type { MCPServerConfig } from '@/types/mcp'
-import { OAuthConnectionDialog } from '@/components/oauth/OAuthConnectionDialog'
 
 function App() {
   const [currentPage, setCurrentPage] = useState('chat')
@@ -374,7 +373,6 @@ function App() {
   return (
     <>
       <Toaster position="top-right" />
-      <OAuthConnectionDialog />
 
       {/* MCP Deep Link Confirmation Modal */}
       <MCPDeepLinkModal

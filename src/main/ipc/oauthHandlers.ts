@@ -68,7 +68,7 @@ export function setupOAuthHandlers(): void {
   // Stop OAuth callback server
   ipcMain.handle('levante/oauth/stop-server', handleStopServer);
 
-  logger.core.info('OAuth handlers registered successfully (MCP + OpenRouter)');
+  logger.oauth.info('OAuth handlers registered successfully (MCP + OpenRouter)');
 }
 
 /**
@@ -91,7 +91,7 @@ async function handleAuthorize(
   try {
     await initializeServices();
 
-    logger.core.info('IPC: Starting OAuth authorization', {
+    logger.oauth.info('IPC: Starting OAuth authorization', {
       serverId: params.serverId,
       url: params.mcpServerUrl,
       hasWWWAuth: !!params.wwwAuthHeader,
@@ -106,7 +106,7 @@ async function handleAuthorize(
     });
 
     if (result.success) {
-      logger.core.info('IPC: OAuth authorization successful', {
+      logger.oauth.info('IPC: OAuth authorization successful', {
         serverId: params.serverId,
       });
 
@@ -118,7 +118,7 @@ async function handleAuthorize(
         },
       };
     } else {
-      logger.core.error('IPC: OAuth authorization failed', {
+      logger.oauth.error('IPC: OAuth authorization failed', {
         serverId: params.serverId,
         error: result.error,
       });
@@ -129,7 +129,7 @@ async function handleAuthorize(
       };
     }
   } catch (error) {
-    logger.core.error('IPC: OAuth authorization error', {
+    logger.oauth.error('IPC: OAuth authorization error', {
       serverId: params.serverId,
       error: error instanceof Error ? error.message : error,
     });
@@ -157,7 +157,7 @@ async function handleDisconnect(
   try {
     await initializeServices();
 
-    logger.core.info('IPC: Disconnecting OAuth server', {
+    logger.oauth.info('IPC: Disconnecting OAuth server', {
       serverId: params.serverId,
       revokeTokens: params.revokeTokens,
     });
@@ -167,13 +167,13 @@ async function handleDisconnect(
       revokeTokens: params.revokeTokens ?? true,
     });
 
-    logger.core.info('IPC: OAuth server disconnected', {
+    logger.oauth.info('IPC: OAuth server disconnected', {
       serverId: params.serverId,
     });
 
     return { success: true };
   } catch (error) {
-    logger.core.error('IPC: OAuth disconnect error', {
+    logger.oauth.error('IPC: OAuth disconnect error', {
       serverId: params.serverId,
       error: error instanceof Error ? error.message : error,
     });
@@ -231,7 +231,7 @@ async function handleStatus(
       },
     };
   } catch (error) {
-    logger.core.error('IPC: OAuth status error', {
+    logger.oauth.error('IPC: OAuth status error', {
       serverId: params.serverId,
       error: error instanceof Error ? error.message : error,
     });
@@ -257,13 +257,13 @@ async function handleRefresh(
   try {
     await initializeServices();
 
-    logger.core.info('IPC: Refreshing OAuth token', {
+    logger.oauth.info('IPC: Refreshing OAuth token', {
       serverId: params.serverId,
     });
 
     const tokens = await oauthService.ensureValidToken(params.serverId);
 
-    logger.core.info('IPC: OAuth token refreshed', {
+    logger.oauth.info('IPC: OAuth token refreshed', {
       serverId: params.serverId,
     });
 
@@ -275,7 +275,7 @@ async function handleRefresh(
       },
     };
   } catch (error) {
-    logger.core.error('IPC: OAuth refresh error', {
+    logger.oauth.error('IPC: OAuth refresh error', {
       serverId: params.serverId,
       error: error instanceof Error ? error.message : error,
     });
@@ -329,7 +329,7 @@ async function handleList(): Promise<{
       data: oauthServers,
     };
   } catch (error) {
-    logger.core.error('IPC: OAuth list error', {
+    logger.oauth.error('IPC: OAuth list error', {
       error: error instanceof Error ? error.message : error,
     });
 
@@ -353,12 +353,12 @@ async function handleStartServer(): Promise<{
   error?: string;
 }> {
   try {
-    logger.core.info('Starting OAuth callback server');
+    logger.oauth.info('Starting OAuth callback server');
     const result = await oauthCallbackServer.start();
-    logger.core.info('OAuth callback server started', result);
+    logger.oauth.info('OAuth callback server started', result);
     return { success: true, ...result };
   } catch (error) {
-    logger.core.error('Error starting OAuth callback server', {
+    logger.oauth.error('Error starting OAuth callback server', {
       error: error instanceof Error ? error.message : error,
     });
     return {
@@ -373,11 +373,11 @@ async function handleStartServer(): Promise<{
  */
 async function handleStopServer(): Promise<{ success: boolean; error?: string }> {
   try {
-    logger.core.info('Stopping OAuth callback server');
+    logger.oauth.info('Stopping OAuth callback server');
     await oauthCallbackServer.stop();
     return { success: true };
   } catch (error) {
-    logger.core.error('Error stopping OAuth callback server', {
+    logger.oauth.error('Error stopping OAuth callback server', {
       error: error instanceof Error ? error.message : error,
     });
     return {

@@ -19,7 +19,7 @@ export class OAuthCallbackServer {
    */
   async start(): Promise<{ port: number; callbackUrl: string }> {
     if (this.server) {
-      logger.core.warn('OAuth callback server already running', { port: this.port });
+      logger.oauth.warn('OAuth callback server already running', { port: this.port });
       return { port: this.port, callbackUrl: `http://localhost:${this.port}` };
     }
 
@@ -39,7 +39,7 @@ export class OAuthCallbackServer {
           const address = this.server?.address();
           if (address && typeof address === 'object') {
             this.port = address.port;
-            logger.core.info('OAuth callback server started', {
+            logger.oauth.info('OAuth callback server started', {
               port: this.port,
               isRecommendedPort: this.port === 3000
             });
@@ -55,12 +55,12 @@ export class OAuthCallbackServer {
         this.server?.once('error', (error: NodeJS.ErrnoException) => {
           if (error.code === 'EADDRINUSE' && portIndex < tryPorts.length - 1) {
             // Port 3000 is in use, try random port
-            logger.core.info('Port 3000 in use, trying random port');
+            logger.oauth.info('Port 3000 in use, trying random port');
             portIndex++;
             this.server?.removeAllListeners();
             tryListen();
           } else {
-            logger.core.error('OAuth callback server error', {
+            logger.oauth.error('OAuth callback server error', {
               error: error.message
             });
             reject(error);
@@ -77,19 +77,19 @@ export class OAuthCallbackServer {
    */
   async stop(): Promise<void> {
     if (!this.server) {
-      logger.core.warn('OAuth callback server not running');
+      logger.oauth.warn('OAuth callback server not running');
       return;
     }
 
     return new Promise((resolve, reject) => {
       this.server?.close((error) => {
         if (error) {
-          logger.core.error('Error closing OAuth callback server', {
+          logger.oauth.error('Error closing OAuth callback server', {
             error: error.message
           });
           reject(error);
         } else {
-          logger.core.info('OAuth callback server stopped');
+          logger.oauth.info('OAuth callback server stopped');
           this.server = null;
           this.port = 0;
           resolve();
@@ -104,9 +104,11 @@ export class OAuthCallbackServer {
   private handleRequest(req: IncomingMessage, res: ServerResponse): void {
     const url = new URL(req.url || '', `http://localhost:${this.port}`);
 
-    logger.core.info('OAuth callback received', {
+    logger.oauth.info('OAuth callback received', {
       path: url.pathname,
-      query: Object.fromEntries(url.searchParams.entries())
+      hasCode: url.searchParams.has('code'),
+      hasState: url.searchParams.has('state'),
+      hasError: url.searchParams.has('error')
     });
 
     // Handle callback endpoint (accept both /callback and / as valid paths)
@@ -116,7 +118,7 @@ export class OAuthCallbackServer {
       const errorDescription = url.searchParams.get('error_description');
 
       if (error) {
-        logger.core.error('OAuth authorization error', {
+        logger.oauth.error('OAuth authorization error', {
           error,
           errorDescription
         });
@@ -176,7 +178,7 @@ export class OAuthCallbackServer {
       }
 
       if (!code) {
-        logger.core.warn('OAuth callback missing code parameter');
+        logger.oauth.warn('OAuth callback missing code parameter');
 
         res.writeHead(400, { 'Content-Type': 'text/html' });
         res.end(`
@@ -219,7 +221,7 @@ export class OAuthCallbackServer {
       }
 
       // Success! Send code to renderer
-      logger.core.info('OAuth authorization successful', {
+      logger.oauth.info('OAuth authorization successful', {
         codeLength: code.length
       });
 

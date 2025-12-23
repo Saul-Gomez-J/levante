@@ -178,14 +178,14 @@ export class OAuthDiscoveryService {
         authServerUrl: string
     ): Promise<AuthorizationServerMetadata> {
         try {
-            this.logger.core.info('Fetching authorization server metadata', {
+            this.logger.oauth.info('Fetching authorization server metadata', {
                 authServerUrl,
             });
 
             // Check cache first
             const cached = this.getFromCache(this.metadataCache, authServerUrl);
             if (cached) {
-                this.logger.core.debug('Using cached authorization server metadata', {
+                this.logger.oauth.debug('Using cached authorization server metadata', {
                     authServerUrl,
                 });
                 return cached;
@@ -197,7 +197,7 @@ export class OAuthDiscoveryService {
                 this.AUTH_SERVER_PATH
             );
 
-            this.logger.core.debug('Fetching metadata from URL', {
+            this.logger.oauth.debug('Fetching metadata from URL', {
                 metadataUrl,
             });
 
@@ -229,7 +229,7 @@ export class OAuthDiscoveryService {
             // Cache metadata
             this.saveToCache(this.metadataCache, authServerUrl, metadata);
 
-            this.logger.core.info('Authorization server metadata fetched', {
+            this.logger.oauth.info('Authorization server metadata fetched', {
                 authServerUrl,
                 authorizationEndpoint: metadata.authorization_endpoint,
                 tokenEndpoint: metadata.token_endpoint,
@@ -242,7 +242,7 @@ export class OAuthDiscoveryService {
                 throw error;
             }
 
-            this.logger.core.error('Failed to fetch authorization server metadata', {
+            this.logger.oauth.error('Failed to fetch authorization server metadata', {
                 authServerUrl,
                 error: error instanceof Error ? error.message : error,
             });
@@ -262,7 +262,7 @@ export class OAuthDiscoveryService {
     parseWWWAuthenticate(header: string): WWWAuthenticateParams {
         try {
             // DEBUG: Log raw header
-            this.logger.core.debug('🔍 Parsing WWW-Authenticate header (RAW)', {
+            this.logger.oauth.debug('🔍 Parsing WWW-Authenticate header (RAW)', {
                 headerLength: header.length,
                 rawHeader: header
             });
@@ -273,7 +273,7 @@ export class OAuthDiscoveryService {
             const schemeMatch = header.match(/^(\w+)\s+/);
             if (schemeMatch) {
                 result.scheme = schemeMatch[1];
-                this.logger.core.debug('Scheme extracted', { scheme: result.scheme });
+                this.logger.oauth.debug('Scheme extracted', { scheme: result.scheme });
             }
 
             // Extraer parámetros
@@ -312,12 +312,12 @@ export class OAuthDiscoveryService {
             }
 
             // DEBUG: Log all extracted params
-            this.logger.core.debug('🔍 All parameters extracted from WWW-Authenticate', {
+            this.logger.oauth.debug('🔍 All parameters extracted from WWW-Authenticate', {
                 extractedParams,
                 paramCount: Object.keys(extractedParams).length
             });
 
-            this.logger.core.debug('WWW-Authenticate header parsed (FINAL RESULT)', {
+            this.logger.oauth.debug('WWW-Authenticate header parsed (FINAL RESULT)', {
                 scheme: result.scheme,
                 realm: result.realm,
                 as_uri: result.as_uri,
@@ -329,7 +329,7 @@ export class OAuthDiscoveryService {
 
             return result;
         } catch (error) {
-            this.logger.core.error('Failed to parse WWW-Authenticate header', {
+            this.logger.oauth.error('Failed to parse WWW-Authenticate header', {
                 error: error instanceof Error ? error.message : error,
             });
 
@@ -505,7 +505,7 @@ export class OAuthDiscoveryService {
         }
 
         if (cleanedCount > 0) {
-            this.logger.core.debug('Expired metadata cache cleaned', {
+            this.logger.oauth.debug('Expired metadata cache cleaned', {
                 count: cleanedCount,
             });
         }
@@ -523,7 +523,7 @@ export class OAuthDiscoveryService {
         this.metadataCache.clear();
         this.resourceCache.clear();
 
-        this.logger.core.debug('All metadata cache cleared', {
+        this.logger.oauth.debug('All metadata cache cleared', {
             count: totalCount,
         });
     }
@@ -685,7 +685,7 @@ export class OAuthDiscoveryService {
         const asUrl = new URL(authServerUrl);
 
         if (issuerUrl.origin !== asUrl.origin) {
-            this.logger.core.warn('Issuer origin does not match auth server origin', {
+            this.logger.oauth.warn('Issuer origin does not match auth server origin', {
                 issuer: metadata.issuer,
                 authServerUrl,
             });
@@ -724,7 +724,7 @@ export class OAuthDiscoveryService {
             this.validateEndpointUrl(endpoint);
         }
 
-        this.logger.core.debug('Authorization server metadata validated', {
+        this.logger.oauth.debug('Authorization server metadata validated', {
             issuer: metadata.issuer,
             supportsPKCE: true,
             hasRegistrationEndpoint: !!metadata.registration_endpoint,
@@ -746,7 +746,7 @@ export class OAuthDiscoveryService {
                 parsed.hostname === '[::1]';
 
             if (!isLocalhost) {
-                this.logger.core.warn('Endpoint using HTTP instead of HTTPS', {
+                this.logger.oauth.warn('Endpoint using HTTP instead of HTTPS', {
                     url,
                     hostname: parsed.hostname,
                 });

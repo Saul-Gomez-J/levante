@@ -243,6 +243,7 @@ Environment variables loaded from:
 - `DEBUG_IPC` → Inter-process communication
 - `DEBUG_PREFERENCES` → Settings and configuration
 - `DEBUG_CORE` → Application lifecycle and errors
+- `DEBUG_OAUTH` → OAuth flow, authorization, and tokens
 - `LOG_LEVEL` → Minimum log level (debug|info|warn|error)
 
 ## Testing Strategy

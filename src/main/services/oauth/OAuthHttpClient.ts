@@ -41,7 +41,7 @@ export class OAuthHttpClient {
      * @throws OAuthHttpClientError if no tokens or refresh fails
      */
     async ensureValidToken(serverId: string): Promise<OAuthTokens> {
-        logger.core.debug('Ensuring valid token', { serverId });
+        logger.oauth.debug('Ensuring valid token', { serverId });
 
         // 1. Get current tokens
         let tokens = await this.tokenStore.getTokens(serverId);
@@ -56,7 +56,7 @@ export class OAuthHttpClient {
 
         // 2. Check expiration
         if (this.tokenStore.isTokenExpired(tokens)) {
-            logger.core.info('Access token expired, refreshing', { serverId });
+            logger.oauth.info('Access token expired, refreshing', { serverId });
             tokens = await this.refreshToken(serverId, tokens);
         }
 
@@ -84,7 +84,7 @@ export class OAuthHttpClient {
         serverId: string,
         response: Response
     ): Promise<boolean> {
-        logger.core.warn('Received 401 Unauthorized', {
+        logger.oauth.warn('Received 401 Unauthorized', {
             serverId,
             status: response.status,
         });
@@ -93,7 +93,7 @@ export class OAuthHttpClient {
         const wwwAuth = response.headers.get('WWW-Authenticate');
         if (wwwAuth) {
             const parsed = this.discoveryService.parseWWWAuthenticate(wwwAuth);
-            logger.core.debug('WWW-Authenticate header', {
+            logger.oauth.debug('WWW-Authenticate header', {
                 serverId,
                 parsed,
             });
@@ -104,20 +104,20 @@ export class OAuthHttpClient {
             const tokens = await this.tokenStore.getTokens(serverId);
 
             if (!tokens?.refreshToken) {
-                logger.core.error('No refresh token available', { serverId });
+                logger.oauth.error('No refresh token available', { serverId });
                 return false;
             }
 
             // Attempt refresh
             await this.refreshToken(serverId, tokens);
 
-            logger.core.info('Token refreshed after 401, retry possible', {
+            logger.oauth.info('Token refreshed after 401, retry possible', {
                 serverId,
             });
 
             return true; // Retry the request
         } catch (error) {
-            logger.core.error('Failed to handle 401', {
+            logger.oauth.error('Failed to handle 401', {
                 serverId,
                 error: error instanceof Error ? error.message : error,
             });
@@ -161,7 +161,7 @@ export class OAuthHttpClient {
                 oauthConfig.authServerId
             );
 
-            logger.core.debug('Refreshing token', {
+            logger.oauth.debug('Refreshing token', {
                 serverId,
                 tokenEndpoint: metadata.token_endpoint,
             });
@@ -177,14 +177,14 @@ export class OAuthHttpClient {
             // 4. Save new tokens
             await this.tokenStore.saveTokens(serverId, newTokens);
 
-            logger.core.info('Successfully refreshed access token', {
+            logger.oauth.info('Successfully refreshed access token', {
                 serverId,
                 expiresAt: new Date(newTokens.expiresAt).toISOString(),
             });
 
             return newTokens;
         } catch (error) {
-            logger.core.error('Failed to refresh token', {
+            logger.oauth.error('Failed to refresh token', {
                 serverId,
                 error: error instanceof Error ? error.message : error,
             });

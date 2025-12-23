@@ -72,21 +72,34 @@ export class OAuthService {
         const {
             serverId,
             mcpServerUrl,
-            scopes = ['mcp:read', 'mcp:write'],
+            scopes,
             clientId: providedClientId,
             wwwAuthHeader,
         } = params;
 
-        logger.core.info('Starting OAuth authorization flow', {
+        logger.oauth.info('Starting OAuth authorization flow', {
             serverId,
             mcpServerUrl,
             hasProvidedClientId: !!providedClientId,
         });
 
         try {
+            // Resolve effective scopes: prefer parsed header -> provided -> defaults
+            let effectiveScopes = scopes;
+            if ((!effectiveScopes || effectiveScopes.length === 0) && wwwAuthHeader) {
+                const parsedHeader = this.discoveryService.parseWWWAuthenticate(wwwAuthHeader);
+                if (parsedHeader.scope) {
+                    effectiveScopes = parsedHeader.scope.split(/\s+/).filter(Boolean);
+                }
+            }
+            if (!effectiveScopes || effectiveScopes.length === 0) {
+                effectiveScopes = ['mcp:read', 'mcp:write'];
+            }
+
             // Step 1: Discovery of Authorization Server
-            logger.core.debug('Step 1: Discovering authorization server', {
+            logger.oauth.debug('Step 1: Discovering authorization server', {
                 serverId,
+                scopes: effectiveScopes,
             });
 
             const { authorizationServer: authServerId, metadata } =
@@ -95,20 +108,20 @@ export class OAuthService {
                     wwwAuthHeader
                 );
 
-            logger.core.info('Authorization server discovered', {
+            logger.oauth.info('Authorization server discovered', {
                 serverId,
                 authServerId,
                 hasRegistration: !!metadata.registration_endpoint,
             });
 
             // Step 2: Pre-allocate redirect server port (for DCR consistency)
-            logger.core.info('Step 2: Pre-allocating redirect server port');
+            logger.oauth.info('Step 2: Pre-allocating redirect server port');
 
             // Start redirect server to get the port we'll use
             const redirectServer = this.flowManager['redirectServer'];
             const { redirectUri } = await redirectServer.start();
 
-            logger.core.debug('Redirect server started', {
+            logger.oauth.debug('Redirect server started', {
                 redirectUri,
             });
 
@@ -117,13 +130,13 @@ export class OAuthService {
             let clientSecret: string | undefined;
 
             if (!clientId) {
-                logger.core.info(
-                    'Step 3: No client_id provided, checking for Dynamic Client Registration'
+                logger.oauth.info(
+                    'Step 3: No client_id provided, attempting Dynamic Client Registration'
                 );
 
                 // Check if AS supports Dynamic Client Registration
                 if (this.discoveryService.supportsClientRegistration(metadata)) {
-                    logger.core.info(
+                    logger.oauth.info(
                         'Dynamic Client Registration supported, attempting registration'
                     );
 
@@ -141,7 +154,7 @@ export class OAuthService {
                         // Save credentials to preferences (encrypted)
                         await this.saveClientCredentials(serverId, credentials);
 
-                        logger.core.info('Dynamic Client Registration successful', {
+                        logger.oauth.info('Dynamic Client Registration successful', {
                             clientId: this.sanitizeForLog(clientId),
                             hasClientSecret: !!clientSecret,
                         });
@@ -150,7 +163,7 @@ export class OAuthService {
                         await redirectServer.stop();
 
                         // Dynamic Registration failed
-                        logger.core.error('Dynamic Client Registration failed', {
+                        logger.oauth.error('Dynamic Client Registration failed', {
                             error:
                                 registrationError instanceof Error
                                     ? registrationError.message
@@ -171,7 +184,7 @@ export class OAuthService {
                     await redirectServer.stop();
 
                     // No Dynamic Registration available
-                    logger.core.warn(
+                    logger.oauth.warn(
                         'Dynamic Client Registration not supported by Authorization Server'
                     );
 
@@ -181,13 +194,13 @@ export class OAuthService {
                     };
                 }
             } else {
-                logger.core.info('Step 3: Using provided client_id', {
+                logger.oauth.info('Step 3: Using provided client_id', {
                     clientId: this.sanitizeForLog(clientId),
                 });
             }
 
             // Step 4: Authorization flow (PKCE) - reuse existing redirect server
-            logger.core.debug('Step 4: Starting authorization flow', {
+            logger.oauth.debug('Step 4: Starting authorization flow', {
                 serverId,
             });
 
@@ -195,7 +208,7 @@ export class OAuthService {
                 serverId,
                 authorizationEndpoint: metadata.authorization_endpoint,
                 clientId,
-                scopes: scopes || metadata.scopes_supported || ['mcp:read', 'mcp:write'],
+                scopes: effectiveScopes || metadata.scopes_supported || ['mcp:read', 'mcp:write'],
                 resource: mcpServerUrl,
                 existingRedirectUri: redirectUri, // Reuse the same redirect URI
             });
@@ -203,12 +216,12 @@ export class OAuthService {
             // Cleanup redirect server now that we have the auth code
             await redirectServer.stop();
 
-            logger.core.info('Authorization code received', {
+            logger.oauth.info('Authorization code received', {
                 serverId,
             });
 
             // Step 5: Token exchange
-            logger.core.debug('Step 5: Exchanging code for tokens', {
+            logger.oauth.debug('Step 5: Exchanging code for tokens', {
                 serverId,
             });
 
@@ -221,13 +234,13 @@ export class OAuthService {
                 clientSecret, // Include if we have it from Dynamic Registration
             });
 
-            logger.core.info('Tokens received', {
+            logger.oauth.info('Tokens received', {
                 serverId,
                 expiresAt: new Date(tokens.expiresAt).toISOString(),
             });
 
             // Step 6: Save tokens and configuration
-            logger.core.debug('Step 6: Saving tokens and config', {
+            logger.oauth.debug('Step 6: Saving tokens and config', {
                 serverId,
             });
 
@@ -239,11 +252,11 @@ export class OAuthService {
                 authServerId,
                 clientId,
                 clientSecret,
-                scopes: tokens.scope?.split(' ') || scopes,
+                scopes: tokens.scope?.split(' ') || effectiveScopes,
                 redirectUri: authResult.redirectUri,
             });
 
-            logger.core.info('OAuth authorization flow completed successfully', {
+            logger.oauth.info('OAuth authorization flow completed successfully', {
                 serverId,
             });
 
@@ -253,7 +266,7 @@ export class OAuthService {
                 metadata,
             };
         } catch (error) {
-            logger.core.error('OAuth authorization flow failed', {
+            logger.oauth.error('OAuth authorization flow failed', {
                 serverId,
                 error: error instanceof Error ? error.message : error,
             });
@@ -279,13 +292,13 @@ export class OAuthService {
 
             // Si está expirado pero tiene refresh token, intentar refrescar
             if (this.tokenStore.isTokenExpired(tokens) && tokens.refreshToken) {
-                logger.core.debug('Token expired, attempting refresh', { serverId });
+                logger.oauth.debug('Token expired, attempting refresh', { serverId });
                 return await this.httpClient.refreshToken(serverId);
             }
 
             return tokens;
         } catch (error) {
-            logger.core.debug('No existing token available', {
+            logger.oauth.debug('No existing token available', {
                 serverId,
                 error: error instanceof Error ? error.message : error
             });
@@ -329,7 +342,7 @@ export class OAuthService {
     async disconnect(params: DisconnectParams): Promise<void> {
         const { serverId, revokeTokens = true } = params; // Default: true
 
-        logger.core.info('Disconnecting OAuth server', {
+        logger.oauth.info('Disconnecting OAuth server', {
             serverId,
             revokeTokens,
         });
@@ -337,7 +350,7 @@ export class OAuthService {
         try {
             // Fase 6: Token revocation
             if (revokeTokens) {
-                logger.core.info('Attempting token revocation', { serverId });
+                logger.oauth.info('Attempting token revocation', { serverId });
 
                 // Get tokens
                 const tokens = await this.tokenStore.getTokens(serverId);
@@ -366,7 +379,7 @@ export class OAuthService {
                                     clientSecret: config.clientSecret,
                                 });
 
-                                logger.core.info('Refresh token revoked', { serverId });
+                                logger.oauth.info('Refresh token revoked', { serverId });
                             }
 
                             // Revocar access token
@@ -378,9 +391,9 @@ export class OAuthService {
                                 clientSecret: config.clientSecret,
                             });
 
-                            logger.core.info('Access token revoked', { serverId });
+                            logger.oauth.info('Access token revoked', { serverId });
                         } else {
-                            logger.core.warn(
+                            logger.oauth.warn(
                                 'Authorization server does not support token revocation',
                                 {
                                     serverId,
@@ -390,7 +403,7 @@ export class OAuthService {
                         }
                     } catch (revocationError) {
                         // Log error but continue with disconnect
-                        logger.core.error(
+                        logger.oauth.error(
                             'Token revocation failed, continuing with disconnect',
                             {
                                 serverId,
@@ -410,9 +423,9 @@ export class OAuthService {
             // Remove OAuth config
             await this.preferencesService.set(`mcpServers.${serverId}.oauth`, undefined);
 
-            logger.core.info('Server disconnected successfully', { serverId });
+            logger.oauth.info('Server disconnected successfully', { serverId });
         } catch (error) {
-            logger.core.error('Error during disconnect', {
+            logger.oauth.error('Error during disconnect', {
                 serverId,
                 error: error instanceof Error ? error.message : error,
             });
@@ -499,7 +512,7 @@ export class OAuthService {
             toSave
         );
 
-        logger.core.info('Client credentials saved', {
+        logger.oauth.info('Client credentials saved', {
             serverId,
             clientId: this.sanitizeForLog(credentials.clientId),
         });
