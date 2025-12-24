@@ -134,7 +134,7 @@ export class OAuthHttpClient {
         oldTokens?: OAuthTokens
     ): Promise<OAuthTokens> {
         if (!oldTokens) {
-            oldTokens = await this.tokenStore.getTokens(serverId);
+            oldTokens = (await this.tokenStore.getTokens(serverId)) || undefined;
             if (!oldTokens) {
                 throw this.createError(
                     'NO_TOKENS',

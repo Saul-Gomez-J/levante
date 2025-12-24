@@ -102,6 +102,7 @@ describe('Dynamic Client Registration Integration', () => {
         vi.spyOn(OAuthFlowManager.prototype, 'authorize').mockResolvedValue({
             code: 'test-auth-code',
             verifier: 'test-verifier',
+            redirectUri: 'http://localhost:3000/callback',
         });
 
         // Mock OAuthTokenStore.saveTokens
