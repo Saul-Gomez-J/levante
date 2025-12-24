@@ -166,7 +166,9 @@
       "tmp": "^0.2.3",
       "jsondiffpatch": "^0.7.3",
       "esbuild": "^0.25.0",
-      "@modelcontextprotocol/sdk": "^1.24.3"
+      "@modelcontextprotocol/sdk": "^1.24.3",
+      "@langchain/core": "^1.1.8",
+      "langchain": "^1.2.3"
     },
     "patchedDependencies": {
       "@ai-sdk/google@3.0.1": "patches/@ai-sdk__google@3.0.1.patch"
