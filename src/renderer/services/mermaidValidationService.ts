@@ -8,7 +8,8 @@ interface ValidationRequest {
 
 async function validateMermaidCode(code: string): Promise<{ isValid: boolean; diagramType?: string; error?: string; suggestion?: string }> {
     try {
-        const diagramType = await mermaid.parse(code);
+        const parseResult = await mermaid.parse(code);
+        const diagramType = parseResult?.diagramType || 'unknown';
         return { isValid: true, diagramType };
     } catch (error) {
         return {

@@ -199,7 +199,7 @@ export interface LevanteAPI {
     success: boolean;
     response: string;
     sources?: any[];
-    reasoning?: string;
+    reasoningText?: string;
   }>;
   streamChat: (
     request: ChatRequest,

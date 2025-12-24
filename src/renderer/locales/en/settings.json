@@ -6,6 +6,7 @@
     "security": "Security",
     "privacy": "Privacy & Analytics",
     "ai_configuration": "AI Configuration",
+    "reasoning_configuration": "Reasoning Configuration",
     "mcp_configuration": "MCP Configuration"
   },
   "privacy": {
@@ -157,6 +158,56 @@
     "used_by": "Used by",
     "servers_count": "server",
     "servers_count_plural": "servers"
+  },
+  "reasoning_config": {
+    "mode": {
+      "label": "Reasoning Mode",
+      "options": {
+        "adaptive": "Adaptive (Recommended)",
+        "always": "Always Enabled",
+        "prompt_based": "Prompt-based Only",
+        "disabled": "Disabled"
+      },
+      "descriptions": {
+        "adaptive": "Let the model decide when to use reasoning based on task complexity. Works with prompts like 'think step by step'.",
+        "always": "Always request reasoning output from models that support it. Configure effort level below.",
+        "prompt-based": "Only trigger reasoning through prompts. No API parameters sent.",
+        "disabled": "Never use reasoning features. Saves tokens for simple tasks."
+      }
+    },
+    "effort": {
+      "label": "Reasoning Effort",
+      "description": "How much reasoning budget to allocate. Higher effort = more thorough reasoning but slower and more expensive.",
+      "options": {
+        "minimal": "Minimal (~10% of tokens)",
+        "low": "Low (~20% of tokens)",
+        "medium": "Medium (~50% of tokens)",
+        "high": "High (~80% of tokens)",
+        "xhigh": "Extra High (~95% of tokens)"
+      }
+    },
+    "max_tokens": {
+      "label": "Max Reasoning Tokens",
+      "placeholder": "Uses effort level if not set",
+      "description": "Override effort with specific token count (1024-32000). Setting this clears the effort level."
+    },
+    "exclude": {
+      "label": "Hide Reasoning",
+      "description": "Model uses reasoning internally but doesn't include it in the response. Useful for cleaner output."
+    },
+    "advanced_options": "Advanced Options",
+    "save_button": "Save Configuration",
+    "saving": "Saving...",
+    "saved": "Saved successfully",
+    "info_box": {
+      "title": "About Reasoning Models",
+      "points": {
+        "adaptive": "Adaptive mode is recommended - models like GPT-5 automatically reason when needed",
+        "prompt_triggers": "Use 'think step by step' or 'analyze carefully' to trigger reasoning",
+        "openrouter_unified": "OpenRouter normalizes reasoning across all providers automatically",
+        "direct_providers": "Direct provider APIs (OpenAI, Google, Anthropic) use their native reasoning params"
+      }
+    }
   },
   "mcp_config": {
     "sdk": {

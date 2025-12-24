@@ -5,9 +5,18 @@ import {
   UIMessage,
   FileUIPart,
   stepCountIs,
+  wrapLanguageModel,
+  extractReasoningMiddleware,
 } from "ai";
 import { getLogger } from "./logging";
 import { getModelProvider } from "./ai/providerResolver";
+import {
+  getReasoningConfig,
+  buildProviderOptions,
+  shouldUseReasoningMiddleware as shouldUseReasoningMiddlewareFromResolver,
+} from "./ai/reasoningResolver";
+import type { ProviderConfig } from "../../types/models";
+import type { ReasoningConfig } from "../../types/reasoning";
 import { getMCPTools } from "./ai/mcpToolsAdapter";
 import { buildSystemPrompt } from "./ai/systemPromptBuilder";
 import { isToolUseNotSupportedError } from "./ai/toolErrorDetector";
@@ -34,7 +43,8 @@ export interface ChatStreamChunk {
   done?: boolean;
   error?: string;
   sources?: Array<{ url: string; title?: string }>;
-  reasoning?: string;
+  reasoningText?: string;
+  reasoningId?: string; // Stable ID for reasoning block reconciliation
   toolCall?: {
     id: string;
     name: string;
@@ -72,8 +82,11 @@ type AttachmentAwareUIMessage = UIMessage & {
  * Handles known Vercel AI SDK issues:
  * - Issue #8431: Deep clone to avoid object reference issues
  * - Issue #8061: Remove providerExecuted when null
- * - Issue #9731: Remove providerMetadata to avoid providerOptions conversion
+ * - Issue #9731: Remove providerMetadata (except Google's thoughtSignature)
  * - Remove uiResources from tool results (MCP-UI specific)
+ *
+ * IMPORTANT: Google's thoughtSignature MUST be preserved for Gemini 3 tool calling.
+ * Without it, multi-turn tool calls fail with "function call is missing a thought_signature".
  */
 function sanitizeMessagesForModel(messages: UIMessage[]): UIMessage[] {
   // Deep clone to avoid reference issues (GitHub Issue #8431)
@@ -94,11 +107,24 @@ function sanitizeMessagesForModel(messages: UIMessage[]): UIMessage[] {
         part = partWithoutProvider;
       }
 
-      // Remove providerMetadata to prevent incorrect conversion (GitHub Issue #9731)
-      // The SDK incorrectly converts providerMetadata to providerOptions
-      if ('providerMetadata' in part) {
-        const { providerMetadata, ...partWithoutMetadata } = part;
-        part = partWithoutMetadata;
+      // Handle providerMetadata carefully (GitHub Issue #9731)
+      // IMPORTANT: Google's thoughtSignature MUST be preserved for Gemini 3 tool calling
+      // Without thoughtSignature, Gemini 3 fails with "function call is missing a thought_signature"
+      if ('providerMetadata' in part && part.providerMetadata) {
+        const metadata = part.providerMetadata as Record<string, unknown>;
+        // Check if this is Google metadata with thoughtSignature - preserve it
+        const googleMeta = metadata.google as Record<string, unknown> | undefined;
+        const vertexMeta = metadata.vertex as Record<string, unknown> | undefined;
+        const hasThoughtSignature = googleMeta?.thoughtSignature || vertexMeta?.thoughtSignature;
+
+        if (hasThoughtSignature) {
+          // Keep providerMetadata intact for Gemini 3 thought_signatures
+          // The SDK needs this to maintain conversation context for multi-turn tool calls
+        } else {
+          // For other providers, remove providerMetadata to avoid conversion issues
+          const { providerMetadata, ...partWithoutMetadata } = part;
+          part = partWithoutMetadata;
+        }
       }
 
       // Sanitize tool invocation outputs that contain uiResources (MCP-UI)
@@ -110,9 +136,8 @@ function sanitizeMessagesForModel(messages: UIMessage[]): UIMessage[] {
       // Note: Tool parts can have type 'tool-invocation' or 'tool-{toolName}' depending on source
       const isToolWithOutput = (
         // AI SDK format: tool-invocation with output-available state
-        (part?.type === 'tool-invocation' && part?.state === 'output-available') ||
-        // Stored format: tool-{name} with output-available state
-        (part?.type?.startsWith('tool-') && part?.type !== 'tool-invocation' && part?.state === 'output-available')
+        (// Stored format: tool-{name} with output-available state
+        ((part?.type === 'tool-invocation' && part?.state === 'output-available') || (part?.type?.startsWith('tool-') && part?.type !== 'tool-invocation' && part?.state === 'output-available')))
       );
       if (isToolWithOutput && part.output) {
         const output = part.output;
@@ -168,6 +193,108 @@ function sanitizeMessagesForModel(messages: UIMessage[]): UIMessage[] {
       parts: sanitizedParts,
     };
   }) as UIMessage[];
+}
+
+/**
+ * Check if model should use reasoning middleware for <think> tag extraction.
+ * DeepSeek R1 models use <think></think> tags to wrap reasoning content.
+ * Delegates to reasoningResolver for centralized model pattern management.
+ *
+ * @param modelId - The model identifier (e.g., "deepseek-r1", "deepseek-reasoner")
+ * @returns true if middleware should be applied
+ */
+function shouldUseReasoningMiddleware(modelId: string): boolean {
+  return shouldUseReasoningMiddlewareFromResolver(modelId);
+}
+
+/**
+ * Wrap model with extractReasoningMiddleware to extract reasoning from tags.
+ *
+ * Configuration:
+ * - tagName: 'think' - DeepSeek R1 uses <think> tags
+ * - startWithReasoning: true - For third-party providers like Together AI
+ *
+ * @param model - The language model to wrap
+ * @param modelId - Model ID for logging
+ * @returns Wrapped model with middleware
+ */
+function wrapModelForReasoning(model: any, modelId: string) {
+  return wrapLanguageModel({
+    model,
+    middleware: extractReasoningMiddleware({
+      tagName: 'think',
+      startWithReasoning: true,
+    }),
+  });
+}
+
+/**
+ * Get provider-specific options for reasoning models.
+ * Uses the centralized reasoningResolver for multi-provider support.
+ *
+ * Priority for configuration:
+ * 1. Provider-specific settings (provider.settings.reasoning)
+ * 2. Global AI preferences (aiConfig.reasoning)
+ * 3. Default (adaptive mode)
+ *
+ * @param modelId - The model identifier
+ * @param provider - The provider configuration (optional, for provider-specific settings)
+ * @param hasTools - Whether the request has tools (affects some model thinking behavior)
+ * @returns Provider options object or undefined
+ */
+async function getReasoningProviderOptions(
+  modelId: string,
+  provider?: ProviderConfig,
+  hasTools: boolean = false
+): Promise<any> {
+  const logger = getLogger();
+
+  try {
+    // Get global reasoning config from AI preferences
+    const { preferencesService } = await import("./preferencesService");
+    const aiConfig = preferencesService.get('ai') as { reasoningText?: ReasoningConfig } | undefined;
+    const globalReasoningConfig = aiConfig?.reasoningText;
+
+    // If no provider passed, try to find it
+    let resolvedProvider = provider;
+    if (!resolvedProvider) {
+      const providers = (preferencesService.get("providers") as ProviderConfig[]) || [];
+      resolvedProvider = providers.find((p) => {
+        if (p.modelSource === "dynamic") {
+          return p.selectedModelIds?.includes(modelId);
+        } else {
+          return p.models.some(
+            (model) => model.id === modelId && model.isSelected !== false
+          );
+        }
+      });
+    }
+
+    // Get reasoning config with priority resolution
+    const reasoningConfig = resolvedProvider
+      ? getReasoningConfig(modelId, resolvedProvider, globalReasoningConfig)
+      : globalReasoningConfig;
+
+    if (!reasoningConfig || reasoningConfig.mode === 'disabled') {
+      logger.aiSdk.debug('Reasoning disabled or no config', { modelId });
+      return undefined;
+    }
+
+    // Build provider-specific options
+    const providerType = resolvedProvider?.type;
+    if (!providerType) {
+      logger.aiSdk.debug('No provider type found, cannot build reasoning options', { modelId });
+      return undefined;
+    }
+
+    return buildProviderOptions(reasoningConfig, providerType, modelId, hasTools);
+  } catch (error) {
+    logger.aiSdk.error('Error getting reasoning provider options', {
+      error: error instanceof Error ? error.message : error,
+      modelId,
+    });
+    return undefined;
+  }
 }
 
 export class AIService {
@@ -699,6 +826,7 @@ export class AIService {
     try {
       const { preferencesService } = await import("./preferencesService");
       const aiPrefs = preferencesService.get('ai') as any;
+
       return {
         mermaidValidation: aiPrefs?.mermaidValidation !== false, // Enabled by default
         mcpDiscovery: aiPrefs?.mcpDiscovery !== false // Enabled by default
@@ -792,7 +920,16 @@ export class AIService {
       }
 
       // Get the appropriate model provider
-      const modelProvider = await getModelProvider(model);
+      let modelProvider = await getModelProvider(model);
+
+      // Wrap model with reasoning middleware if needed (DeepSeek R1, etc.)
+      if (shouldUseReasoningMiddleware(model)) {
+        this.logger.aiSdk.info("Applying reasoning middleware for model", {
+          modelId: model,
+          middleware: 'extractReasoningMiddleware',
+        });
+        modelProvider = wrapModelForReasoning(modelProvider, model);
+      }
 
       // Get MCP tools if enabled
       // Get MCP tools if enabled
@@ -888,7 +1025,7 @@ export class AIService {
 
       const result = streamText({
         model: modelProvider,
-        messages: convertToModelMessages(sanitizeMessagesForModel(messagesWithFileParts)),
+        messages: await convertToModelMessages(sanitizeMessagesForModel(messagesWithFileParts)),
         tools,
         system: await buildSystemPrompt(
           webSearch,
@@ -900,6 +1037,18 @@ export class AIService {
         // Use stopWhen as recommended in AI SDK v5 (not maxSteps)
         // This allows the model to continue generating after tool results
         stopWhen: stepCountIs(await calculateMaxSteps(Object.keys(tools).length)),
+
+        // Provider-specific options for reasoning models (GPT-5, Gemini 2.0, etc.)
+        providerOptions: await (async () => {
+          const hasTools = Object.keys(tools).length > 0;
+          const options = await getReasoningProviderOptions(model, undefined, hasTools);
+          this.logger.aiSdk.info("🔧 Applying provider options for reasoning", {
+            modelId: model,
+            hasTools,
+            providerOptions: options,
+          });
+          return options;
+        })(),
 
         // Callback for each chunk - measure TTFB
         onChunk: ({ chunk }) => {
@@ -915,7 +1064,9 @@ export class AIService {
         },
 
         // Callback when stream finishes - log final metrics
-        onFinish: ({ usage, finishReason }) => {
+        onFinish: (finishData: any) => {
+          const { usage, finishReason } = finishData;
+
           const totalTime = Date.now() - streamStartTime;
           const ttfb = firstChunkTime ? firstChunkTime - streamStartTime : null;
 
@@ -936,28 +1087,91 @@ export class AIService {
         },
       });
 
+      // Track accumulated reasoning text per block ID
+      const reasoningBlocks = new Map<string, string>();
+
       // Use full stream to handle tool calls
       for await (const chunk of result.fullStream) {
-        //Log all chunks
-        // if (chunk.type !== "text-delta") {
-        //   this.logger.aiSdk.debug("AI Stream chunk received", {
-        //     type: chunk.type,
-        //     chunk
-        //   });
-        // }
+        // Log ALL chunks for debugging (except frequent text-delta)
+        if (chunk.type !== "text-delta" && chunk.type !== "reasoning-delta") {
+          this.logger.aiSdk.debug("🔄 Stream chunk", {
+            type: chunk.type,
+            chunkKeys: Object.keys(chunk),
+          });
+        }
 
         // Log the actual model used when we receive finish-step
         if (chunk.type === "finish-step" && chunk.response) {
           this.logger.aiSdk.info("Model used in AI request", {
             requestedModelId: model,
             actualModelId: chunk.response.modelId,
-            providerMetadata: chunk.response.headers,
+            providerOptions: chunk.response.headers,
           });
         }
 
         switch (chunk.type) {
           case "text-delta":
+            // Log text chunks to detect if tool results are being echoed as text
+            const textContent = chunk.text;
+            const looksLikeJSON = textContent.trim().startsWith('{') || textContent.trim().startsWith('[');
+            if (looksLikeJSON) {
+              this.logger.aiSdk.debug("📝 Text-delta looks like JSON", {
+                preview: textContent.substring(0, 200),
+                length: textContent.length,
+              });
+            }
+
             yield { delta: chunk.text };
+            break;
+
+          case "reasoning-start":
+            const startId = (chunk as any).id;
+            this.logger.aiSdk.debug("Reasoning started", {
+              id: startId,
+            });
+            // Initialize empty string for this reasoning block
+            reasoningBlocks.set(startId, '');
+            break;
+
+          case "reasoning-delta":
+            // AI SDK uses 'text' field for reasoning chunks
+            const reasoningDelta = (chunk as any).text;
+            const reasoningId = (chunk as any).id;
+
+            this.logger.aiSdk.debug("Reasoning chunk received", {
+              id: reasoningId,
+              deltaLength: reasoningDelta?.length,
+            });
+
+            if (reasoningDelta && reasoningId) {
+              // Accumulate the delta
+              const currentText = reasoningBlocks.get(reasoningId) || '';
+              const accumulatedText = currentText + reasoningDelta;
+              reasoningBlocks.set(reasoningId, accumulatedText);
+
+              this.logger.aiSdk.debug("Yielding accumulated reasoning", {
+                reasoningId,
+                accumulatedLength: accumulatedText.length,
+              });
+
+              // Yield the full accumulated text
+              yield {
+                reasoningText: accumulatedText,
+                reasoningId,
+              };
+            } else {
+              this.logger.aiSdk.warn("⚠️ Reasoning delta or ID is missing");
+            }
+            break;
+
+          case "reasoning-end":
+            const endId = (chunk as any).id;
+            this.logger.aiSdk.debug("Reasoning completed", {
+              id: endId,
+              finalLength: reasoningBlocks.get(endId)?.length,
+            });
+            // Clean up the accumulated text
+            reasoningBlocks.delete(endId);
             break;
 
           case "tool-call":
@@ -1097,6 +1311,40 @@ export class AIService {
             };
             return;
         }
+      }
+
+      // After stream completes, check if reasoning is available in result
+      // Some models (GPT-5) don't stream reasoning incrementally but provide it at the end
+      await result.text; // Wait for completion
+
+      this.logger.aiSdk.info("🔍 Checking result for reasoning", {
+        resultKeys: Object.keys(result),
+        hasReasoningText: !!(result as any).reasoningText,
+        hasReasoning: !!(result as any).reasoningText,
+        reasoningTextType: typeof (result as any).reasoningText,
+        reasoningType: typeof (result as any).reasoningText,
+        reasoningTextValue: (result as any).reasoningText,
+        reasoningValue: (result as any).reasoningText,
+        reasoningTextKeys: (result as any).reasoningText ? Object.keys((result as any).reasoningText) : null,
+        reasoningKeys: (result as any).reasoningText ? Object.keys((result as any).reasoningText) : null,
+      });
+
+      const reasoningText = (result as any).reasoningText || (result as any).reasoningText;
+
+      if (reasoningText) {
+        this.logger.aiSdk.info("📝 Reasoning found in finishData", {
+          reasoningLength: typeof reasoningText === 'string' ? reasoningText.length : JSON.stringify(reasoningText).length,
+          reasoningType: typeof reasoningText,
+          reasoningPreview: typeof reasoningText === 'string' ? reasoningText.substring(0, 100) : null,
+        });
+
+        // Send reasoning as final chunk before done
+        yield {
+          reasoningText: typeof reasoningText === 'string' ? reasoningText : JSON.stringify(reasoningText),
+          reasoningId: 'finish-reasoning',
+        };
+      } else {
+        this.logger.aiSdk.debug("No reasoning found in finishData");
       }
 
       yield { done: true };
@@ -1460,7 +1708,7 @@ export class AIService {
 
   async sendSingleMessage(
     request: ChatRequest
-  ): Promise<{ response: string; sources?: any[]; reasoning?: string }> {
+  ): Promise<{ response: string; sources?: any[]; reasoningText?: string }> {
     const { messages, model, webSearch, enableMCP = false } = request;
 
     try {
@@ -1493,7 +1741,16 @@ export class AIService {
       }
 
       // Get the appropriate model provider
-      const modelProvider = await getModelProvider(model);
+      let modelProvider = await getModelProvider(model);
+
+      // Wrap model with reasoning middleware if needed (DeepSeek R1, etc.)
+      if (shouldUseReasoningMiddleware(model)) {
+        this.logger.aiSdk.info("Applying reasoning middleware for model", {
+          modelId: model,
+          middleware: 'extractReasoningMiddleware',
+        });
+        modelProvider = wrapModelForReasoning(modelProvider, model);
+      }
 
       // Get MCP tools if enabled
       let tools = {};
@@ -1511,7 +1768,7 @@ export class AIService {
 
       const result = await generateText({
         model: modelProvider,
-        messages: convertToModelMessages(sanitizeMessagesForModel(messagesWithFileParts)),
+        messages: await convertToModelMessages(sanitizeMessagesForModel(messagesWithFileParts)),
         tools,
         system: await buildSystemPrompt(
           webSearch,
@@ -1521,12 +1778,13 @@ export class AIService {
           builtInToolsConfig.mcpDiscovery
         ),
         stopWhen: stepCountIs(await calculateMaxSteps(Object.keys(tools).length)),
+        providerOptions: await getReasoningProviderOptions(model, undefined, Object.keys(tools).length > 0),
       });
 
       return {
         response: result.text,
         sources: undefined,
-        reasoning: undefined,
+        reasoningText: undefined,
       };
     } catch (error) {
       // Extract error details for better logging
@@ -1563,7 +1821,7 @@ export class AIService {
           return {
             response: `⚠️ **Tool Use Not Supported**\n\nThe model "${model}" doesn't support tool/function calling, which is required for MCP integration.\n\n**Recommendation:** Choose a different model that supports tools, or disable MCP for this conversation.\n\nHere's the response without tools:\n\n${retryResult.response}`,
             sources: retryResult.sources,
-            reasoning: retryResult.reasoning,
+            reasoningText: retryResult.reasoningText,
           };
         } catch (retryError) {
           this.logger.aiSdk.error("Retry without tools also failed", {

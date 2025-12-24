@@ -1,4 +1,3 @@
-
 import { tool } from "ai";
 import { z } from "zod";
 import { getLogger } from '../logging';
@@ -78,11 +77,12 @@ IMPORTANT: You MUST use this tool to validate ANY Mermaid code block before incl
 Returns: isValid (boolean), diagramType (if valid), and error details (if invalid).
 If validation fails, fix the syntax and validate again before delivering.`,
 
-        parameters: z.object({
-            code: z.string().describe('The Mermaid diagram code to validate (without the ```mermaid wrapper)'),
+        inputSchema: z.object({
+            code: z.string().describe('The Mermaid diagram code to validate (without the ```mermaid wrapper)')
         }),
 
-        execute: async (args: { code: string }) => {
+        execute: async ({ code }) => {
+            const args = { code };
             try {
                 logger.aiSdk.debug('Validating Mermaid code', {
                     codeLength: args.code.length,
@@ -189,13 +189,12 @@ Use this tool when:
 The tool returns matching servers that are NOT already configured, with deep links to configure them.
 Each result includes a configureUrl that users can click to add the MCP server.`,
 
-        parameters: z.object({
+        inputSchema: z.object({
             query: z.string().describe('Search query to find MCP servers (e.g., "github", "database", "file system", "email")'),
             limit: z.number().optional().default(5).describe('Maximum number of results to return (1-10, default: 5)'),
         }),
 
-        execute: async (args: { query: string; limit?: number }): Promise<MCPDiscoveryToolResponse> => {
-            const { query, limit = 5 } = args;
+        execute: async ({ query, limit = 5 }) => {
 
             try {
                 logger.aiSdk.info('MCP discovery search', {

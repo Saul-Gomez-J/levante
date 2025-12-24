@@ -332,6 +332,19 @@ export class DatabaseService {
           // Create index for faster filtering by session type
           `CREATE INDEX IF NOT EXISTS idx_chat_sessions_type ON chat_sessions(session_type)`
         ]
+      },
+      {
+        version: 5,
+        name: 'Add reasoning support',
+        queries: [
+          // Add reasoning column to messages table
+          // Stores JSON object with reasoning content: { text: string, duration?: number }
+          `ALTER TABLE messages ADD COLUMN reasoning TEXT DEFAULT NULL`,
+
+          // Add index for messages with reasoning (for faster queries)
+          `CREATE INDEX IF NOT EXISTS idx_messages_reasoning ON messages(session_id, reasoning)
+           WHERE reasoning IS NOT NULL`
+        ]
       }
     ];
   }

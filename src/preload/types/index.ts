@@ -14,7 +14,8 @@ export interface ChatStreamChunk {
   done?: boolean;
   error?: string;
   sources?: Array<{ url: string; title?: string }>;
-  reasoning?: string;
+  reasoningText?: string;
+  reasoningId?: string; // Stable ID for reasoning block reconciliation
   toolCall?: {
     id: string;
     name: string;

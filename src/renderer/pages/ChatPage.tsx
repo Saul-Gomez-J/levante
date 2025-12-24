@@ -193,11 +193,28 @@ const ChatPage = () => {
 
     // Persist messages after AI finishes
     onFinish: async ({ message }) => {
+      // Detailed logging to debug message parts
+      const partsDetail = message.parts?.map((p: any, i: number) => ({
+        index: i,
+        type: p.type,
+        hasText: !!p.text,
+        textPreview: p.text?.substring(0, 100),
+        hasData: !!p.data,
+        dataKeys: p.data ? Object.keys(p.data) : undefined,
+        state: p.state,
+        toolName: p.toolName,
+      }));
+
       logger.aiSdk.info('AI response finished', {
         sessionId: currentSession?.id,
         messageId: message.id,
         messageRole: message.role,
         partsCount: message.parts?.length,
+      });
+
+      logger.aiSdk.debug('📋 Message parts detail', {
+        messageId: message.id,
+        parts: partsDetail,
       });
 
       // Persist the AI response
@@ -518,7 +535,8 @@ const ChatPage = () => {
           size: number;
           storagePath: string;
         }> = [];
-        let attachmentDataForInference: any[] = [];
+        // AI SDK 6: FileUIPart uses { type: 'file', mediaType, url } format
+        let fileParts: Array<{ type: 'file'; mediaType: string; url: string; filename?: string }> = [];
 
         if (filesToAttach.length > 0) {
           logger.core.info('Processing attachments', {
@@ -532,12 +550,14 @@ const ChatPage = () => {
             const base64 = btoa(
               new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
             );
+            // AI SDK 6 FileUIPart expects url as data URL
             const dataUrl = `data:${file.type};base64,${base64}`;
 
-            attachmentDataForInference.push({
-              type: file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'video',
-              data: dataUrl,
-              mime: file.type,
+            // AI SDK 6 uses { type: 'file', mediaType, url } format
+            fileParts.push({
+              type: 'file',
+              mediaType: file.type,
+              url: dataUrl,
               filename: file.name
             });
           }
@@ -560,11 +580,11 @@ const ChatPage = () => {
         logger.core.info('Sending message with attachments', {
           sessionId: currentSession.id,
           messageText: messageText.substring(0, 50) + '...',
-          attachmentsCount: attachmentDataForInference.length,
-          attachmentsData: attachmentDataForInference.map(a => ({
-            type: a.type,
-            filename: a.filename,
-            dataLength: a.data?.length || 0
+          attachmentsCount: fileParts.length,
+          fileParts: fileParts.map(p => ({
+            type: p.type,
+            mediaType: p.mediaType,
+            urlLength: p.url?.length || 0
           }))
         });
 
@@ -587,16 +607,16 @@ const ChatPage = () => {
           await updateSessionModel(currentSession.id, model);
         }
 
-        // Send to AI with attachments in the body
+        // Send to AI with attachments using AI SDK 6 format: { text, files }
         // The ElectronChatTransport will pass these to the IPC layer
         await sendMessageAI(
           {
             text: messageText,
-            experimental_attachments: attachmentDataForInference.length > 0 ? attachmentDataForInference as any : undefined
-          } as any,
+            files: fileParts.length > 0 ? fileParts : undefined
+          },
           {
             body: {
-              attachments: attachmentDataForInference.length > 0 ? attachmentDataForInference : undefined
+              attachments: fileParts.length > 0 ? fileParts : undefined
             }
           }
         );
@@ -634,12 +654,8 @@ const ChatPage = () => {
     const sendPendingMessage = async () => {
       try {
         const messageId = `user-${Date.now()}`;
-        let attachmentDataForInference: Array<{
-          type: 'image' | 'audio' | 'video';
-          data: string;
-          mime: string;
-          filename: string;
-        }> = [];
+        // AI SDK 6: FileUIPart uses { type: 'file', mediaType, url } format
+        let fileParts: Array<{ type: 'file'; mediaType: string; url: string; filename?: string }> = [];
         let savedAttachments: Array<{
           id: string;
           type: 'image' | 'audio' | 'video' | 'document';
@@ -663,12 +679,14 @@ const ChatPage = () => {
                 ''
               )
             );
+            // AI SDK 6 FileUIPart expects url as data URL
             const dataUrl = `data:${file.type};base64,${base64}`;
 
-            attachmentDataForInference.push({
-              type: file.type.startsWith('image/') ? 'image' : file.type.startsWith('audio/') ? 'audio' : 'video',
-              data: dataUrl,
-              mime: file.type,
+            // AI SDK 6 uses { type: 'file', mediaType, url } format
+            fileParts.push({
+              type: 'file',
+              mediaType: file.type,
+              url: dataUrl,
               filename: file.name
             });
           }
@@ -706,14 +724,15 @@ const ChatPage = () => {
           await updateSessionModel(currentSession.id, model);
         }
 
+        // Send to AI with attachments using AI SDK 6 format: { text, files }
         await sendMessageAI(
           {
             text: messageText,
-            experimental_attachments: attachmentDataForInference.length > 0 ? attachmentDataForInference as any : undefined
-          } as any,
+            files: fileParts.length > 0 ? fileParts : undefined
+          },
           {
             body: {
-              attachments: attachmentDataForInference.length > 0 ? attachmentDataForInference : undefined
+              attachments: fileParts.length > 0 ? fileParts : undefined
             }
           }
         );
@@ -786,17 +805,15 @@ const ChatPage = () => {
           </div>
         </div>
       )}
-
       {/* Show error if any */}
       {chatError && (
         <div className="p-4 bg-red-100 border border-red-400 text-red-800">
           <strong>Error:</strong> {chatError.message}
         </div>
       )}
-
       {isChatEmpty ? (
         // Empty state with welcome screen
-        <div className="flex-1 flex flex-col items-center justify-center px-4">
+        (<div className="flex-1 flex flex-col items-center justify-center px-4">
           <div className="w-full max-w-3xl flex flex-col items-center gap-8">
             <WelcomeScreen userName={userName} />
             <div className="w-full">
@@ -827,17 +844,17 @@ const ChatPage = () => {
               />
             </div>
           </div>
-        </div>
+        </div>)
       ) : (
         // Chat conversation
-        <>
+        (<>
           <Conversation className="flex-1">
             <ConversationContent className="max-w-3xl mx-auto p-0 pl-4 pr-2 py-4">
-              {messages.map((message) => (
+              {messages.map((message, index) => (
                 <ChatMessageItem
                   key={message.id}
                   message={message}
-                  isStreaming={status === 'streaming'}
+                  isStreaming={status === 'streaming' && index === messages.length - 1}
                   onPrompt={setInput}
                   onSendMessage={handleSendMessage}
                   chatMessages={messages}
@@ -855,7 +872,6 @@ const ChatPage = () => {
             </ConversationContent>
             <ConversationScrollButton />
           </Conversation>
-
           {/* Input */}
           <div className="bg-transparent px-2">
             <ChatPromptInput
@@ -884,7 +900,7 @@ const ChatPage = () => {
               onPromptRemove={removePrompt}
             />
           </div>
-        </>
+        </>)
       )}
     </div>
   );

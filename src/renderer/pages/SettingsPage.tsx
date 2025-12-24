@@ -5,6 +5,7 @@ import {
   SecuritySection,
   PrivacySection,
   AIConfigSection,
+  ReasoningSection,
   DeveloperModeSection,
   RuntimesSection,
   MCPSection
@@ -41,6 +42,7 @@ const SettingsPage = () => {
         <SecuritySection />
         <PrivacySection />
         <AIConfigSection />
+        <ReasoningSection />
         <DeveloperModeSection />
         {developerMode && <RuntimesSection />}
         <MCPSection />
