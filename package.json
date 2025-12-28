@@ -29,12 +29,12 @@
     "start": "electron-forge start"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^3.0.0",
-    "@ai-sdk/gateway": "^3.0.1",
+    "@ai-sdk/anthropic": "^3.0.1",
+    "@ai-sdk/gateway": "^3.0.2",
     "@ai-sdk/google": "^3.0.1",
-    "@ai-sdk/openai": "^3.0.0",
-    "@ai-sdk/openai-compatible": "^2.0.0",
-    "@ai-sdk/react": "^3.0.2",
+    "@ai-sdk/openai": "^3.0.1",
+    "@ai-sdk/openai-compatible": "^2.0.1",
+    "@ai-sdk/react": "^3.0.3",
     "@ai-sdk/ui-utils": "^1.2.11",
     "@codemirror/lang-json": "^6.0.2",
     "@codemirror/theme-one-dark": "^6.1.3",
@@ -77,7 +77,7 @@
     "@supabase/supabase-js": "^2.87.1",
     "@tailwindcss/vite": "^4.1.17",
     "@uiw/react-codemirror": "^4.25.3",
-    "ai": "^6.0.2",
+    "ai": "^6.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
@@ -170,9 +170,6 @@
       "@modelcontextprotocol/sdk": "^1.24.3",
       "@langchain/core": "^1.1.8",
       "langchain": "^1.2.3"
-    },
-    "patchedDependencies": {
-      "@ai-sdk/google@3.0.1": "patches/@ai-sdk__google@3.0.1.patch"
     }
   }
 }
