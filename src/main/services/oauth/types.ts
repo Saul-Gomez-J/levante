@@ -28,6 +28,12 @@ export interface OAuthTokens {
 }
 
 /**
+ * Método de autenticación para el token endpoint
+ * RFC 6749 Section 2.3.1
+ */
+export type TokenEndpointAuthMethod = 'none' | 'client_secret_post' | 'client_secret_basic';
+
+/**
  * OAuth tokens almacenados (con encriptación)
  */
 export interface StoredOAuthTokens {
@@ -187,6 +193,9 @@ export interface TokenExchangeParams {
 
     /** Client secret (solo confidential clients) */
     clientSecret?: string;
+
+    /** Método de autenticación para el token endpoint */
+    tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 }
 
 /**
@@ -207,6 +216,9 @@ export interface TokenRefreshParams {
 
     /** Scopes a solicitar (opcional) */
     scopes?: string[];
+
+    /** Método de autenticación para el token endpoint */
+    tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 }
 
 /**
@@ -468,7 +480,8 @@ export interface OAuthHttpClientError extends Error {
     | 'REFRESH_FAILED'
     | 'NO_OAUTH_CONFIG'
     | 'NETWORK_ERROR'
-    | 'UNAUTHORIZED';
+    | 'UNAUTHORIZED'
+    | 'CREDENTIALS_EXPIRED';
     details?: Record<string, unknown>;
 }
 
@@ -483,7 +496,9 @@ export interface OAuthServiceError extends Error {
     | 'NO_CLIENT_ID'
     | 'SAVE_FAILED'
     | 'AUTH_SERVER_NOT_FOUND'
-    | 'MISSING_CLIENT_ID';
+    | 'MISSING_CLIENT_ID'
+    | 'CLIENT_SECRET_EXPIRED'
+    | 'CLIENT_REREGISTRATION_FAILED';
     details?: Record<string, unknown>;
 }
 
@@ -529,6 +544,20 @@ export interface OAuthClientRegistrationRequest {
 }
 
 /**
+ * Opciones para registro dinámico de cliente
+ */
+export interface ClientRegistrationOptions {
+    /** URIs de redirección */
+    redirectUris?: string[];
+
+    /** Si es true, intenta registrarse como cliente confidencial */
+    preferConfidential?: boolean;
+
+    /** Método de autenticación preferido para el token endpoint */
+    tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
+}
+
+/**
  * RFC 7591: Dynamic Client Registration Response
  */
 export interface OAuthClientRegistrationResponse {
@@ -567,6 +596,10 @@ export interface OAuthClientCredentials {
     clientSecret?: string; // Encrypted if exists
     registeredAt: number;
     authServerId: string;
+
+    /** Método de autenticación configurado para este cliente */
+    tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
+
     registrationMetadata?: {
         client_secret_expires_at?: number;
         registration_access_token?: string; // Encrypted
@@ -606,6 +639,9 @@ export interface TokenRevocationParams {
 
     /** Client secret (solo confidential clients) */
     clientSecret?: string;
+
+    /** Método de autenticación para el token endpoint */
+    tokenEndpointAuthMethod?: TokenEndpointAuthMethod;
 }
 
 /**

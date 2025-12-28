@@ -1597,6 +1597,93 @@ El sistema soporta múltiples Authorization Servers simultáneamente:
    - 60 segundos buffer
    - Previene expiración durante request
 
+### 6. Client Secret Expiration Handling (Fase 5)
+
+El sistema maneja automáticamente la expiración de `client_secret` según RFC 7591:
+
+**Flujo de Validación**:
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    VALIDACIÓN DE CREDENCIALES                    │
+└───────────────────────────┬─────────────────────────────────────┘
+                            │
+                            ▼
+              ┌──────────────────────────────┐
+              │ ¿Existe client_secret_       │
+              │ expires_at en metadata?      │
+              └───────────────┬──────────────┘
+                              │
+               ┌──────────────┴──────────────┐
+               │                             │
+               ▼                             ▼
+        ┌───────────┐                 ┌────────────┐
+        │  NO / 0   │                 │    SÍ      │
+        │ (nunca    │                 │ (timestamp)│
+        │  expira)  │                 └──────┬─────┘
+        └─────┬─────┘                        │
+              │                              ▼
+              │                 ┌────────────────────────┐
+              │                 │ now < (expires_at - 5m)?│
+              │                 └───────────┬────────────┘
+              │                             │
+              │                  ┌──────────┴──────────┐
+              │                  │                     │
+              ▼                  ▼                     ▼
+        ┌───────────┐     ┌───────────┐        ┌────────────┐
+        │ VÁLIDO    │     │ VÁLIDO    │        │ EXPIRADO   │
+        └───────────┘     └───────────┘        └──────┬─────┘
+                                                      │
+                                                      ▼
+                                      ┌──────────────────────────┐
+                                      │ ¿Tiene registration_     │
+                                      │ client_uri?              │
+                                      └───────────┬──────────────┘
+                                                  │
+                                       ┌──────────┴──────────┐
+                                       │                     │
+                                       ▼                     ▼
+                                ┌────────────┐        ┌────────────┐
+                                │    SÍ      │        │    NO      │
+                                │ Intentar   │        │ Eliminar   │
+                                │ re-registro│        │ credentials│
+                                └──────┬─────┘        │ Notificar  │
+                                       │              └────────────┘
+                                       ▼
+                                ┌────────────────────┐
+                                │ GET registration_  │
+                                │ client_uri con     │
+                                │ Bearer token       │
+                                └─────────┬──────────┘
+                                          │
+                               ┌──────────┴──────────┐
+                               │                     │
+                               ▼                     ▼
+                        ┌────────────┐        ┌────────────┐
+                        │  Éxito     │        │  Error     │
+                        │  Guardar   │        │  Eliminar  │
+                        │  nuevas    │        │  credentials│
+                        │  creds     │        │  Notificar │
+                        └────────────┘        └────────────┘
+```
+
+**Buffer de Seguridad**:
+- Se aplica un buffer de 5 minutos antes de la expiración real
+- Previene race conditions durante operaciones
+
+**Evento IPC**:
+```typescript
+// Enviado cuando las credenciales expiran
+mainWindow.webContents.send('levante/oauth/credentials-expired', {
+    serverId: 'server1',
+    reason: 'client_secret_expired',
+    timestamp: 1735000000000,
+});
+```
+
+**Respuesta del Renderer**:
+- Mostrar notificación al usuario
+- Ofrecer re-autorización
+
 ---
 
 ## Resumen Ejecutivo

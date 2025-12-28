@@ -118,6 +118,22 @@ export const appApi = {
       };
     },
 
+    // Listen for credentials expiration events
+    onCredentialsExpired: (
+      callback: (data: {
+        serverId: string;
+        reason: 'client_secret_expired' | 'registration_revoked';
+        timestamp: number;
+      }) => void
+    ) => {
+      const handler = (_event: any, data: any) => callback(data);
+      ipcRenderer.on('levante/oauth/credentials-expired', handler);
+
+      return () => {
+        ipcRenderer.removeListener('levante/oauth/credentials-expired', handler);
+      };
+    },
+
     // ========================================
     // OpenRouter OAuth Methods
     // ========================================

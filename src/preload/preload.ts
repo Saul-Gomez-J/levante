@@ -168,6 +168,15 @@ export interface LevanteAPI {
       }) => void
     ) => () => void;
 
+    // Listen for credentials expiration events
+    onCredentialsExpired: (
+      callback: (data: {
+        serverId: string;
+        reason: 'client_secret_expired' | 'registration_revoked';
+        timestamp: number;
+      }) => void
+    ) => () => void;
+
     // ========================================
     // OpenRouter OAuth Methods
     // ========================================

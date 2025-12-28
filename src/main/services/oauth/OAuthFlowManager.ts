@@ -10,8 +10,60 @@ import type {
     TokenRefreshParams,
     OAuthTokens,
     TokenRevocationParams,
+    TokenEndpointAuthMethod,
 } from './types';
 import { OAuthFlowError } from './types';
+
+/**
+ * Aplica autenticación de cliente a un request según el método especificado
+ * RFC 6749 Section 2.3.1
+ *
+ * @param headers - Headers del request (se modifican in-place)
+ * @param body - URLSearchParams del body (se modifican in-place)
+ * @param clientId - Client ID
+ * @param clientSecret - Client secret (opcional para public clients)
+ * @param authMethod - Método de autenticación
+ */
+function applyClientAuthentication(
+    headers: Record<string, string>,
+    body: URLSearchParams,
+    clientId: string,
+    clientSecret: string | undefined,
+    authMethod: TokenEndpointAuthMethod = 'none'
+): void {
+    switch (authMethod) {
+        case 'client_secret_basic':
+            // RFC 6749 Section 2.3.1: HTTP Basic Authentication
+            // client_id y client_secret deben ser URL-encoded antes de Base64
+            if (!clientSecret) {
+                throw new OAuthFlowError(
+                    'client_secret_basic requires a client secret',
+                    'TOKEN_EXCHANGE_FAILED',
+                    { authMethod }
+                );
+            }
+            const credentials = Buffer.from(
+                `${encodeURIComponent(clientId)}:${encodeURIComponent(clientSecret)}`
+            ).toString('base64');
+            headers['Authorization'] = `Basic ${credentials}`;
+            // NO incluir client_id/client_secret en el body
+            break;
+
+        case 'client_secret_post':
+            // RFC 6749 Section 2.3.1: Client credentials in request body
+            body.set('client_id', clientId);
+            if (clientSecret) {
+                body.set('client_secret', clientSecret);
+            }
+            break;
+
+        case 'none':
+        default:
+            // Public client: solo client_id en el body
+            body.set('client_id', clientId);
+            break;
+    }
+}
 
 /**
  * OAuthFlowManager
@@ -225,27 +277,38 @@ export class OAuthFlowManager {
                 tokenEndpoint: params.tokenEndpoint,
             });
 
-            // Construir body
+            // Construir body base (sin credenciales de cliente)
             const body = new URLSearchParams({
                 grant_type: 'authorization_code',
                 code: params.code,
                 redirect_uri: params.redirectUri,
-                client_id: params.clientId,
                 code_verifier: params.codeVerifier,
             });
 
-            // Client secret (solo confidential clients)
-            if (params.clientSecret) {
-                body.set('client_secret', params.clientSecret);
-            }
+            // Preparar headers
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                Accept: 'application/json',
+            };
+
+            // Aplicar autenticación de cliente según método configurado
+            applyClientAuthentication(
+                headers,
+                body,
+                params.clientId,
+                params.clientSecret,
+                params.tokenEndpointAuthMethod ?? (params.clientSecret ? 'client_secret_post' : 'none')
+            );
+
+            this.logger.oauth.debug('Token exchange request prepared', {
+                authMethod: params.tokenEndpointAuthMethod ?? 'auto',
+                hasBasicAuth: !!headers['Authorization'],
+            });
 
             // Hacer request
             const response = await fetch(params.tokenEndpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    Accept: 'application/json',
-                },
+                headers,
                 body: body.toString(),
             });
 
@@ -322,30 +385,41 @@ export class OAuthFlowManager {
                 tokenEndpoint: params.tokenEndpoint,
             });
 
-            // Construir body
+            // Construir body base (sin credenciales de cliente)
             const body = new URLSearchParams({
                 grant_type: 'refresh_token',
                 refresh_token: params.refreshToken,
-                client_id: params.clientId,
             });
-
-            // Client secret (solo confidential clients)
-            if (params.clientSecret) {
-                body.set('client_secret', params.clientSecret);
-            }
 
             // Scopes (opcional)
             if (params.scopes && params.scopes.length > 0) {
                 body.set('scope', params.scopes.join(' '));
             }
 
+            // Preparar headers
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                Accept: 'application/json',
+            };
+
+            // Aplicar autenticación de cliente según método configurado
+            applyClientAuthentication(
+                headers,
+                body,
+                params.clientId,
+                params.clientSecret,
+                params.tokenEndpointAuthMethod ?? (params.clientSecret ? 'client_secret_post' : 'none')
+            );
+
+            this.logger.oauth.debug('Token refresh request prepared', {
+                authMethod: params.tokenEndpointAuthMethod ?? 'auto',
+                hasBasicAuth: !!headers['Authorization'],
+            });
+
             // Hacer request
             const response = await fetch(params.tokenEndpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    Accept: 'application/json',
-                },
+                headers,
                 body: body.toString(),
             });
 
@@ -431,10 +505,9 @@ export class OAuthFlowManager {
                 tokenTypeHint: params.tokenTypeHint,
             });
 
-            // Construir body según RFC 7009
+            // Construir body base según RFC 7009 (sin credenciales de cliente)
             const body = new URLSearchParams({
                 token: params.token,
-                client_id: params.clientId,
             });
 
             // Token type hint (opcional pero recomendado)
@@ -442,18 +515,31 @@ export class OAuthFlowManager {
                 body.set('token_type_hint', params.tokenTypeHint);
             }
 
-            // Client secret (solo confidential clients)
-            if (params.clientSecret) {
-                body.set('client_secret', params.clientSecret);
-            }
+            // Preparar headers
+            const headers: Record<string, string> = {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                Accept: 'application/json',
+            };
+
+            // Aplicar autenticación de cliente según método configurado
+            applyClientAuthentication(
+                headers,
+                body,
+                params.clientId,
+                params.clientSecret,
+                params.tokenEndpointAuthMethod ?? (params.clientSecret ? 'client_secret_post' : 'none')
+            );
+
+            this.logger.oauth.debug('Token revocation request prepared', {
+                tokenTypeHint: params.tokenTypeHint,
+                authMethod: params.tokenEndpointAuthMethod ?? 'auto',
+                hasBasicAuth: !!headers['Authorization'],
+            });
 
             // Hacer request
             const response = await fetch(params.revocationEndpoint, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    Accept: 'application/json',
-                },
+                headers,
                 body: body.toString(),
             });
 

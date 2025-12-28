@@ -8,6 +8,7 @@ import type {
     OAuthClientRegistrationRequest,
     OAuthClientRegistrationResponse,
     OAuthClientCredentials,
+    ClientRegistrationOptions,
 } from './types';
 import { OAuthDiscoveryError, ClientRegistrationError } from './types';
 
@@ -813,12 +814,14 @@ export class OAuthDiscoveryService {
     async registerClient(
         registrationEndpoint: string,
         authServerId: string,
-        redirectUris?: string[]
+        options?: ClientRegistrationOptions
     ): Promise<OAuthClientCredentials> {
         this.logger.mcp.info('Attempting Dynamic Client Registration', {
             registrationEndpoint,
             authServerId,
-            redirectUris,
+            redirectUris: options?.redirectUris,
+            preferConfidential: options?.preferConfidential ?? false,
+            requestedAuthMethod: options?.tokenEndpointAuthMethod ?? 'none',
         });
 
         // Validate HTTPS (except localhost)
@@ -833,6 +836,11 @@ export class OAuthDiscoveryService {
             );
         }
 
+        // Determinar método de autenticación
+        const authMethod = options?.preferConfidential
+            ? (options.tokenEndpointAuthMethod ?? 'client_secret_post')
+            : 'none';
+
         // Prepare registration request (RFC 7591)
         const registrationRequest: OAuthClientRegistrationRequest = {
             client_name: 'Levante',
@@ -840,7 +848,7 @@ export class OAuthDiscoveryService {
 
             // Use provided redirect_uris or fallback to loopback without port
             // If redirect_uris is provided, it should include the exact port from the pre-allocated server
-            redirect_uris: redirectUris || ['http://127.0.0.1/callback'],
+            redirect_uris: options?.redirectUris || ['http://127.0.0.1/callback'],
 
             // Grant types for Authorization Code Flow with PKCE
             grant_types: ['authorization_code', 'refresh_token'],
@@ -849,11 +857,16 @@ export class OAuthDiscoveryService {
             response_types: ['code'],
 
             // Public client (no client secret needed for PKCE)
-            token_endpoint_auth_method: 'none',
+            token_endpoint_auth_method: authMethod,
 
             // Minimal scopes (server-specific scopes will be requested during authorization)
             scope: 'mcp:read mcp:write',
         };
+
+        this.logger.mcp.debug('Registration request prepared', {
+            authMethod,
+            redirectUris: registrationRequest.redirect_uris,
+        });
 
         try {
             // POST to registration endpoint
@@ -910,18 +923,30 @@ export class OAuthDiscoveryService {
                 authServerId,
             });
 
+            // Determinar el auth method efectivo basado en si recibimos client_secret
+            const effectiveAuthMethod = data.client_secret
+                ? (options?.tokenEndpointAuthMethod ?? 'client_secret_post')
+                : 'none';
+
             // Build credentials object
             const credentials: OAuthClientCredentials = {
                 clientId: data.client_id,
                 clientSecret: data.client_secret, // Will be encrypted when saved
                 registeredAt: Date.now(),
                 authServerId,
+                tokenEndpointAuthMethod: effectiveAuthMethod,
                 registrationMetadata: {
                     client_secret_expires_at: data.client_secret_expires_at,
                     registration_access_token: data.registration_access_token,
                     registration_client_uri: data.registration_client_uri,
                 },
             };
+
+            this.logger.mcp.debug('Client credentials built', {
+                clientId: data.client_id,
+                hasSecret: !!data.client_secret,
+                authMethod: effectiveAuthMethod,
+            });
 
             return credentials;
         } catch (error) {

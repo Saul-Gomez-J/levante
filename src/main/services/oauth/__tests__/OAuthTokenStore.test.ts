@@ -23,6 +23,12 @@ vi.mock('../../logging', () => ({
             warn: vi.fn(),
             error: vi.fn(),
         },
+        oauth: {
+            info: vi.fn(),
+            debug: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+        },
     }),
 }));
 
