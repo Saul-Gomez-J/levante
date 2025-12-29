@@ -1,6 +1,13 @@
 import * as http from 'http';
 import * as net from 'net';
 import { getLogger } from '../logging';
+import {
+    OAUTH_LOOPBACK_PORT,
+    OAUTH_LOOPBACK_HOST,
+    OAUTH_CALLBACK_PATH,
+    OAUTH_CALLBACK_TIMEOUT,
+    OAUTH_REDIRECT_URI,
+} from './constants';
 import type {
     LoopbackServerConfig,
     LoopbackServerResult,
@@ -26,15 +33,17 @@ export class OAuthRedirectServer {
     private timeoutHandle?: NodeJS.Timeout;
 
     private readonly DEFAULT_CONFIG: Required<LoopbackServerConfig> = {
-        port: 0, // 0 = random port
-        hostname: '127.0.0.1',
-        callbackPath: '/callback',
-        timeout: 5 * 60 * 1000, // 5 minutos
+        port: OAUTH_LOOPBACK_PORT, // Puerto fijo
+        hostname: OAUTH_LOOPBACK_HOST,
+        callbackPath: OAUTH_CALLBACK_PATH,
+        timeout: OAUTH_CALLBACK_TIMEOUT,
     };
 
     /**
-     * Inicia el servidor loopback
+     * Inicia el servidor loopback en el puerto fijo
      * Retorna el puerto y redirect_uri
+     *
+     * @throws OAuthFlowError si el puerto está ocupado
      */
     async start(
         config: LoopbackServerConfig = {}
@@ -42,10 +51,24 @@ export class OAuthRedirectServer {
         const finalConfig = { ...this.DEFAULT_CONFIG, ...config };
 
         try {
-            // Encontrar puerto disponible
-            this.port = await this.findAvailablePort(finalConfig.port);
+            // Verificar si el puerto está disponible
+            const isAvailable = await this.isPortAvailable(finalConfig.port);
 
-            this.logger.oauth.info('Starting OAuth redirect server', {
+            if (!isAvailable) {
+                this.logger.oauth.error('OAuth loopback port is in use', {
+                    port: finalConfig.port,
+                });
+
+                throw new OAuthFlowError(
+                    `Puerto ${finalConfig.port} está ocupado. Por favor, cierra la aplicación que lo esté usando e intenta de nuevo.`,
+                    'LOOPBACK_SERVER_FAILED',
+                    { port: finalConfig.port, reason: 'PORT_IN_USE' }
+                );
+            }
+
+            this.port = finalConfig.port;
+
+            this.logger.oauth.info('Starting OAuth redirect server on fixed port', {
                 port: this.port,
                 hostname: finalConfig.hostname,
             });
@@ -84,25 +107,37 @@ export class OAuthRedirectServer {
                     resolve();
                 });
 
-                this.server!.on('error', (error) => {
+                this.server!.on('error', (error: NodeJS.ErrnoException) => {
                     this.logger.oauth.error('OAuth redirect server error', {
                         error: error.message,
+                        code: error.code,
                     });
-                    reject(
-                        new OAuthFlowError(
-                            'Failed to start loopback server',
-                            'LOOPBACK_SERVER_FAILED',
-                            { error: error.message }
-                        )
-                    );
+
+                    // Mensaje más descriptivo para EADDRINUSE
+                    if (error.code === 'EADDRINUSE') {
+                        reject(
+                            new OAuthFlowError(
+                                `Puerto ${this.port} está ocupado. Por favor, cierra la aplicación que lo esté usando e intenta de nuevo.`,
+                                'LOOPBACK_SERVER_FAILED',
+                                { error: error.message, port: this.port, reason: 'PORT_IN_USE' }
+                            )
+                        );
+                    } else {
+                        reject(
+                            new OAuthFlowError(
+                                'Failed to start loopback server',
+                                'LOOPBACK_SERVER_FAILED',
+                                { error: error.message }
+                            )
+                        );
+                    }
                 });
             });
 
-            const redirectUri = `http://${finalConfig.hostname}:${this.port}${finalConfig.callbackPath}`;
-
+            // Siempre retornar el redirect URI fijo
             return {
                 port: this.port,
-                redirectUri,
+                redirectUri: OAUTH_REDIRECT_URI,
             };
         } catch (error) {
             this.logger.oauth.error('Failed to start OAuth redirect server', {
@@ -159,28 +194,37 @@ export class OAuthRedirectServer {
     }
 
     /**
-     * Encuentra un puerto disponible
+     * Verifica si el puerto fijo está disponible
+     *
+     * @param port - Puerto a verificar
+     * @returns true si está disponible, false si está ocupado
      */
-    private async findAvailablePort(preferredPort: number = 0): Promise<number> {
-        return new Promise((resolve, reject) => {
+    private async isPortAvailable(port: number): Promise<boolean> {
+        return new Promise((resolve) => {
             const server = net.createServer();
 
-            server.listen(preferredPort, '127.0.0.1', () => {
-                const address = server.address() as net.AddressInfo;
-                const port = address.port;
+            server.once('error', (error: NodeJS.ErrnoException) => {
+                if (error.code === 'EADDRINUSE') {
+                    this.logger.oauth.debug('Port is in use', { port });
+                    resolve(false);
+                } else {
+                    // Otro error, asumimos que el puerto no está disponible
+                    this.logger.oauth.warn('Error checking port availability', {
+                        port,
+                        error: error.message,
+                    });
+                    resolve(false);
+                }
+            });
 
+            server.once('listening', () => {
                 server.close(() => {
-                    this.logger.oauth.debug('Found available port', { port });
-                    resolve(port);
+                    this.logger.oauth.debug('Port is available', { port });
+                    resolve(true);
                 });
             });
 
-            server.on('error', (error) => {
-                this.logger.oauth.error('Failed to find available port', {
-                    error: error.message,
-                });
-                reject(error);
-            });
+            server.listen(port, OAUTH_LOOPBACK_HOST);
         });
     }
 

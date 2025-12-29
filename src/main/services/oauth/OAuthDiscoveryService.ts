@@ -1,4 +1,5 @@
 import { getLogger } from '../logging';
+import { OAUTH_REDIRECT_URI } from './constants';
 import type {
     ProtectedResourceMetadata,
     AuthorizationServerMetadata,
@@ -845,10 +846,12 @@ export class OAuthDiscoveryService {
         const registrationRequest: OAuthClientRegistrationRequest = {
             client_name: 'Levante',
             client_uri: 'https://github.com/levante-hub/levante',
+            // Required by some AS (Supabase) to allow loopback redirect URIs
+            application_type: 'native',
 
-            // Use provided redirect_uris or fallback to loopback without port
-            // If redirect_uris is provided, it should include the exact port from the pre-allocated server
-            redirect_uris: options?.redirectUris || ['http://127.0.0.1/callback'],
+            // Siempre usar el redirect_uri fijo
+            // Si se proporciona options.redirectUris, debe contener el URI fijo
+            redirect_uris: options?.redirectUris || [OAUTH_REDIRECT_URI],
 
             // Grant types for Authorization Code Flow with PKCE
             grant_types: ['authorization_code', 'refresh_token'],
@@ -858,14 +861,21 @@ export class OAuthDiscoveryService {
 
             // Public client (no client secret needed for PKCE)
             token_endpoint_auth_method: authMethod,
-
-            // Minimal scopes (server-specific scopes will be requested during authorization)
-            scope: 'mcp:read mcp:write',
         };
+
+        // Validar que si se proporcionan redirectUris, incluyan el fijo
+        if (options?.redirectUris && !options.redirectUris.includes(OAUTH_REDIRECT_URI)) {
+            this.logger.mcp.warn('Provided redirectUris do not include fixed URI, adding it', {
+                provided: options.redirectUris,
+                fixedUri: OAUTH_REDIRECT_URI,
+            });
+            registrationRequest.redirect_uris = [OAUTH_REDIRECT_URI, ...options.redirectUris];
+        }
 
         this.logger.mcp.debug('Registration request prepared', {
             authMethod,
             redirectUris: registrationRequest.redirect_uris,
+            usingFixedPort: registrationRequest.redirect_uris.includes(OAUTH_REDIRECT_URI),
         });
 
         try {
@@ -880,26 +890,28 @@ export class OAuthDiscoveryService {
             });
 
             if (!response.ok) {
-                // Parse error response
-                let errorData: any;
+                // Parse error response (and keep raw for debugging)
+                let errorData: any = {};
+                let rawBody = '';
                 try {
-                    errorData = await response.json();
+                    rawBody = await response.text();
+                    errorData = rawBody ? JSON.parse(rawBody) : {};
                 } catch {
-                    errorData = {
-                        error: 'unknown_error',
-                        error_description: await response.text(),
-                    };
+                    // Leave errorData as empty object; rawBody already captured
                 }
 
                 this.logger.mcp.error('Client registration failed', {
                     status: response.status,
                     error: errorData.error,
                     description: errorData.error_description,
+                    rawBody,
                 });
 
                 throw new ClientRegistrationError(
                     errorData.error_description ||
-                    `Registration failed: ${errorData.error}`,
+                    errorData.message ||
+                    rawBody ||
+                    `Registration failed: ${errorData.error || response.status}`,
                     errorData.error || 'registration_failed',
                     response.status
                 );

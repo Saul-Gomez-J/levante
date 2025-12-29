@@ -24,3 +24,12 @@ export { OAuthService } from './OAuthService';
 
 // Types
 export * from './types';
+
+// Constantes OAuth
+export {
+    OAUTH_LOOPBACK_PORT,
+    OAUTH_LOOPBACK_HOST,
+    OAUTH_CALLBACK_PATH,
+    OAUTH_REDIRECT_URI,
+    OAUTH_CALLBACK_TIMEOUT,
+} from './constants';

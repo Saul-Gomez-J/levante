@@ -541,6 +541,9 @@ export interface OAuthClientRegistrationRequest {
 
     /** Logo URI */
     logo_uri?: string;
+
+    /** Application type (native for loopback) */
+    application_type?: 'native' | 'web';
 }
 
 /**

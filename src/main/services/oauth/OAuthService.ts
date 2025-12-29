@@ -11,6 +11,7 @@ import { OAuthDiscoveryService } from './OAuthDiscoveryService';
 import { OAuthFlowManager } from './OAuthFlowManager';
 import { OAuthTokenStore } from './OAuthTokenStore';
 import { OAuthHttpClient } from './OAuthHttpClient';
+import { OAUTH_REDIRECT_URI } from './constants';
 import { safeStorage } from 'electron';
 import { PreferencesService } from '../preferencesService';
 import { getLogger } from '../logging';
@@ -85,16 +86,13 @@ export class OAuthService {
         });
 
         try {
-            // Resolve effective scopes: prefer parsed header -> provided -> defaults
+            // Resolve effective scopes: prefer parsed header -> provided -> later metadata/defaults
             let effectiveScopes = scopes;
             if ((!effectiveScopes || effectiveScopes.length === 0) && wwwAuthHeader) {
                 const parsedHeader = this.discoveryService.parseWWWAuthenticate(wwwAuthHeader);
                 if (parsedHeader.scope) {
                     effectiveScopes = parsedHeader.scope.split(/\s+/).filter(Boolean);
                 }
-            }
-            if (!effectiveScopes || effectiveScopes.length === 0) {
-                effectiveScopes = ['mcp:read', 'mcp:write'];
             }
 
             // Step 1: Discovery of Authorization Server
@@ -115,16 +113,34 @@ export class OAuthService {
                 hasRegistration: !!metadata.registration_endpoint,
             });
 
-            // Step 2: Pre-allocate redirect server port (for DCR consistency)
-            logger.oauth.info('Step 2: Pre-allocating redirect server port');
+            // If no scopes yet, prefer those advertised by the AS, else fallback to MCP defaults
+            if (!effectiveScopes || effectiveScopes.length === 0) {
+                effectiveScopes = metadata.scopes_supported && metadata.scopes_supported.length > 0
+                    ? metadata.scopes_supported
+                    : ['mcp:read', 'mcp:write'];
+            }
 
-            // Start redirect server to get the port we'll use
+            // Step 2: Pre-allocate redirect server (puerto fijo)
+            logger.oauth.info('Step 2: Starting redirect server on fixed port');
+
+            // Start redirect server - siempre usa el puerto fijo
             const redirectServer = this.flowManager['redirectServer'];
             const { redirectUri } = await redirectServer.start();
 
-            logger.oauth.debug('Redirect server started', {
+            logger.oauth.debug('Redirect server started on fixed port', {
                 redirectUri,
+                expectedUri: OAUTH_REDIRECT_URI,
             });
+
+            // Validar que el redirectUri sea el esperado
+            if (redirectUri !== OAUTH_REDIRECT_URI) {
+                await redirectServer.stop();
+                throw this.createError(
+                    'AUTHORIZATION_FAILED',
+                    'Redirect URI mismatch',
+                    { redirectUri, expected: OAUTH_REDIRECT_URI }
+                );
+            }
 
             // Step 3: Dynamic Client Registration (if needed)
             let clientId = providedClientId;
@@ -658,10 +674,16 @@ export class OAuthService {
     }
 
     /**
-     * Obtiene credenciales válidas, intentando re-registrar si están expiradas
+     * Obtiene credenciales válidas, verificando:
+     * 1. Que existan
+     * 2. Que el client_secret no haya expirado
+     * 3. Que el redirect_uri coincida con el fijo actual
+     *
+     * Si el redirect_uri no coincide, las credenciales se invalidan
+     * y se retorna null para forzar nuevo DCR.
      *
      * @param serverId - ID del servidor MCP
-     * @returns Credenciales válidas o null si no hay/no se pueden obtener
+     * @returns Credenciales válidas o null si no hay/no se pueden usar
      */
     async getValidClientCredentials(
         serverId: string
@@ -670,6 +692,30 @@ export class OAuthService {
 
         if (!credentials) {
             logger.oauth.debug('No client credentials found', { serverId });
+            return null;
+        }
+
+        // NUEVO: Verificar que el redirect_uri coincida con el fijo actual
+        const storedConfig = await this.preferencesService.get(
+            `mcpServers.${serverId}.oauth`
+        ) as any;
+
+        if (storedConfig?.redirectUri && storedConfig.redirectUri !== OAUTH_REDIRECT_URI) {
+            logger.oauth.warn('Stored redirect_uri does not match fixed port, invalidating credentials', {
+                serverId,
+                storedRedirectUri: storedConfig.redirectUri,
+                expectedRedirectUri: OAUTH_REDIRECT_URI,
+            });
+
+            // Eliminar credenciales con redirect_uri antiguo
+            await this.deleteClientCredentials(serverId);
+
+            // También limpiar el oauth config
+            await this.preferencesService.set(`mcpServers.${serverId}.oauth`, undefined);
+
+            // Notificar que las credenciales fueron invalidadas
+            this.notifyCredentialsExpired(serverId, 'registration_revoked');
+
             return null;
         }
 

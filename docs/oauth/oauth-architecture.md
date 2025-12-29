@@ -641,7 +641,7 @@ HTTP Request → getAuthHeaders() → ensureValidToken()
 
 **Configuración**:
 - **Hostname**: 127.0.0.1 (fijo)
-- **Puerto**: Aleatorio disponible (default: 0)
+- **Puerto**: Fijo preferido (1 solo puerto loopback reutilizado). Motivo: el AS vincula el `redirect_uri` exacto usado en DCR; con puertos aleatorios luego rechaza con `redirect_uri not allowed` al reusar `client_id`. Para Supabase y MCP hosted, usamos siempre el mismo puerto para que el redirect registrado coincida.
 - **Path**: /callback (fijo)
 - **Timeout**: 5 minutos
 
