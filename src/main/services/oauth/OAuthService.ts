@@ -464,7 +464,7 @@ export class OAuthService {
             await this.tokenStore.deleteTokens(serverId);
 
             // Remove OAuth config
-            await this.preferencesService.set(`mcpServers.${serverId}.oauth`, undefined);
+            this.preferencesService.delete(`mcpServers.${serverId}.oauth`);
 
             logger.oauth.info('Server disconnected successfully', { serverId });
         } catch (error) {
@@ -711,7 +711,7 @@ export class OAuthService {
             await this.deleteClientCredentials(serverId);
 
             // También limpiar el oauth config
-            await this.preferencesService.set(`mcpServers.${serverId}.oauth`, undefined);
+            this.preferencesService.delete(`mcpServers.${serverId}.oauth`);
 
             // Notificar que las credenciales fueron invalidadas
             this.notifyCredentialsExpired(serverId, 'registration_revoked');
@@ -841,12 +841,42 @@ export class OAuthService {
     }
 
     /**
+     * Limpia TODAS las credenciales OAuth de un servidor (tokens + client credentials + config)
+     * Usado cuando se elimina un MCP para evitar credenciales huérfanas.
+     *
+     * A diferencia de disconnect(), este método:
+     * - NO intenta revocar tokens (el servidor ya no existe en config)
+     * - Limpia TODO: tokens, client credentials y oauth config
+     */
+    async cleanupCredentials(serverId: string): Promise<void> {
+        logger.oauth.info('Cleaning up all OAuth credentials for removed server', { serverId });
+
+        try {
+            // 1. Eliminar tokens (access_token, refresh_token)
+            await this.tokenStore.deleteTokens(serverId);
+
+            // 2. Eliminar client credentials (client_id, client_secret)
+            await this.deleteClientCredentials(serverId);
+
+            // 3. Eliminar oauth config completo
+            this.preferencesService.delete(`mcpServers.${serverId}.oauth`);
+
+            logger.oauth.info('OAuth credentials cleaned up successfully', { serverId });
+        } catch (error) {
+            // Log pero no fallar - la limpieza es best-effort
+            logger.oauth.error('Error cleaning up OAuth credentials', {
+                serverId,
+                error: error instanceof Error ? error.message : error,
+            });
+        }
+    }
+
+    /**
      * Elimina credenciales de cliente del almacenamiento
      */
-    private async deleteClientCredentials(serverId: string): Promise<void> {
-        await this.preferencesService.set(
-            `mcpServers.${serverId}.oauth.clientCredentials`,
-            undefined
+    async deleteClientCredentials(serverId: string): Promise<void> {
+        this.preferencesService.delete(
+            `mcpServers.${serverId}.oauth.clientCredentials`
         );
 
         logger.oauth.info('Client credentials deleted', { serverId });

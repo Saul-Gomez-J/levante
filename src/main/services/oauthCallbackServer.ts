@@ -187,6 +187,24 @@ export class OAuthCallbackServer {
             <head>
               <title>Invalid Request</title>
               <style>
+                :root {
+                  --background: 0 0% 100%;
+                  --foreground: 0 0% 3.9%;
+                  --card: 0 0% 100%;
+                  --card-foreground: 0 0% 3.9%;
+                  --muted-foreground: 0 0% 45.1%;
+                  --border: 0 0% 89.8%;
+                }
+                @media (prefers-color-scheme: dark) {
+                  :root {
+                    --background: 0 0% 11.8%;
+                    --foreground: 0 0% 88%;
+                    --card: 0 0% 15.3%;
+                    --card-foreground: 0 0% 88%;
+                    --muted-foreground: 0 0% 65%;
+                    --border: 0 0% 30%;
+                  }
+                }
                 body {
                   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                   display: flex;
@@ -194,17 +212,20 @@ export class OAuthCallbackServer {
                   align-items: center;
                   height: 100vh;
                   margin: 0;
-                  background: #f5f5f5;
+                  background: hsl(var(--background));
+                  color: hsl(var(--foreground));
                 }
                 .container {
                   text-align: center;
                   padding: 2rem;
-                  background: white;
+                  background: hsl(var(--card));
+                  color: hsl(var(--card-foreground));
+                  border: 1px solid hsl(var(--border));
                   border-radius: 8px;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
                 }
-                h1 { color: #000; }
-                p { color: #000; }
+                h1 { color: hsl(var(--card-foreground)); }
+                p { color: hsl(var(--muted-foreground)); }
               </style>
             </head>
             <body>
@@ -232,6 +253,28 @@ export class OAuthCallbackServer {
           <head>
             <title>Authorization Successful</title>
             <style>
+              :root {
+                --background: 0 0% 100%;
+                --foreground: 0 0% 3.9%;
+                --card: 0 0% 100%;
+                --card-foreground: 0 0% 3.9%;
+                --muted-foreground: 0 0% 45.1%;
+                --border: 0 0% 89.8%;
+                --success: 160 84% 39%;
+                --success-foreground: 0 0% 100%;
+              }
+              @media (prefers-color-scheme: dark) {
+                :root {
+                  --background: 0 0% 11.8%;
+                  --foreground: 0 0% 88%;
+                  --card: 0 0% 15.3%;
+                  --card-foreground: 0 0% 88%;
+                  --muted-foreground: 0 0% 65%;
+                  --border: 0 0% 30%;
+                  --success: 160 84% 39%;
+                  --success-foreground: 0 0% 100%;
+                }
+              }
               body {
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                 display: flex;
@@ -239,25 +282,34 @@ export class OAuthCallbackServer {
                 align-items: center;
                 height: 100vh;
                 margin: 0;
-                background: #f5f5f5;
+                background: hsl(var(--background));
+                color: hsl(var(--foreground));
               }
               .container {
                 text-align: center;
                 padding: 2rem;
-                background: white;
+                background: hsl(var(--card));
+                color: hsl(var(--card-foreground));
+                border: 1px solid hsl(var(--border));
                 border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
               }
-              h1 { color: #000; }
-              p { color: #000; }
+              h1 { color: hsl(var(--card-foreground)); }
+              p { color: hsl(var(--muted-foreground)); }
               .spinner {
                 margin: 1rem auto;
                 width: 40px;
                 height: 40px;
                 border: 4px solid #f3f3f3;
-                border-top: 4px solid #38a169;
+                border-top: 4px solid hsl(var(--success));
                 border-radius: 50%;
                 animation: spin 1s linear infinite;
+              }
+              @media (prefers-color-scheme: dark) {
+                .spinner {
+                  border-color: hsl(var(--border));
+                  border-top-color: hsl(var(--success));
+                }
               }
               @keyframes spin {
                 0% { transform: rotate(0deg); }

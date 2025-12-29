@@ -58,6 +58,9 @@ export function setupOAuthHandlers(): void {
   // List OAuth servers
   ipcMain.handle('levante/oauth/list', handleList);
 
+  // Cleanup all OAuth credentials for a removed server
+  ipcMain.handle('levante/oauth/cleanup', handleCleanup);
+
   // ========================================
   // OpenRouter OAuth Handlers
   // ========================================
@@ -330,6 +333,43 @@ async function handleList(): Promise<{
     };
   } catch (error) {
     logger.oauth.error('IPC: OAuth list error', {
+      error: error instanceof Error ? error.message : error,
+    });
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Cleanup all OAuth credentials for a removed server
+ */
+async function handleCleanup(
+  _event: any,
+  params: { serverId: string }
+): Promise<{
+  success: boolean;
+  error?: string;
+}> {
+  try {
+    await initializeServices();
+
+    logger.oauth.info('IPC: Cleaning up OAuth credentials', {
+      serverId: params.serverId,
+    });
+
+    await oauthService.cleanupCredentials(params.serverId);
+
+    logger.oauth.info('IPC: OAuth credentials cleaned up', {
+      serverId: params.serverId,
+    });
+
+    return { success: true };
+  } catch (error) {
+    logger.oauth.error('IPC: OAuth cleanup error', {
+      serverId: params.serverId,
       error: error instanceof Error ? error.message : error,
     });
 

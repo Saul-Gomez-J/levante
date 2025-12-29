@@ -345,6 +345,28 @@ export class OAuthRedirectServer {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Authorization Successful - Levante</title>
   <style>
+    :root {
+      --background: 0 0% 100%;
+      --foreground: 0 0% 3.9%;
+      --card: 0 0% 100%;
+      --card-foreground: 0 0% 3.9%;
+      --muted-foreground: 0 0% 45.1%;
+      --border: 0 0% 89.8%;
+      --success: 160 84% 39%;
+      --success-foreground: 0 0% 100%;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --background: 0 0% 11.8%;
+        --foreground: 0 0% 88%;
+        --card: 0 0% 15.3%;
+        --card-foreground: 0 0% 88%;
+        --muted-foreground: 0 0% 65%;
+        --border: 0 0% 30%;
+        --success: 160 84% 39%;
+        --success-foreground: 0 0% 100%;
+      }
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       display: flex;
@@ -352,37 +374,40 @@ export class OAuthRedirectServer {
       justify-content: center;
       min-height: 100vh;
       margin: 0;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
     }
     .container {
-      background: white;
+      background: hsl(var(--card));
+      color: hsl(var(--card-foreground));
+      border: 1px solid hsl(var(--border));
       border-radius: 12px;
       padding: 48px;
       text-align: center;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
       max-width: 400px;
     }
     .icon {
       width: 64px;
       height: 64px;
       margin: 0 auto 24px;
-      background: #10b981;
+      background: hsl(var(--success));
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .checkmark {
-      color: white;
+      color: hsl(var(--success-foreground));
       font-size: 32px;
     }
     h1 {
-      color: #1f2937;
+      color: hsl(var(--card-foreground));
       font-size: 24px;
       margin: 0 0 16px;
     }
     p {
-      color: #6b7280;
+      color: hsl(var(--muted-foreground));
       font-size: 16px;
       line-height: 1.5;
       margin: 0;
@@ -417,6 +442,28 @@ export class OAuthRedirectServer {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title} - Levante</title>
   <style>
+    :root {
+      --background: 0 0% 100%;
+      --foreground: 0 0% 3.9%;
+      --card: 0 0% 100%;
+      --card-foreground: 0 0% 3.9%;
+      --muted-foreground: 0 0% 45.1%;
+      --border: 0 0% 89.8%;
+      --destructive: 0 84.2% 60.2%;
+      --destructive-foreground: 0 0% 98%;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --background: 0 0% 11.8%;
+        --foreground: 0 0% 88%;
+        --card: 0 0% 15.3%;
+        --card-foreground: 0 0% 88%;
+        --muted-foreground: 0 0% 65%;
+        --border: 0 0% 30%;
+        --destructive: 0 62.8% 30.6%;
+        --destructive-foreground: 0 0% 88%;
+      }
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       display: flex;
@@ -424,37 +471,40 @@ export class OAuthRedirectServer {
       justify-content: center;
       min-height: 100vh;
       margin: 0;
-      background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
     }
     .container {
-      background: white;
+      background: hsl(var(--card));
+      color: hsl(var(--card-foreground));
+      border: 1px solid hsl(var(--border));
       border-radius: 12px;
       padding: 48px;
       text-align: center;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
       max-width: 400px;
     }
     .icon {
       width: 64px;
       height: 64px;
       margin: 0 auto 24px;
-      background: #ef4444;
+      background: hsl(var(--destructive));
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .cross {
-      color: white;
+      color: hsl(var(--destructive-foreground));
       font-size: 32px;
     }
     h1 {
-      color: #1f2937;
+      color: hsl(var(--card-foreground));
       font-size: 24px;
       margin: 0 0 16px;
     }
     p {
-      color: #6b7280;
+      color: hsl(var(--muted-foreground));
       font-size: 16px;
       line-height: 1.5;
       margin: 0;

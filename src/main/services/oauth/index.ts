@@ -33,3 +33,18 @@ export {
     OAUTH_REDIRECT_URI,
     OAUTH_CALLBACK_TIMEOUT,
 } from './constants';
+
+import { OAuthService } from './OAuthService';
+import { preferencesService } from '../preferencesService';
+
+let oauthServiceInstance: OAuthService | null = null;
+
+/**
+ * Get the singleton instance of OAuthService
+ */
+export function getOAuthService(): OAuthService {
+    if (!oauthServiceInstance) {
+        oauthServiceInstance = new OAuthService(preferencesService);
+    }
+    return oauthServiceInstance;
+}

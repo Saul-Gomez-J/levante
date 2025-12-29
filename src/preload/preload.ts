@@ -159,6 +159,9 @@ export interface LevanteAPI {
       error?: string;
     }>;
 
+    // Cleanup all OAuth credentials for a removed server
+    cleanup: (params: { serverId: string }) => Promise<{ success: boolean; error?: string }>;
+
     // Listen for OAuth-required events from the main process
     onOAuthRequired: (
       callback: (data: {

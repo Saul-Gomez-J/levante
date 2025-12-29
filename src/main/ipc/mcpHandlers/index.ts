@@ -15,6 +15,7 @@ import { registerExtractionHandlers } from "./extraction.js";
 import { registerRegistryHandlers } from "./registry.js";
 import { registerProviderHandlers } from "./providers.js";
 import { registerRuntimeHandlers } from "./runtime.js";
+import { getOAuthService } from "../../services/oauth";
 
 // Create singleton instances
 let mcpService: IMCPService;
@@ -33,13 +34,14 @@ export async function registerMCPHandlers() {
 
     // Register all handler categories
     registerConnectionHandlers(mcpService, configManager);
-    registerConfigurationHandlers(mcpService, configManager);
+    const oauthService = getOAuthService();
+    registerConfigurationHandlers(mcpService, configManager, oauthService);
     registerToolHandlers(mcpService);
     registerResourceHandlers(mcpService);
     registerPromptHandlers(mcpService);
     registerHealthHandlers();
     registerExtractionHandlers(mcpService);
-    registerRegistryHandlers(mcpService, configManager);
+    registerRegistryHandlers(mcpService, configManager, oauthService);
     registerProviderHandlers();
     registerRuntimeHandlers();
 

@@ -102,6 +102,13 @@ export const appApi = {
         error?: string;
       }>,
 
+    // Cleanup all OAuth credentials for a removed server
+    cleanup: (params: { serverId: string }) =>
+      ipcRenderer.invoke('levante/oauth/cleanup', params) as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
+
     // Listen for OAuth required events triggered by 401 responses
     onOAuthRequired: (
       callback: (data: {
