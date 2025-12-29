@@ -8,6 +8,7 @@ import { join } from "path";
 import { config } from "dotenv";
 import { initializeLogger } from "./services/logging";
 import { updateService } from "./services/updateService";
+import { announcementService } from "./services/announcementService";
 import { deepLinkService } from "./services/deepLinkService";
 import { oauthCallbackServer } from "./services/oauthCallbackServer";
 import { analyticsService } from "./services/analytics";
@@ -28,6 +29,9 @@ initializeLogger();
 
 // Initialize auto-updates
 updateService.initialize();
+
+// Initialize announcement service
+announcementService.initialize();
 
 // Register custom protocol for deep linking
 if (process.defaultApp) {

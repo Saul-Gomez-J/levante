@@ -174,3 +174,5 @@ export type {
   ValidationResult,
   ProviderValidationConfig,
 };
+
+export type { Announcement, AnnouncementCategory, LastSeenAnnouncements } from '../../types/announcement';

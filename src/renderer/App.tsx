@@ -6,6 +6,7 @@ import ModelPage from '@/pages/ModelPage'
 import StorePage from '@/pages/StorePage'
 import { OnboardingWizard } from '@/pages/OnboardingWizard'
 import { MCPDeepLinkModal } from '@/components/mcp/deep-link/MCPDeepLinkModal'
+import { AnnouncementModal } from '@/components/announcements/AnnouncementModal'
 import { useChatStore, initializeChatStore } from '@/stores/chatStore'
 import { logger } from '@/services/logger'
 import { modelService } from '@/services/modelService'
@@ -16,6 +17,7 @@ import { toast, Toaster } from 'sonner'
 import '@/i18n/config' // Initialize i18n
 import type { DeepLinkAction } from '@preload/preload'
 import type { MCPServerConfig } from '@/types/mcp'
+import type { Announcement } from '@preload/types'
 
 function App() {
   const [currentPage, setCurrentPage] = useState('chat')
@@ -31,6 +33,10 @@ function App() {
     sourceUrl?: string;
     inputs?: Record<string, any>;
   }>({ config: null, name: '' })
+
+  // Announcement Modal state
+  const [announcementModalOpen, setAnnouncementModalOpen] = useState(false)
+  const [currentAnnouncement, setCurrentAnnouncement] = useState<Announcement | null>(null)
 
   // Load theme and language from ui-preferences.json
   useEffect(() => {
@@ -183,6 +189,31 @@ function App() {
       logger.core.error('Failed to initialize renderer services', { error: error instanceof Error ? error.message : error });
     });
   }, []);
+
+  // Check for announcements after wizard is completed
+  useEffect(() => {
+    if (!wizardCompleted) return;
+
+    const checkAnnouncements = async () => {
+      try {
+        const result = await window.levante.announcements.check();
+        if (result.success && result.data) {
+          setCurrentAnnouncement(result.data);
+          setAnnouncementModalOpen(true);
+          logger.core.info('New announcement found', {
+            id: result.data.id,
+            category: result.data.category
+          });
+        }
+      } catch (error) {
+        logger.core.error('Failed to check announcements', {
+          error: error instanceof Error ? error.message : error
+        });
+      }
+    };
+
+    checkAnnouncements();
+  }, [wizardCompleted]);
 
   // Chat management for sidebar - using Zustand selectors
   const currentSession = useChatStore((state) => state.currentSession)
@@ -458,6 +489,14 @@ function App() {
         serverName={mcpModalConfig.name}
         sourceUrl={mcpModalConfig.sourceUrl}
         inputs={mcpModalConfig.inputs}
+      />
+
+      {/* Announcement Modal */}
+      <AnnouncementModal
+        open={announcementModalOpen}
+        onOpenChange={setAnnouncementModalOpen}
+        announcement={currentAnnouncement}
+        onNavigate={setCurrentPage}
       />
 
       <MainLayout

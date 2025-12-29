@@ -54,6 +54,7 @@ import { attachmentsApi } from "./api/attachments";
 import { analyticsApi } from "./api/analytics";
 import { mermaidApi } from "./api/mermaid";
 import { widgetApi } from "./api/widget";
+import { announcementsApi } from "./api/announcements";
 
 // Re-export types for backwards compatibility
 export type {
@@ -701,6 +702,13 @@ export interface LevanteAPI {
     sendResult: (data: { requestId: string; result: any }) => void;
   };
 
+  // Announcements functionality
+  announcements: {
+    check: () => Promise<{ success: boolean; data?: import('../types/announcement').Announcement; error?: string }>;
+    markSeen: (id: string, category: import('../types/announcement').AnnouncementCategory) => Promise<{ success: boolean; error?: string }>;
+    enablePrivacy: (id: string) => Promise<{ success: boolean; error?: string }>;
+  };
+
   // Widget proxy functionality
   widget: {
     store: (html: string, options?: {
@@ -781,6 +789,9 @@ const api: LevanteAPI = {
   ...mermaidApi,
   // Widget Protocol API
   widget: widgetApi,
+
+  // Announcements API
+  announcements: announcementsApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to
