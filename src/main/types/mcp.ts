@@ -24,11 +24,32 @@ export interface MCPServerConfig {
   runtime?: RuntimeConfig;
   /** Per-server code mode override (only applies to mcp-use) */
   codeMode?: boolean | CodeModeConfig;
+  /** OAuth configuration (Phase 4) */
+  oauth?: {
+    enabled: boolean;
+    authServerId?: string;
+    clientId?: string;
+    scopes?: string[];
+  };
 }
 
 export interface MCPConfiguration {
   mcpServers: Record<string, Omit<MCPServerConfig, 'id'>>;
   disabled?: Record<string, Omit<MCPServerConfig, 'id'>>;
+}
+
+/**
+ * Tool behavior annotations (MCP spec / OpenAI Apps SDK)
+ */
+export interface ToolAnnotations {
+  /** Whether the tool only reads data without making changes */
+  readOnlyHint?: boolean;
+  /** Whether the tool may perform destructive updates */
+  destructiveHint?: boolean;
+  /** Whether the tool can be called multiple times with same result */
+  idempotentHint?: boolean;
+  /** Whether the tool operates on an open world (external systems) */
+  openWorldHint?: boolean;
 }
 
 export interface Tool {
@@ -41,6 +62,8 @@ export interface Tool {
   };
   /** Metadata including widget configuration (e.g., openai/outputTemplate for Skybridge) */
   _meta?: Record<string, any>;
+  /** Tool behavior annotations (MCP spec) */
+  annotations?: ToolAnnotations;
 }
 
 export interface ToolCall {

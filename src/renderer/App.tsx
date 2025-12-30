@@ -6,14 +6,18 @@ import ModelPage from '@/pages/ModelPage'
 import StorePage from '@/pages/StorePage'
 import { OnboardingWizard } from '@/pages/OnboardingWizard'
 import { MCPDeepLinkModal } from '@/components/mcp/deep-link/MCPDeepLinkModal'
+import { AnnouncementModal } from '@/components/announcements/AnnouncementModal'
 import { useChatStore, initializeChatStore } from '@/stores/chatStore'
-import { modelService } from '@/services/modelService'
 import { logger } from '@/services/logger'
+import { modelService } from '@/services/modelService'
+import { setupMermaidValidationHandler } from '@/services/mermaidValidationService'
+
 import { useTranslation } from 'react-i18next'
 import { toast, Toaster } from 'sonner'
 import '@/i18n/config' // Initialize i18n
 import type { DeepLinkAction } from '@preload/preload'
 import type { MCPServerConfig } from '@/types/mcp'
+import type { Announcement } from '@preload/types'
 
 function App() {
   const [currentPage, setCurrentPage] = useState('chat')
@@ -27,7 +31,12 @@ function App() {
     config: Partial<MCPServerConfig> | null;
     name: string;
     sourceUrl?: string;
+    inputs?: Record<string, any>;
   }>({ config: null, name: '' })
+
+  // Announcement Modal state
+  const [announcementModalOpen, setAnnouncementModalOpen] = useState(false)
+  const [currentAnnouncement, setCurrentAnnouncement] = useState<Announcement | null>(null)
 
   // Load theme and language from ui-preferences.json
   useEffect(() => {
@@ -70,7 +79,7 @@ function App() {
       window.removeEventListener('theme-changed', handleThemeChange as EventListener);
     };
   }, []);
-  
+
   // Apply theme to document
   useEffect(() => {
     const root = document.documentElement;
@@ -160,6 +169,15 @@ function App() {
   useEffect(() => {
     const initializeServices = async () => {
       logger.core.info('Renderer application starting');
+
+      // Initialize mermaid validation handler
+      try {
+        setupMermaidValidationHandler();
+        logger.core.info('Mermaid validation handler initialized');
+      } catch (error) {
+        logger.core.error('Failed to initialize Mermaid validation handler', { error });
+      }
+
       await Promise.all([
         initializeChatStore(),
         modelService.initialize()
@@ -171,7 +189,32 @@ function App() {
       logger.core.error('Failed to initialize renderer services', { error: error instanceof Error ? error.message : error });
     });
   }, []);
-  
+
+  // Check for announcements after wizard is completed
+  useEffect(() => {
+    if (!wizardCompleted) return;
+
+    const checkAnnouncements = async () => {
+      try {
+        const result = await window.levante.announcements.check();
+        if (result.success && result.data) {
+          setCurrentAnnouncement(result.data);
+          setAnnouncementModalOpen(true);
+          logger.core.info('New announcement found', {
+            id: result.data.id,
+            category: result.data.category
+          });
+        }
+      } catch (error) {
+        logger.core.error('Failed to check announcements', {
+          error: error instanceof Error ? error.message : error
+        });
+      }
+    };
+
+    checkAnnouncements();
+  }, [wizardCompleted]);
+
   // Chat management for sidebar - using Zustand selectors
   const currentSession = useChatStore((state) => state.currentSession)
   const sessions = useChatStore((state) => state.sessions)
@@ -192,20 +235,84 @@ function App() {
           setCurrentPage('store');
 
           // Extract MCP server data from deep link
-          const { name, config } = action.data as { name: string; config: any };
+          const { name, config, inputs } = action.data as {
+            name: string;
+            config: any;
+            inputs?: Record<string, any>;
+          };
           if (config && config.id) {
-            logger.core.info('Opening MCP confirmation modal from deep link', { serverId: config.id });
+            logger.core.info('Opening MCP confirmation modal from deep link', {
+              serverId: config.id,
+              hasInputs: !!inputs,
+              inputCount: inputs ? Object.keys(inputs).length : 0
+            });
 
             // Open confirmation modal instead of adding directly
             setMcpModalConfig({
               config,
               name: name || 'MCP Server',
-              sourceUrl: undefined // Could be extracted from deep link if needed
+              sourceUrl: undefined, // Could be extracted from deep link if needed
+              inputs
             });
             setMcpModalOpen(true);
           } else {
             toast.error('Invalid MCP server configuration', {
               description: 'The deep link did not contain valid server configuration',
+              duration: 5000
+            });
+          }
+        } else if (action.type === 'mcp-configure') {
+          // Handle MCP configure deep link (from discovery tool)
+          const { serverId } = action.data as { serverId: string };
+
+          logger.core.info('Handling MCP configure from discovery', { serverId });
+
+          // Fetch the server entry from registry (modal opens in current page context)
+          const result = await window.levante.mcp.providers.getEntry(serverId);
+
+          if (result.success && result.data) {
+            const entry = result.data;
+
+            logger.core.info('Found registry entry for MCP configure', {
+              serverId: entry.id,
+              name: entry.name,
+              transport: entry.transport.type
+            });
+
+            // Build the config from registry entry template
+            const config: Partial<MCPServerConfig> = {
+              id: entry.id,
+              name: entry.name,
+              transport: entry.transport.type,
+              ...(entry.configuration.template || {})
+            };
+
+            // Convert fields to inputs format for the modal
+            const inputs: Record<string, any> = {};
+            if (entry.configuration.fields && entry.configuration.fields.length > 0) {
+              for (const field of entry.configuration.fields) {
+                inputs[field.key] = {
+                  label: field.label,
+                  required: field.required,
+                  type: field.type,
+                  default: field.defaultValue,
+                  description: field.description
+                };
+              }
+            }
+
+            // Open the modal
+            setMcpModalConfig({
+              config,
+              name: entry.name,
+              sourceUrl: entry.metadata?.homepage || entry.metadata?.repository,
+              inputs: Object.keys(inputs).length > 0 ? inputs : undefined
+            });
+            setMcpModalOpen(true);
+          } else {
+            logger.core.error('Failed to find MCP server in registry', { serverId, error: result.error });
+            toast.error('MCP server not found', {
+              description: `Could not find server: ${serverId}`,
               duration: 5000
             });
           }
@@ -381,6 +488,15 @@ function App() {
         config={mcpModalConfig.config}
         serverName={mcpModalConfig.name}
         sourceUrl={mcpModalConfig.sourceUrl}
+        inputs={mcpModalConfig.inputs}
+      />
+
+      {/* Announcement Modal */}
+      <AnnouncementModal
+        open={announcementModalOpen}
+        onOpenChange={setAnnouncementModalOpen}
+        announcement={currentAnnouncement}
+        onNavigate={setCurrentPage}
       />
 
       <MainLayout

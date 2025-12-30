@@ -6,8 +6,8 @@ const logger = getLogger();
 /**
  * Protocols allowed for external URL opening
  *
- * Security: Only web protocols and email are permitted.
- * file:// and custom protocols are blocked to prevent:
+ * Security: Only web protocols, email, and our own deep link protocol are permitted.
+ * file:// and other custom protocols are blocked to prevent:
  * - Local file access/exposure
  * - Arbitrary application execution
  * - Protocol handler exploitation
@@ -16,7 +16,7 @@ const logger = getLogger();
  * - CVE-2020-25019: Jitsi Meet file:// URL execution vulnerability
  * - Electron Security Guidelines: shell.openExternal() best practices
  */
-export const ALLOWED_PROTOCOLS = ['http:', 'https:', 'mailto:'] as const;
+export const ALLOWED_PROTOCOLS = ['http:', 'https:', 'mailto:', 'levante:'] as const;
 
 /**
  * Validates if a URL is safe to open externally
@@ -60,7 +60,7 @@ export async function safeOpenExternal(
 
       return {
         success: false,
-        error: `Protocol "${parsedUrl.protocol}" is not allowed. Only HTTP, HTTPS, and mailto URLs can be opened.`
+        error: `Protocol "${parsedUrl.protocol}" is not allowed. Only HTTP, HTTPS, mailto, and levante URLs can be opened.`
       };
     }
 

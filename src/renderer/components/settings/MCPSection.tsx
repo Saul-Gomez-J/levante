@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,6 +19,8 @@ import { CheckCircle, Settings, ChevronDown, Info } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useMCPConfig } from '@/hooks/useMCPConfig';
 import { SettingsSection } from './SettingsSection';
+import { OAuthPermissionsView } from '@/components/oauth/OAuthPermissionsView';
+import { useOAuth } from '@/hooks/useOAuth';
 
 export const MCPSection = () => {
   const { t } = useTranslation(['settings', 'common']);
@@ -27,6 +30,15 @@ export const MCPSection = () => {
     state,
     handleSave
   } = useMCPConfig();
+
+  const { servers, loadAll } = useOAuth();
+  const oauthServerIds = Object.keys(servers);
+
+  // Load OAuth servers on mount
+  // Load OAuth servers on mount
+  useEffect(() => {
+    loadAll();
+  }, []);
 
   return (
     <SettingsSection
@@ -210,6 +222,25 @@ export const MCPSection = () => {
                 </Collapsible>
               </>
             )}
+          </div>
+        )}
+
+
+        {/* OAuth Connections Section */}
+        {oauthServerIds.length > 0 && (
+          <div className="space-y-4 border-t pt-4">
+            <div className="space-y-1">
+              <h3 className="text-sm font-medium">OAuth Connections</h3>
+              <p className="text-xs text-muted-foreground">
+                Manage your connected MCP servers
+              </p>
+            </div>
+
+            <div className="grid gap-4">
+              {oauthServerIds.map(serverId => (
+                <OAuthPermissionsView key={serverId} serverId={serverId} />
+              ))}
+            </div>
           </div>
         )}
 

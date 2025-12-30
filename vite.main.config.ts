@@ -24,11 +24,10 @@ export default defineConfig(({ command }) => ({
         // Optional native modules (ws dependencies)
         'bufferutil',
         'utf-8-validate',
-        // Winston logger (used by mcp-use)
+        // Winston must be external - mcp-use's Logger.configure() loads it at runtime
         'winston',
         /^winston\/.*/,
-        // mcp-use framework - must be external to avoid Logger.get() at bundle load time
-        'mcp-use',
+        // NOTE: mcp-use bundled by Vite, but winston kept external for Logger
       ]
     }
   },

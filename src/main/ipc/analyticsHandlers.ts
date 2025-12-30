@@ -22,6 +22,11 @@ export function registerAnalyticsHandlers() {
         return { success: true };
     });
 
+    ipcMain.handle('levante/analytics/track-app-open', async (_, force: boolean = false) => {
+        await analyticsService.trackAppOpen(force);
+        return { success: true };
+    });
+
     ipcMain.handle('levante/analytics/disable', async () => {
         await analyticsService.disableAnalytics();
         return { success: true };

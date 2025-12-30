@@ -17,6 +17,7 @@ import type { IMCPService } from "./IMCPService.js";
 import { RuntimeResolver } from "../runtime/RuntimeResolver.js";
 import { RuntimeManager } from "../runtime/runtimeManager.js";
 import { PreferencesService } from "../preferencesService.js";
+import { OAuthService } from "../oauth/OAuthService.js";
 
 /**
  * Legacy MCP service implementation using @modelcontextprotocol/sdk.
@@ -28,6 +29,7 @@ export class MCPLegacyService implements IMCPService {
   private logger = getLogger();
   private clients: Map<string, Client> = new Map();
   private runtimeResolver: RuntimeResolver;
+  private oauthAttempts: Map<string, { count: number; lastAttempt: number }> = new Map();
 
   constructor() {
     // Initialize RuntimeResolver for automatic runtime management
@@ -61,6 +63,31 @@ export class MCPLegacyService implements IMCPService {
     const transportType = config.transport || (config as any).type;
     const baseUrl = config.baseUrl || (config as any).url;
 
+    if (transportType === 'http' || transportType === 'sse' || transportType === 'streamable-http') {
+      let headers = { ...(config.headers || {}) };
+
+      try {
+        const preferencesService = new PreferencesService();
+        await preferencesService.initialize();
+        const oauthService = new OAuthService(preferencesService);
+
+        const tokens = await oauthService.getExistingToken(config.id);
+        if (tokens) {
+          this.logger.mcp.debug("Using existing OAuth token", { serverId: config.id });
+          headers = {
+            ...headers,
+            Authorization: `${tokens.tokenType} ${tokens.accessToken}`,
+          };
+        }
+      } catch (error) {
+        this.logger.mcp.debug("No OAuth token available, will connect without auth", {
+          serverId: config.id
+        });
+      }
+
+      config.headers = headers;
+    }
+
     try {
       const { client, transport } = await createTransport(config);
 
@@ -75,6 +102,31 @@ export class MCPLegacyService implements IMCPService {
           serverId: config.id,
         });
       } catch (connectionError) {
+        if (this.is401Error(connectionError)) {
+          if (!this.canAttemptOAuth(config.id)) {
+            this.logger.mcp.error('Too many OAuth attempts', { serverId: config.id });
+          } else {
+            this.logger.mcp.info("Received 401, initiating OAuth flow", {
+              serverId: config.id,
+              url: baseUrl
+            });
+
+            const wwwAuth = this.extractWWWAuthenticate(connectionError);
+
+            if (wwwAuth) {
+              await this.initiateOAuthFlow(config.id, baseUrl, wwwAuth);
+
+              throw {
+                code: 'OAUTH_REQUIRED',
+                message: 'OAuth authorization required',
+                serverId: config.id,
+                mcpServerUrl: baseUrl,
+                wwwAuth
+              };
+            }
+          }
+        }
+
         this.logger.mcp.error("Connection failed for server", {
           serverId: config.id,
           error:
@@ -281,6 +333,78 @@ export class MCPLegacyService implements IMCPService {
         message: "Unable to validate package due to registry loading error",
       };
     }
+  }
+
+  /**
+   * Detects if an error represents a 401 unauthorized response.
+   */
+  private is401Error(error: any): boolean {
+    return (
+      error?.status === 401 ||
+      error?.statusCode === 401 ||
+      error?.response?.status === 401 ||
+      (error?.message && typeof error.message === 'string' && error.message.includes('401')) ||
+      (error?.message && typeof error.message === 'string' && error.message.toLowerCase().includes('unauthorized'))
+    );
+  }
+
+  /**
+   * Extract WWW-Authenticate header from various error shapes.
+   */
+  private extractWWWAuthenticate(error: any): string | undefined {
+    return (
+      error?.headers?.['www-authenticate'] ||
+      error?.headers?.['WWW-Authenticate'] ||
+      error?.response?.headers?.['www-authenticate'] ||
+      error?.response?.headers?.['WWW-Authenticate'] ||
+      undefined
+    );
+  }
+
+  /**
+   * Emit OAuth required event to renderer when 401 is detected.
+   */
+  private async initiateOAuthFlow(
+    serverId: string,
+    mcpServerUrl: string,
+    wwwAuth: string
+  ): Promise<void> {
+    const { BrowserWindow } = await import('electron');
+    const mainWindow = BrowserWindow.getAllWindows()[0];
+
+    if (mainWindow) {
+      mainWindow.webContents.send('levante/oauth/required', {
+        serverId,
+        mcpServerUrl,
+        wwwAuth
+      });
+    }
+  }
+
+  /**
+   * Simple rate limiting for OAuth attempts.
+   */
+  private canAttemptOAuth(serverId: string): boolean {
+    const now = Date.now();
+    const attempt = this.oauthAttempts.get(serverId);
+
+    if (!attempt) {
+      this.oauthAttempts.set(serverId, { count: 1, lastAttempt: now });
+      return true;
+    }
+
+    if (now - attempt.lastAttempt > 5 * 60 * 1000) {
+      this.oauthAttempts.set(serverId, { count: 1, lastAttempt: now });
+      return true;
+    }
+
+    if (attempt.count >= 3) {
+      return false;
+    }
+
+    attempt.count++;
+    attempt.lastAttempt = now;
+    return true;
   }
 
   // ==========================================

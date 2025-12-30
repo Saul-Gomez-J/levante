@@ -38,7 +38,22 @@ export function registerConnectionHandlers(
         logger.mcp.error("Failed to connect server", {
           serverId: config.id,
           error: error.message,
+          errorCode: error.code,
         });
+
+        // Handle OAuth required error
+        if (error.code === 'OAUTH_REQUIRED') {
+          return {
+            success: false,
+            error: error.message || 'OAuth authorization required',
+            errorCode: 'OAUTH_REQUIRED',
+            metadata: {
+              serverId: error.serverId,
+              mcpServerUrl: error.mcpServerUrl,
+              wwwAuth: error.wwwAuth
+            }
+          };
+        }
 
         // Preserve runtime error metadata for UI dialogs
         if (error.message === 'RUNTIME_CHOICE_REQUIRED') {
@@ -195,6 +210,20 @@ export function registerConnectionHandlers(
           await mcpService.disconnectServer(testId);
         } catch {
           // Ignore cleanup errors
+        }
+
+        // Handle OAuth required error
+        if (error.code === 'OAUTH_REQUIRED') {
+          return {
+            success: false,
+            error: error.message || 'OAuth authorization required',
+            errorCode: 'OAUTH_REQUIRED',
+            metadata: {
+              serverId: error.serverId,
+              mcpServerUrl: error.mcpServerUrl,
+              wwwAuth: error.wwwAuth
+            }
+          };
         }
 
         // Preserve runtime error metadata for UI dialogs (same as connect-server)

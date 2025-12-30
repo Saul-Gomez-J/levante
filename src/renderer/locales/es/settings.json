@@ -115,6 +115,14 @@
       "formula": "Fórmula: Pasos Base + (Número de Herramientas ÷ 5) × 2",
       "example": "Con 24 herramientas: {{baseSteps}} + (24 ÷ 5) × 2 = {{result}} pasos",
       "note": "Previene bucles infinitos mientras permite operaciones complejas"
+    },
+    "mermaid_validation": {
+      "label": "Generación de Diagramas Mermaid",
+      "description": "Permite que la IA genere y valide diagramas Mermaid"
+    },
+    "mcp_discovery": {
+      "label": "Descubrimiento de Servidores MCP",
+      "description": "Permite que la IA sugiera y recomiende servidores MCP de la tienda cuando necesites capacidades adicionales"
     }
   },
   "developer_mode": {

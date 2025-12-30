@@ -32,13 +32,17 @@ export class AnalyticsService {
 
     async trackUser(): Promise<void> {
         try {
-            if (!await this.canTrack()) return;
+            // Get user ID and consent status from profile
             const userId = await this.getUserId();
             if (!userId) return;
 
-            const success = await this.supabaseClient.insertUser(userId, true);
+            const profile = await userProfileService.getProfile();
+            const sharingData = profile.analytics?.hasConsented === true;
+
+            // Track user record creation regardless of consent, but with correct sharing_data value
+            const success = await this.supabaseClient.insertUser(userId, sharingData);
             if (success) {
-                getLogger().analytics?.info('User tracked successfully', { userId });
+                getLogger().analytics?.info('User tracked successfully', { userId, sharingData });
             } else {
                 throw new Error('Failed to insert user record');
             }
@@ -48,9 +52,11 @@ export class AnalyticsService {
         }
     }
 
-    async trackAppOpen(): Promise<void> {
+    async trackAppOpen(force: boolean = false): Promise<void> {
         try {
-            if (!await this.canTrack()) return;
+            // Only track app opens if user has consented, unless forced (e.g., initial onboarding)
+            if (!force && !await this.canTrack()) return;
+
             const userId = await this.getUserId();
             if (!userId) return;
 
@@ -61,6 +67,7 @@ export class AnalyticsService {
             if (platform === 'linux') platform = 'Linux';
 
             await this.supabaseClient.insertAppOpen(userId, version, platform);
+            getLogger().analytics?.info('App open tracked', { userId, version, platform, forced: force });
         } catch (error) {
             getLogger().analytics?.info('Error tracking app open', { error });
         }
@@ -149,6 +156,48 @@ export class AnalyticsService {
             await this.supabaseClient.updateUser(userId, { sharing_data: true });
         } catch (error) {
             getLogger().analytics?.info('Error enabling analytics', { error });
+        }
+    }
+
+    async ensureUserTracked(): Promise<void> {
+        try {
+            // Check if user has UUID
+            const existingUserId = await this.getUserId();
+
+            // If user already has UUID, nothing to do
+            if (existingUserId) return;
+
+            getLogger().analytics?.info('User has no UUID, creating one with default settings');
+
+            // Generate new UUID and save to profile with sharing_data: false
+            const newUserId = crypto.randomUUID();
+            const profile = await userProfileService.getProfile();
+
+            await userProfileService.updateProfile({
+                ...profile,
+                analytics: {
+                    hasConsented: false,
+                    consentedAt: new Date().toISOString(),
+                    anonymousUserId: newUserId,
+                },
+            });
+
+            getLogger().analytics?.info('Created UUID for user', { userId: newUserId });
+
+            // Track user and initial app open (fire-and-forget, don't await)
+            this.trackUser()
+                .then(() => {
+                    getLogger().analytics?.info('User tracked successfully');
+                    return this.trackAppOpen(true);
+                })
+                .then(() => {
+                    getLogger().analytics?.info('Initial app open tracked');
+                })
+                .catch((error) => {
+                    getLogger().analytics?.error('Error tracking user/app open', { error });
+                });
+        } catch (error) {
+            getLogger().analytics?.error('Error ensuring user tracked', { error });
         }
     }
 }

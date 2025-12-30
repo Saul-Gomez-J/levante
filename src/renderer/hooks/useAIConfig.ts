@@ -7,6 +7,8 @@ export const useAIConfig = () => {
   const [config, setConfig] = useState({
     baseSteps: 5,
     maxSteps: 20,
+    mermaidValidation: true,
+    mcpDiscovery: true,
   });
 
   const [state, setState] = useState({
@@ -24,7 +26,9 @@ export const useAIConfig = () => {
       setConfig(prev => ({
         ...prev,
         baseSteps: aiConfig?.data?.baseSteps || 5,
-        maxSteps: aiConfig?.data?.maxSteps || 20
+        maxSteps: aiConfig?.data?.maxSteps || 20,
+        mermaidValidation: aiConfig?.data?.mermaidValidation !== false,
+        mcpDiscovery: aiConfig?.data?.mcpDiscovery !== false
       }));
     } catch (error) {
       logger.preferences.error('Error loading AI steps configuration', {
@@ -39,7 +43,9 @@ export const useAIConfig = () => {
     try {
       await window.levante.preferences.set('ai', {
         baseSteps: config.baseSteps,
-        maxSteps: config.maxSteps
+        maxSteps: config.maxSteps,
+        mermaidValidation: config.mermaidValidation,
+        mcpDiscovery: config.mcpDiscovery
       });
 
       setState(prev => ({ ...prev, saving: false, saved: true }));

@@ -127,7 +127,7 @@ export function IntegrationCard({
           {mode === 'active' && (
             <Switch
               checked={server?.enabled !== false}
-              disabled={status === 'connecting'}
+              disabled={status === 'connecting' || status === 'pending_oauth'}
               onCheckedChange={onToggle}
             />
           )}
@@ -164,8 +164,8 @@ export function IntegrationCard({
           {description}
         </p>
 
-        {/* Status indicator solo en modo Active y cuando está conectado/conectando */}
-        {mode === 'active' && (status === 'connected' || status === 'connecting') && (
+        {/* Status indicator solo en modo Active y cuando está conectado/conectando/oauth */}
+        {mode === 'active' && (status === 'connected' || status === 'connecting' || status === 'pending_oauth') && (
           <div className="flex items-center">
             <ConnectionStatus
               serverId={server?.id || entry?.id || 'unknown'}
@@ -221,7 +221,7 @@ export function IntegrationCard({
                 size="sm"
                 className="flex-1"
                 onClick={onConfigure}
-                disabled={status === 'connecting'}
+                disabled={status === 'connecting' || status === 'pending_oauth'}
               >
                 <Settings className="w-4 h-4 mr-2" />
                 {t('server.configure')}
@@ -232,7 +232,7 @@ export function IntegrationCard({
                   variant="ghost"
                   size="sm"
                   onClick={handleDeleteClick}
-                  disabled={status === 'connecting'}
+                  disabled={status === 'connecting' || status === 'pending_oauth'}
                   title={t('server.delete')}
                 >
                   <Trash2 className="w-4 h-4" />
@@ -265,11 +265,11 @@ export function IntegrationCard({
       </AlertDialog>
 
       {/* Overlay solo en modo Active */}
-      {mode === 'active' && status === 'connecting' && (
+      {mode === 'active' && (status === 'connecting' || status === 'pending_oauth') && (
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center">
           <ConnectionStatus
             serverId={server?.id || entry?.id || 'unknown'}
-            status="connecting"
+            status={status}
             size="lg"
             variant="full"
             showLabel={true}

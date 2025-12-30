@@ -19,7 +19,7 @@ export class OAuthCallbackServer {
    */
   async start(): Promise<{ port: number; callbackUrl: string }> {
     if (this.server) {
-      logger.core.warn('OAuth callback server already running', { port: this.port });
+      logger.oauth.warn('OAuth callback server already running', { port: this.port });
       return { port: this.port, callbackUrl: `http://localhost:${this.port}` };
     }
 
@@ -39,7 +39,7 @@ export class OAuthCallbackServer {
           const address = this.server?.address();
           if (address && typeof address === 'object') {
             this.port = address.port;
-            logger.core.info('OAuth callback server started', {
+            logger.oauth.info('OAuth callback server started', {
               port: this.port,
               isRecommendedPort: this.port === 3000
             });
@@ -55,12 +55,12 @@ export class OAuthCallbackServer {
         this.server?.once('error', (error: NodeJS.ErrnoException) => {
           if (error.code === 'EADDRINUSE' && portIndex < tryPorts.length - 1) {
             // Port 3000 is in use, try random port
-            logger.core.info('Port 3000 in use, trying random port');
+            logger.oauth.info('Port 3000 in use, trying random port');
             portIndex++;
             this.server?.removeAllListeners();
             tryListen();
           } else {
-            logger.core.error('OAuth callback server error', {
+            logger.oauth.error('OAuth callback server error', {
               error: error.message
             });
             reject(error);
@@ -77,19 +77,19 @@ export class OAuthCallbackServer {
    */
   async stop(): Promise<void> {
     if (!this.server) {
-      logger.core.warn('OAuth callback server not running');
+      logger.oauth.warn('OAuth callback server not running');
       return;
     }
 
     return new Promise((resolve, reject) => {
       this.server?.close((error) => {
         if (error) {
-          logger.core.error('Error closing OAuth callback server', {
+          logger.oauth.error('Error closing OAuth callback server', {
             error: error.message
           });
           reject(error);
         } else {
-          logger.core.info('OAuth callback server stopped');
+          logger.oauth.info('OAuth callback server stopped');
           this.server = null;
           this.port = 0;
           resolve();
@@ -104,9 +104,11 @@ export class OAuthCallbackServer {
   private handleRequest(req: IncomingMessage, res: ServerResponse): void {
     const url = new URL(req.url || '', `http://localhost:${this.port}`);
 
-    logger.core.info('OAuth callback received', {
+    logger.oauth.info('OAuth callback received', {
       path: url.pathname,
-      query: Object.fromEntries(url.searchParams.entries())
+      hasCode: url.searchParams.has('code'),
+      hasState: url.searchParams.has('state'),
+      hasError: url.searchParams.has('error')
     });
 
     // Handle callback endpoint (accept both /callback and / as valid paths)
@@ -116,7 +118,7 @@ export class OAuthCallbackServer {
       const errorDescription = url.searchParams.get('error_description');
 
       if (error) {
-        logger.core.error('OAuth authorization error', {
+        logger.oauth.error('OAuth authorization error', {
           error,
           errorDescription
         });
@@ -176,7 +178,7 @@ export class OAuthCallbackServer {
       }
 
       if (!code) {
-        logger.core.warn('OAuth callback missing code parameter');
+        logger.oauth.warn('OAuth callback missing code parameter');
 
         res.writeHead(400, { 'Content-Type': 'text/html' });
         res.end(`
@@ -185,6 +187,24 @@ export class OAuthCallbackServer {
             <head>
               <title>Invalid Request</title>
               <style>
+                :root {
+                  --background: 0 0% 100%;
+                  --foreground: 0 0% 3.9%;
+                  --card: 0 0% 100%;
+                  --card-foreground: 0 0% 3.9%;
+                  --muted-foreground: 0 0% 45.1%;
+                  --border: 0 0% 89.8%;
+                }
+                @media (prefers-color-scheme: dark) {
+                  :root {
+                    --background: 0 0% 11.8%;
+                    --foreground: 0 0% 88%;
+                    --card: 0 0% 15.3%;
+                    --card-foreground: 0 0% 88%;
+                    --muted-foreground: 0 0% 65%;
+                    --border: 0 0% 30%;
+                  }
+                }
                 body {
                   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                   display: flex;
@@ -192,17 +212,20 @@ export class OAuthCallbackServer {
                   align-items: center;
                   height: 100vh;
                   margin: 0;
-                  background: #f5f5f5;
+                  background: hsl(var(--background));
+                  color: hsl(var(--foreground));
                 }
                 .container {
                   text-align: center;
                   padding: 2rem;
-                  background: white;
+                  background: hsl(var(--card));
+                  color: hsl(var(--card-foreground));
+                  border: 1px solid hsl(var(--border));
                   border-radius: 8px;
-                  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
                 }
-                h1 { color: #000; }
-                p { color: #000; }
+                h1 { color: hsl(var(--card-foreground)); }
+                p { color: hsl(var(--muted-foreground)); }
               </style>
             </head>
             <body>
@@ -219,7 +242,7 @@ export class OAuthCallbackServer {
       }
 
       // Success! Send code to renderer
-      logger.core.info('OAuth authorization successful', {
+      logger.oauth.info('OAuth authorization successful', {
         codeLength: code.length
       });
 
@@ -230,6 +253,28 @@ export class OAuthCallbackServer {
           <head>
             <title>Authorization Successful</title>
             <style>
+              :root {
+                --background: 0 0% 100%;
+                --foreground: 0 0% 3.9%;
+                --card: 0 0% 100%;
+                --card-foreground: 0 0% 3.9%;
+                --muted-foreground: 0 0% 45.1%;
+                --border: 0 0% 89.8%;
+                --success: 160 84% 39%;
+                --success-foreground: 0 0% 100%;
+              }
+              @media (prefers-color-scheme: dark) {
+                :root {
+                  --background: 0 0% 11.8%;
+                  --foreground: 0 0% 88%;
+                  --card: 0 0% 15.3%;
+                  --card-foreground: 0 0% 88%;
+                  --muted-foreground: 0 0% 65%;
+                  --border: 0 0% 30%;
+                  --success: 160 84% 39%;
+                  --success-foreground: 0 0% 100%;
+                }
+              }
               body {
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
                 display: flex;
@@ -237,25 +282,34 @@ export class OAuthCallbackServer {
                 align-items: center;
                 height: 100vh;
                 margin: 0;
-                background: #f5f5f5;
+                background: hsl(var(--background));
+                color: hsl(var(--foreground));
               }
               .container {
                 text-align: center;
                 padding: 2rem;
-                background: white;
+                background: hsl(var(--card));
+                color: hsl(var(--card-foreground));
+                border: 1px solid hsl(var(--border));
                 border-radius: 8px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
               }
-              h1 { color: #000; }
-              p { color: #000; }
+              h1 { color: hsl(var(--card-foreground)); }
+              p { color: hsl(var(--muted-foreground)); }
               .spinner {
                 margin: 1rem auto;
                 width: 40px;
                 height: 40px;
                 border: 4px solid #f3f3f3;
-                border-top: 4px solid #38a169;
+                border-top: 4px solid hsl(var(--success));
                 border-radius: 50%;
                 animation: spin 1s linear infinite;
+              }
+              @media (prefers-color-scheme: dark) {
+                .spinner {
+                  border-color: hsl(var(--border));
+                  border-top-color: hsl(var(--success));
+                }
               }
               @keyframes spin {
                 0% { transform: rotate(0deg); }

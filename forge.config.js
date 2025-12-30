@@ -42,7 +42,7 @@ module.exports = {
 
       if (await fs.pathExists(libsqlDir)) {
         console.log('  ✓ Copying all @libsql/* packages...');
-        await fs.copy(libsqlDir, destLibsqlDir, { overwrite: true });
+        await fs.copy(libsqlDir, destLibsqlDir, { overwrite: true, dereference: true });
 
         const packages = await fs.readdir(libsqlDir);
         packages.forEach(pkg => console.log(`    - @libsql/${pkg}`));
@@ -63,7 +63,7 @@ module.exports = {
 
         if (await fs.pathExists(srcPath)) {
           console.log(`    - ${dep}`);
-          await fs.copy(srcPath, destPath, { overwrite: true });
+          await fs.copy(srcPath, destPath, { overwrite: true, dereference: true });
         }
       }
 
@@ -79,41 +79,27 @@ module.exports = {
 
         if (await fs.pathExists(srcPath)) {
           console.log(`    - ${dep}`);
-          await fs.copy(srcPath, destPath, { overwrite: true });
+          await fs.copy(srcPath, destPath, { overwrite: true, dereference: true });
         }
       }
 
-      // Copiar mcp-use y sus dependencias (marcado como external en vite)
-      console.log('  ✓ Finding mcp-use dependencies...');
-      const mcpUseDeps = await getAllDependencies('mcp-use');
-
-      for (const dep of mcpUseDeps) {
-        if (allDeps.has(dep) || updateAppDeps.has(dep)) continue; // Ya copiado
-
-        const srcPath = path.join(projectNodeModules, dep);
-        const destPath = path.join(packageNodeModules, dep);
-
-        if (await fs.pathExists(srcPath)) {
-          console.log(`    - ${dep}`);
-          await fs.copy(srcPath, destPath, { overwrite: true });
-        }
-      }
-
-      // Copiar winston (dependencia de mcp-use, marcado como external)
+      // Copiar winston (external - requerido por mcp-use Logger en runtime)
       console.log('  ✓ Finding winston dependencies...');
       const winstonDeps = await getAllDependencies('winston');
 
       for (const dep of winstonDeps) {
-        if (allDeps.has(dep) || updateAppDeps.has(dep) || mcpUseDeps.has(dep)) continue;
+        if (allDeps.has(dep) || updateAppDeps.has(dep)) continue;
 
         const srcPath = path.join(projectNodeModules, dep);
         const destPath = path.join(packageNodeModules, dep);
 
         if (await fs.pathExists(srcPath)) {
           console.log(`    - ${dep}`);
-          await fs.copy(srcPath, destPath, { overwrite: true });
+          await fs.copy(srcPath, destPath, { overwrite: true, dereference: true });
         }
       }
+
+      // NOTE: mcp-use bundled by Vite, only winston kept external for Logger
 
       console.log(`✅ Copied external dependencies successfully`);
     }

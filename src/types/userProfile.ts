@@ -3,6 +3,8 @@
  * Stored in ~/levante/user-profile.json
  */
 
+import type { LastSeenAnnouncements } from './announcement';
+
 export interface UserProfile {
   /**
    * Wizard completion status
@@ -67,6 +69,19 @@ export interface AnalyticsConsent {
    * Generated once on first consent, persists even if consent is withdrawn
    */
   anonymousUserId?: string;
+
+  /**
+   * @deprecated Use lastSeenAnnouncements instead
+   * Kept for migration compatibility
+   */
+  lastSeenAnnouncementId?: string;
+
+  /**
+   * Per-category tracking of last seen announcement IDs
+   * Key: category name ('announcement' | 'privacy')
+   * Value: UUID of last seen announcement in that category
+   */
+  lastSeenAnnouncements?: LastSeenAnnouncements;
 }
 
 /**

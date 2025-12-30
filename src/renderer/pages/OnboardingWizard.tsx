@@ -141,37 +141,33 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
     // Step 4 (Directory): Save analytics consent
     if (currentStep === 4 && analyticsConsent !== null) {
       try {
+        // Always generate UUID if it doesn't exist (regardless of consent choice)
+        const profile = await window.levante.profile.get();
+        const existingId = profile.data?.analytics?.anonymousUserId;
+        const anonymousUserId = existingId || crypto.randomUUID();
+
         // Save analytics consent to user profile
-        if (analyticsConsent) {
-          // Generate UUID only if consenting and no UUID exists
-          const profile = await window.levante.profile.get();
-          const existingId = profile.data?.analytics?.anonymousUserId;
+        await window.levante.profile.update({
+          analytics: {
+            hasConsented: analyticsConsent,
+            consentedAt: new Date().toISOString(),
+            anonymousUserId: anonymousUserId,
+          },
+        });
 
-          await window.levante.profile.update({
-            analytics: {
-              hasConsented: true,
-              consentedAt: new Date().toISOString(),
-              anonymousUserId: existingId || crypto.randomUUID(),
-            },
-          });
-
-          // Track user record creation (await to ensure it completes before reload)
-          console.log('[Onboarding] Tracking user...');
-          try {
-            await window.levante.analytics?.trackUser?.();
+        // Track analytics asynchronously (fire-and-forget, don't block UI flow)
+        console.log('[Onboarding] Tracking user analytics in background...', { hasConsented: analyticsConsent });
+        window.levante.analytics?.trackUser?.()
+          .then(() => {
             console.log('[Onboarding] User tracked successfully');
-          } catch (e) {
-            console.error('[Onboarding] Failed to track user', e);
-          }
-        } else {
-          // User declined - save that too (but don't generate UUID)
-          await window.levante.profile.update({
-            analytics: {
-              hasConsented: false,
-              consentedAt: new Date().toISOString(),
-            },
+            return window.levante.analytics?.trackAppOpen?.(true);
+          })
+          .then(() => {
+            console.log('[Onboarding] Initial app open tracked');
+          })
+          .catch((e) => {
+            console.error('[Onboarding] Failed to track user/app open', e);
           });
-        }
       } catch (error) {
         console.error('Failed to save analytics consent:', error);
       }

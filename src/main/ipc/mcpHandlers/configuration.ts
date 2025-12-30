@@ -6,7 +6,8 @@ const logger = getLogger();
 
 export function registerConfigurationHandlers(
   mcpService: any,
-  configManager: any
+  configManager: any,
+  oauthService?: any
 ) {
   // Configuration management handlers
   ipcMain.handle("levante/mcp/load-configuration", async () => {
@@ -99,6 +100,11 @@ export function registerConfigurationHandlers(
 
   ipcMain.handle("levante/mcp/remove-server", async (_, serverId: string) => {
     try {
+      // Clean up OAuth credentials if service is available
+      if (oauthService) {
+        await oauthService.cleanupCredentials(serverId);
+      }
+
       await configManager.removeServer(serverId);
       return { success: true };
     } catch (error: any) {

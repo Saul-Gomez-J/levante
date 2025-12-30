@@ -168,4 +168,5 @@ export type MCPConnectionStatus =
   | "connected"
   | "disconnected"
   | "connecting"
-  | "error";
+  | "error"
+  | "pending_oauth";

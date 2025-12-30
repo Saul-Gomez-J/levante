@@ -52,6 +52,9 @@ import { debugApi } from "./api/debug";
 import { settingsApi } from "./api/settings";
 import { attachmentsApi } from "./api/attachments";
 import { analyticsApi } from "./api/analytics";
+import { mermaidApi } from "./api/mermaid";
+import { widgetApi } from "./api/widget";
+import { announcementsApi } from "./api/announcements";
 
 // Re-export types for backwards compatibility
 export type {
@@ -88,13 +91,112 @@ export interface LevanteAPI {
   openExternal: (url: string) => Promise<{ success: boolean; error?: string }>;
   onDeepLink: (callback: (action: DeepLinkAction) => void) => () => void;
   oauth: {
+    // ========================================
+    // MCP OAuth Methods
+    // ========================================
+
+    // Authorize OAuth flow
+    authorize: (params: {
+      serverId: string;
+      mcpServerUrl: string;
+      scopes?: string[];
+      clientId?: string;
+      wwwAuthHeader?: string;
+    }) => Promise<{
+      success: boolean;
+      error?: string;
+      tokens?: {
+        expiresAt: number;
+        scope?: string;
+      };
+    }>;
+
+    // Disconnect and revoke
+    disconnect: (params: {
+      serverId: string;
+      revokeTokens?: boolean;
+    }) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+
+    // Get status
+    status: (params: {
+      serverId: string;
+    }) => Promise<{
+      success: boolean;
+      data?: {
+        hasConfig: boolean;
+        hasTokens: boolean;
+        isTokenValid: boolean;
+        expiresAt?: number;
+        scopes?: string[];
+        authServerId?: string;
+      };
+      error?: string;
+    }>;
+
+    // Refresh token
+    refresh: (params: {
+      serverId: string;
+    }) => Promise<{
+      success: boolean;
+      error?: string;
+      tokens?: {
+        expiresAt: number;
+        scope?: string;
+      };
+    }>;
+
+    // List OAuth servers
+    list: () => Promise<{
+      success: boolean;
+      data?: Array<{
+        serverId: string;
+        hasConfig: boolean;
+        hasTokens: boolean;
+        isTokenValid: boolean;
+      }>;
+      error?: string;
+    }>;
+
+    // Cleanup all OAuth credentials for a removed server
+    cleanup: (params: { serverId: string }) => Promise<{ success: boolean; error?: string }>;
+
+    // Listen for OAuth-required events from the main process
+    onOAuthRequired: (
+      callback: (data: {
+        serverId: string;
+        mcpServerUrl: string;
+        wwwAuth: string;
+      }) => void
+    ) => () => void;
+
+    // Listen for credentials expiration events
+    onCredentialsExpired: (
+      callback: (data: {
+        serverId: string;
+        reason: 'client_secret_expired' | 'registration_revoked';
+        timestamp: number;
+      }) => void
+    ) => () => void;
+
+    // ========================================
+    // OpenRouter OAuth Methods
+    // ========================================
+
+    // Start local OAuth callback server
     startServer: () => Promise<{
       success: boolean;
       port?: number;
       callbackUrl?: string;
       error?: string;
     }>;
+
+    // Stop OAuth callback server
     stopServer: () => Promise<{ success: boolean; error?: string }>;
+
+    // Listen for OAuth callbacks
     onCallback: (
       callback: (data: {
         success: boolean;
@@ -110,7 +212,7 @@ export interface LevanteAPI {
     success: boolean;
     response: string;
     sources?: any[];
-    reasoning?: string;
+    reasoningText?: string;
   }>;
   streamChat: (
     request: ChatRequest,
@@ -436,6 +538,9 @@ export interface LevanteAPI {
         data?: any[];
         error?: string;
       }>;
+      getEntry: (
+        serverId: string
+      ) => Promise<{ success: boolean; data?: any; error?: string }>;
     };
     // Resource methods
     listResources: (
@@ -596,8 +701,55 @@ export interface LevanteAPI {
       count: number
     ) => Promise<{ success: boolean; error?: string }>;
     trackUser: () => Promise<{ success: boolean; error?: string }>;
+    trackAppOpen: (force?: boolean) => Promise<{ success: boolean; error?: string }>;
     disableAnalytics: () => Promise<{ success: boolean; error?: string }>;
     enableAnalytics: () => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // Mermaid functionality
+  mermaid: {
+    onValidate: (
+      callback: (data: { requestId: string; code: string }) => void
+    ) => () => void;
+    sendResult: (data: { requestId: string; result: any }) => void;
+  };
+
+  // Announcements functionality
+  announcements: {
+    check: () => Promise<{ success: boolean; data?: import('../types/announcement').Announcement; error?: string }>;
+    markSeen: (id: string, category: import('../types/announcement').AnnouncementCategory) => Promise<{ success: boolean; error?: string }>;
+    enablePrivacy: (id: string) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // Widget proxy functionality
+  widget: {
+    store: (html: string, options?: {
+      protocol?: 'mcp-apps' | 'openai-sdk' | 'mcp-ui' | 'none';
+      bridgeOptions?: {
+        toolInput?: Record<string, unknown>;
+        toolOutput?: Record<string, unknown>;
+        responseMetadata?: Record<string, unknown>;
+        locale?: string;
+        theme?: 'light' | 'dark' | 'system';
+        serverId?: string;
+      };
+      baseUrl?: string;
+    } | string) => Promise<{
+      success: boolean;
+      url?: string;
+      widgetId?: string;
+      error?: string;
+    }>;
+    remove: (widgetId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    getProxyInfo: () => Promise<{
+      success: boolean;
+      port?: number;
+      secret?: string;
+      error?: string;
+    }>;
   };
 }
 
@@ -644,6 +796,14 @@ const api: LevanteAPI = {
 
   // Analytics API
   analytics: analyticsApi,
+
+  // Mermaid API
+  ...mermaidApi,
+  // Widget Protocol API
+  widget: widgetApi,
+
+  // Announcements API
+  announcements: announcementsApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

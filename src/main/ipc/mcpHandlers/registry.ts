@@ -3,7 +3,11 @@ import { getLogger } from "../../services/logging";
 
 const logger = getLogger();
 
-export function registerRegistryHandlers(mcpService: any, configManager: any) {
+export function registerRegistryHandlers(
+  mcpService: any,
+  configManager: any,
+  oauthService?: any
+) {
   // Get MCP registry information
   ipcMain.handle("levante/mcp/get-registry", async () => {
     try {
@@ -51,6 +55,11 @@ export function registerRegistryHandlers(mcpService: any, configManager: any) {
             )
           )
         ) {
+          // Clean up OAuth credentials if service is available
+          if (oauthService) {
+            await oauthService.cleanupCredentials(serverId);
+          }
+
           await configManager.removeServer(serverId);
           await mcpService.disconnectServer(serverId);
           cleaned++;

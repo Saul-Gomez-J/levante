@@ -4,7 +4,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createGateway } from "@ai-sdk/gateway";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import type { LanguageModelV2 } from "@ai-sdk/provider";
+import type { LanguageModel } from "ai";
 import type { ProviderConfig } from "../../../types/models";
 import { getLogger } from '../logging';
 
@@ -14,7 +14,7 @@ const logger = getLogger();
  * Resolve and configure the AI model provider for a given model ID
  * Handles all provider types: OpenRouter, Vercel Gateway, Local, and Cloud providers
  */
-export async function getModelProvider(modelId: string): Promise<LanguageModelV2> {
+export async function getModelProvider(modelId: string): Promise<LanguageModel> {
   try {
     // Get providers configuration from preferences via IPC
     const { preferencesService } = await import("../preferencesService");

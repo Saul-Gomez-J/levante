@@ -52,6 +52,14 @@ const getStatusConfig = (t: any) => ({
     label: t('connection.status.error'),
     badgeVariant: 'destructive' as const,
     dotColor: 'bg-red-500'
+  },
+  pending_oauth: {
+    color: 'text-blue-500',
+    bgColor: 'bg-blue-100',
+    icon: Loader2,
+    label: t('connection.status.pending_oauth'),
+    badgeVariant: 'secondary' as const,
+    dotColor: 'bg-blue-500'
   }
 });
 
@@ -80,7 +88,7 @@ export function ConnectionStatus({
       <Badge variant={config.badgeVariant} className={sizes.text}>
         {showIcon && (
           <IconComponent
-            className={`${sizes.icon} mr-1 ${status === 'connecting' ? 'animate-spin' : ''
+            className={`${sizes.icon} mr-1 ${status === 'connecting' || status === 'pending_oauth' ? 'animate-spin' : ''
               }`}
           />
         )}
@@ -94,7 +102,7 @@ export function ConnectionStatus({
       <div className="flex items-center gap-2">
         <div className="relative">
           <div className={`${sizes.dot} rounded-full ${config.dotColor}`} />
-          {status === 'connecting' && (
+          {(status === 'connecting' || status === 'pending_oauth') && (
             <div className={`absolute inset-0 ${sizes.dot} rounded-full ${config.dotColor} opacity-75 animate-ping`} />
           )}
         </div>
@@ -113,7 +121,7 @@ export function ConnectionStatus({
       {showIcon && (
         <div className={`p-1.5 rounded-full ${config.bgColor}`}>
           <IconComponent
-            className={`${sizes.icon} ${config.color} ${status === 'connecting' ? 'animate-spin' : ''
+            className={`${sizes.icon} ${config.color} ${status === 'connecting' || status === 'pending_oauth' ? 'animate-spin' : ''
               }`}
           />
         </div>

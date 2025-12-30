@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { CheckCircle, Settings } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useAIConfig } from '@/hooks/useAIConfig';
@@ -66,6 +67,50 @@ export const AIConfigSection = () => {
           </div>
         </div>
 
+        <div className="bg-muted/50 p-3 rounded-md text-sm">
+          <p className="font-medium mb-1">{t('settings:ai_config.how_it_works.title')}</p>
+          <ul className="text-muted-foreground space-y-1 text-xs">
+            <li>• {t('settings:ai_config.how_it_works.formula')}</li>
+            <li>• {t('settings:ai_config.how_it_works.example', {
+              baseSteps: config.baseSteps,
+              result: Math.min(Math.max(config.baseSteps + Math.floor(24 / 5) * 2, config.baseSteps), config.maxSteps)
+            })}</li>
+            <li>• {t('settings:ai_config.how_it_works.note')}</li>
+          </ul>
+        </div>
+
+        <div className="flex items-center justify-between py-2">
+          <div className="space-y-0.5">
+            <Label>{t('settings:ai_config.mermaid_validation.label')}</Label>
+            <p className="text-xs text-muted-foreground">
+              {t('settings:ai_config.mermaid_validation.description')}
+            </p>
+          </div>
+          <Switch
+            checked={config.mermaidValidation}
+            onCheckedChange={(checked) => setConfig(prev => ({
+              ...prev,
+              mermaidValidation: checked
+            }))}
+          />
+        </div>
+
+        <div className="flex items-center justify-between py-2">
+          <div className="space-y-0.5">
+            <Label>{t('settings:ai_config.mcp_discovery.label')}</Label>
+            <p className="text-xs text-muted-foreground">
+              {t('settings:ai_config.mcp_discovery.description')}
+            </p>
+          </div>
+          <Switch
+            checked={config.mcpDiscovery}
+            onCheckedChange={(checked) => setConfig(prev => ({
+              ...prev,
+              mcpDiscovery: checked
+            }))}
+          />
+        </div>
+
         <div className="flex items-center gap-4 pt-2">
           <Button
             onClick={handleSave}
@@ -82,18 +127,6 @@ export const AIConfigSection = () => {
               {t('settings:personalization.saved')}
             </div>
           )}
-        </div>
-
-        <div className="bg-muted/50 p-3 rounded-md text-sm">
-          <p className="font-medium mb-1">{t('settings:ai_config.how_it_works.title')}</p>
-          <ul className="text-muted-foreground space-y-1 text-xs">
-            <li>• {t('settings:ai_config.how_it_works.formula')}</li>
-            <li>• {t('settings:ai_config.how_it_works.example', {
-              baseSteps: config.baseSteps,
-              result: Math.min(Math.max(config.baseSteps + Math.floor(24 / 5) * 2, config.baseSteps), config.maxSteps)
-            })}</li>
-            <li>• {t('settings:ai_config.how_it_works.note')}</li>
-          </ul>
         </div>
       </div>
     </SettingsSection>

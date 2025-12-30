@@ -14,7 +14,8 @@ export interface ChatStreamChunk {
   done?: boolean;
   error?: string;
   sources?: Array<{ url: string; title?: string }>;
-  reasoning?: string;
+  reasoningText?: string;
+  reasoningId?: string; // Stable ID for reasoning block reconciliation
   toolCall?: {
     id: string;
     name: string;
@@ -151,8 +152,16 @@ export interface MCPPromptResult {
 }
 
 // Deep link types
+export interface InputDefinition {
+  label: string;
+  required: boolean;
+  type: 'string' | 'password' | 'number' | 'boolean';
+  default?: string;
+  description?: string;
+}
+
 export interface DeepLinkAction {
-  type: 'mcp-add' | 'chat-new';
+  type: 'mcp-add' | 'mcp-configure' | 'chat-new';
   data: Record<string, unknown>;
 }
 
@@ -165,3 +174,5 @@ export type {
   ValidationResult,
   ProviderValidationConfig,
 };
+
+export type { Announcement, AnnouncementCategory, LastSeenAnnouncements } from '../../types/announcement';

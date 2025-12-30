@@ -70,11 +70,24 @@ export class UserProfileService {
             properties: {
               hasConsented: { type: 'boolean' },
               consentedAt: { type: 'string' },
-              anonymousUserId: { type: 'string' }
+              anonymousUserId: { type: 'string' },
+              lastSeenAnnouncementId: { type: 'string' }, // Deprecated, kept for migration
+              lastSeenAnnouncements: {
+                type: 'object',
+                properties: {
+                  announcement: { type: 'string' },
+                  app: { type: 'string' },
+                  privacy: { type: 'string' }
+                },
+                additionalProperties: false
+              }
             }
           }
         }
       });
+
+      // Migrate from lastSeenAnnouncementId to lastSeenAnnouncements if needed
+      this.migrateAnnouncementTracking();
 
       this.profile = this.store.store;
       this.initialized = true;
@@ -97,6 +110,24 @@ export class UserProfileService {
   private ensureInitialized(): void {
     if (!this.initialized || !this.store) {
       throw new Error('UserProfileService not initialized. Call initialize() first.');
+    }
+  }
+
+  /**
+   * Migrate from lastSeenAnnouncementId to lastSeenAnnouncements
+   * This is a one-time migration for existing users
+   */
+  private migrateAnnouncementTracking(): void {
+    const analytics = this.store.get('analytics');
+    if (analytics?.lastSeenAnnouncementId && !analytics?.lastSeenAnnouncements) {
+      // Migrate old single ID to new per-category structure
+      // We assume 'announcement' category since we can't know the original
+      this.store.set('analytics.lastSeenAnnouncements', {
+        announcement: analytics.lastSeenAnnouncementId
+      });
+      this.logger.core.info('Migrated lastSeenAnnouncementId to lastSeenAnnouncements', {
+        oldId: analytics.lastSeenAnnouncementId
+      });
     }
   }
 

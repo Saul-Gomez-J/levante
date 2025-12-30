@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useMCPStore } from '@/stores/mcpStore';
+import { useOAuthStore } from '@/stores/oauthStore';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -152,7 +153,34 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
       // Server is disabled → enable it (connect + move to mcpServers)
       try {
         await connectServer(server);
+        toast.success(t('messages.connected', { name: server.name || serverId }));
       } catch (error: any) {
+        // Handle OAuth required error
+        if (error.code === 'OAUTH_REQUIRED') {
+          logger.mcp.info('OAuth required for MCP server', {
+            serverId,
+            mcpServerUrl: error.metadata?.mcpServerUrl
+          });
+
+          // Trigger OAuth dialog by calling the store
+          const { handleOAuthRequired } = useOAuthStore.getState();
+          handleOAuthRequired({
+            serverId: error.serverConfig?.id || serverId,
+            mcpServerUrl: error.metadata?.mcpServerUrl || '',
+            wwwAuth: error.metadata?.wwwAuth || ''
+          });
+
+          toast.info(
+            t('messages.oauth_required', {
+              name: server.name || serverId
+            }) || 'OAuth authorization required. Please check the authorization dialog.',
+            {
+              duration: 5000
+            }
+          );
+          return;
+        }
+
         // Handle runtime-specific errors
         if (error.errorCode === 'RUNTIME_CHOICE_REQUIRED' || error.errorCode === 'RUNTIME_NOT_FOUND') {
           setRuntimeDialogState({
@@ -162,10 +190,17 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
             serverConfig: error.serverConfig || server,
             metadata: error.metadata || {},
           });
-        } else {
-          // Other errors are already handled by store
-          logger.mcp.error('Failed to toggle server', { serverId, error: error.message });
+          return;
         }
+
+        // Other errors
+        logger.mcp.error('Failed to toggle server', { serverId, error: error.message });
+        toast.error(
+          t('messages.connection_failed', {
+            name: server.name || serverId,
+            error: error.message
+          }) || `Failed to connect: ${error.message}`
+        );
       }
     } else {
       // Server not configured yet, open config modal
@@ -208,6 +243,26 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
       const template = registryEntry.configuration?.template;
       const transportType = template?.type || 'stdio';
 
+      // Build complete values object: user values + defaults from fields
+      const allFields = registryEntry.configuration?.fields || [];
+      const completeValues: Record<string, string> = {};
+
+      // First, add all default values from fields
+      allFields.forEach((field: MCPConfigField) => {
+        if (field.defaultValue) {
+          completeValues[field.key] = field.defaultValue;
+        }
+      });
+
+      // Then override with user-provided values (exact input preserved)
+      if (apiKeyValues) {
+        Object.entries(apiKeyValues).forEach(([key, value]) => {
+          if (value !== undefined && value !== '') {
+            completeValues[key] = value;
+          }
+        });
+      }
+
       // Construir config desde template según el tipo de transporte
       const serverConfig: MCPServerConfig = {
         id: entryId,
@@ -218,51 +273,75 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
       // Agregar campos específicos según el tipo de transporte
       if (transportType === 'stdio') {
         serverConfig.command = template?.command || '';
-        serverConfig.args = template?.args || [];
 
-        // Reemplazar placeholders en env con valores del usuario
-        const env = { ...template?.env };
-        if (apiKeyValues) {
-          Object.keys(env).forEach(envKey => {
-            const envValue = env[envKey];
-            if (typeof envValue === 'string') {
-              // Reemplazar ${variable} con el valor real
-              let replacedValue = envValue;
-              Object.entries(apiKeyValues).forEach(([key, value]) => {
-                replacedValue = replacedValue.replace(`\${${key}}`, value);
+        // Reemplazar placeholders en args con valores del usuario o defaults
+        // Si no hay valor, eliminar el argumento que contiene el placeholder
+        const args = [...(template?.args || [])];
+        const processedArgs = args
+          .map(arg => {
+            if (typeof arg === 'string') {
+              let replacedArg = arg;
+              Object.entries(completeValues).forEach(([key, value]) => {
+                replacedArg = replacedArg.replace(`\${${key}}`, value);
               });
+              return replacedArg;
+            }
+            return arg;
+          })
+          .filter(arg => typeof arg !== 'string' || !arg.includes('${'));
+        serverConfig.args = processedArgs;
+
+        // Reemplazar placeholders en env con valores del usuario o defaults
+        // Si no hay valor, eliminar la variable de entorno
+        const env: Record<string, string> = {};
+        const templateEnv = template?.env || {};
+        Object.keys(templateEnv).forEach(envKey => {
+          const envValue = templateEnv[envKey];
+          if (typeof envValue === 'string') {
+            // Reemplazar ${variable} con el valor real
+            let replacedValue = envValue;
+            Object.entries(completeValues).forEach(([key, value]) => {
+              replacedValue = replacedValue.replace(`\${${key}}`, value);
+            });
+            // Solo incluir si no quedan placeholders sin resolver
+            if (!replacedValue.includes('${')) {
               env[envKey] = replacedValue;
             }
-          });
+          }
+        });
+        if (Object.keys(env).length > 0) {
+          serverConfig.env = env;
         }
-        serverConfig.env = env;
       } else if (transportType === 'http' || transportType === 'sse' || transportType === 'streamable-http') {
-        // Reemplazar placeholders en url/baseUrl con valores del usuario
+        // Reemplazar placeholders en url/baseUrl con valores del usuario o defaults
         // Support both 'url' (new) and 'baseUrl' (legacy)
         let serverUrl = template?.url || template?.baseUrl || '';
-        if (apiKeyValues) {
-          Object.entries(apiKeyValues).forEach(([key, value]) => {
-            serverUrl = serverUrl.replace(`\${${key}}`, value);
-          });
-        }
+        Object.entries(completeValues).forEach(([key, value]) => {
+          serverUrl = serverUrl.replace(`\${${key}}`, value);
+        });
         serverConfig.url = serverUrl;
 
-        // Reemplazar placeholders en headers con valores del usuario
-        const headers = { ...template?.headers };
-        if (apiKeyValues) {
-          Object.keys(headers).forEach(headerKey => {
-            const headerValue = headers[headerKey];
-            if (typeof headerValue === 'string') {
-              // Reemplazar ${variable} con el valor real
-              let replacedValue = headerValue;
-              Object.entries(apiKeyValues).forEach(([key, value]) => {
-                replacedValue = replacedValue.replace(`\${${key}}`, value);
-              });
+        // Reemplazar placeholders en headers con valores del usuario o defaults
+        // Si no hay valor, eliminar el header
+        const headers: Record<string, string> = {};
+        const templateHeaders = template?.headers || {};
+        Object.keys(templateHeaders).forEach(headerKey => {
+          const headerValue = templateHeaders[headerKey];
+          if (typeof headerValue === 'string') {
+            // Reemplazar ${variable} con el valor real
+            let replacedValue = headerValue;
+            Object.entries(completeValues).forEach(([key, value]) => {
+              replacedValue = replacedValue.replace(`\${${key}}`, value);
+            });
+            // Solo incluir si no quedan placeholders sin resolver
+            if (!replacedValue.includes('${')) {
               headers[headerKey] = replacedValue;
             }
-          });
+          }
+        });
+        if (Object.keys(headers).length > 0) {
+          serverConfig.headers = headers;
         }
-        serverConfig.headers = headers;
       }
 
       // Guardar directo en .mcp.json
@@ -279,11 +358,26 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
         toast.success(t('messages.added', { name: registryEntry.name }), { id: toastId });
       } catch (connectError: any) {
         // Server is saved but connection failed
-        // This can happen if runtime installation fails
+        // This can happen if runtime installation fails or OAuth is required
         logger.mcp.warn('Server added but connection failed', {
           serverId: entryId,
           error: connectError.message
         });
+
+        if (connectError.code === 'OAUTH_REQUIRED') {
+          // Trigger OAuth dialog
+          const { handleOAuthRequired } = useOAuthStore.getState();
+          handleOAuthRequired({
+            serverId: connectError.serverConfig?.id || serverConfig.id,
+            mcpServerUrl: connectError.metadata?.mcpServerUrl || '',
+            wwwAuth: connectError.metadata?.wwwAuth || ''
+          });
+
+          toast.info('OAuth authorization required. Please check the authorization dialog.', {
+            id: toastId
+          });
+          return;
+        }
 
         if (connectError.message === 'RUNTIME_NOT_FOUND') {
           toast.error(t('messages.runtime_not_available'), { id: toastId });
@@ -776,6 +870,7 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
           }
         }}
       />
+
     </div>
   );
 }

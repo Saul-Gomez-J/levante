@@ -65,7 +65,8 @@
       "connected": "Conectado",
       "disconnected": "Desconectado",
       "connecting": "Conectando...",
-      "error": "Error"
+      "error": "Error",
+      "pending_oauth": "Autorizando..."
     }
   },
   "config": {
@@ -209,6 +210,9 @@
     "added": "{{name}} añadido y conectado",
     "added_not_connected": "{{name}} añadido pero no se pudo conectar. Intenta conectar manualmente.",
     "connecting": "Configurando {{name}}...",
+    "connected": "Conectado a {{name}}",
+    "connection_failed": "Error al conectar a {{name}}: {{error}}",
+    "oauth_required": "Se requiere autorización OAuth para {{name}}. Por favor, autoriza en el diálogo.",
     "runtime_not_available": "Runtime no disponible. Comprueba tu conexión e inténtalo de nuevo.",
     "deleted": "Servidor eliminado exitosamente",
     "saved": "Configuración guardada y aplicada exitosamente",
@@ -300,7 +304,9 @@
       "failed_system_runtime": "Error al conectar con runtime del sistema",
       "installing_runtime": "Instalando runtime para {{name}}...",
       "runtime_installed": "Runtime instalado y {{name}} conectado!",
-      "failed_install_runtime": "Error al instalar runtime: {{error}}"
+      "failed_install_runtime": "Error al instalar runtime: {{error}}",
+      "server_already_exists": "{{name}} ya está instalado",
+      "server_already_exists_description": "Este servidor ya está en tu configuración. Por favor elimínalo primero si quieres reinstalarlo."
     }
   }
 }

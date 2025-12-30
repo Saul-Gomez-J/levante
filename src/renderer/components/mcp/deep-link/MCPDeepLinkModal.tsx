@@ -111,29 +111,37 @@ function detectRequiredFields(config: Partial<MCPServerConfig>): MCPConfigField[
 
 /**
  * Replace all placeholders in a config object with actual values
+ * Also adds any unused input values to env (for inputs without placeholders)
  */
 function replacePlaceholders(
   config: Partial<MCPServerConfig>,
   values: Record<string, string>
 ): MCPServerConfig {
   const result = { ...config } as MCPServerConfig;
+  const usedKeys = new Set<string>();
+
+  // Ensure env exists
+  if (!result.env) {
+    result.env = {};
+  }
 
   // Replace in env
-  if (result.env) {
-    const newEnv: Record<string, string> = {};
-    Object.entries(result.env).forEach(([key, value]) => {
-      if (typeof value === 'string') {
-        let replaced = value;
-        Object.entries(values).forEach(([placeholder, actualValue]) => {
+  const newEnv: Record<string, string> = {};
+  Object.entries(result.env).forEach(([key, value]) => {
+    if (typeof value === 'string') {
+      let replaced = value;
+      Object.entries(values).forEach(([placeholder, actualValue]) => {
+        if (replaced.includes(`\${${placeholder}}`)) {
           replaced = replaced.replace(`\${${placeholder}}`, actualValue);
-        });
-        newEnv[key] = replaced;
-      } else {
-        newEnv[key] = value;
-      }
-    });
-    result.env = newEnv;
-  }
+          usedKeys.add(placeholder);
+        }
+      });
+      newEnv[key] = replaced;
+    } else {
+      newEnv[key] = value;
+    }
+  });
+  result.env = newEnv;
 
   // Replace in headers
   if (result.headers) {
@@ -142,7 +150,10 @@ function replacePlaceholders(
       if (typeof value === 'string') {
         let replaced = value;
         Object.entries(values).forEach(([placeholder, actualValue]) => {
-          replaced = replaced.replace(`\${${placeholder}}`, actualValue);
+          if (replaced.includes(`\${${placeholder}}`)) {
+            replaced = replaced.replace(`\${${placeholder}}`, actualValue);
+            usedKeys.add(placeholder);
+          }
         });
         newHeaders[key] = replaced;
       } else {
@@ -156,10 +167,39 @@ function replacePlaceholders(
   if (result.url && typeof result.url === 'string') {
     let replaced = result.url;
     Object.entries(values).forEach(([placeholder, actualValue]) => {
-      replaced = replaced.replace(`\${${placeholder}}`, actualValue);
+      if (replaced.includes(`\${${placeholder}}`)) {
+        replaced = replaced.replace(`\${${placeholder}}`, actualValue);
+        usedKeys.add(placeholder);
+      }
     });
     result.url = replaced;
   }
+
+  // Replace in args (for stdio servers)
+  if (result.args && Array.isArray(result.args)) {
+    result.args = result.args.map(arg => {
+      if (typeof arg === 'string') {
+        let replaced = arg;
+        Object.entries(values).forEach(([placeholder, actualValue]) => {
+          if (replaced.includes(`\${${placeholder}}`)) {
+            replaced = replaced.replace(`\${${placeholder}}`, actualValue);
+            usedKeys.add(placeholder);
+          }
+        });
+        return replaced;
+      }
+      return arg;
+    });
+  }
+
+  // Add any unused input values directly to env
+  // This handles cases where inputs don't have explicit placeholders
+  Object.entries(values).forEach(([key, value]) => {
+    if (!usedKeys.has(key)) {
+      result.env![key] = value;
+      logger.mcp.debug('Added input to env (no placeholder found)', { key });
+    }
+  });
 
   return result;
 }
@@ -173,12 +213,36 @@ import { RuntimeChoiceDialog } from '@/components/runtime/RuntimeChoiceDialog';
 import type { RuntimeType } from '../../../../types/runtime';
 import { useTranslation } from 'react-i18next';
 
+interface InputDefinition {
+  label: string;
+  required: boolean;
+  type: 'string' | 'password' | 'number' | 'boolean';
+  default?: string;
+  description?: string;
+}
+
 interface MCPDeepLinkModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   config: Partial<MCPServerConfig> | null;
   serverName: string;
   sourceUrl?: string;
+  inputs?: Record<string, InputDefinition>;
+}
+
+/**
+ * Convert InputDefinition from deep-link to MCPConfigField format
+ */
+function convertInputsToFields(inputs: Record<string, InputDefinition>): MCPConfigField[] {
+  return Object.entries(inputs).map(([key, input]) => ({
+    key,
+    label: input.label,
+    type: input.type,
+    required: input.required,
+    description: input.description,
+    placeholder: input.description || `Enter ${input.label}`,
+    defaultValue: input.default
+  }));
 }
 
 export function MCPDeepLinkModal({
@@ -186,7 +250,8 @@ export function MCPDeepLinkModal({
   onOpenChange,
   config,
   serverName,
-  sourceUrl
+  sourceUrl,
+  inputs
 }: MCPDeepLinkModalProps) {
   const { t } = useTranslation('mcp');
 
@@ -221,7 +286,7 @@ export function MCPDeepLinkModal({
   });
 
   // Get MCP store to refresh active servers list
-  const { connectServer, loadActiveServers } = useMCPStore();
+  const { connectServer, loadActiveServers, activeServers } = useMCPStore();
 
   // Validation hooks
   const validation = useServerValidation(config);
@@ -232,17 +297,43 @@ export function MCPDeepLinkModal({
       return;
     }
 
-    // Detect fields that need user input (similar to store flow)
-    const fieldsNeedingInput = detectRequiredFields(config);
+    // Check if server already exists
+    const serverExists = activeServers.some(server => server.id === config.id);
+    if (serverExists) {
+      logger.mcp.warn('Server already exists, cannot add duplicate', { serverId: config.id });
+      toast.error(t('deep_link.toasts.server_already_exists', { name: serverName }), {
+        description: t('deep_link.toasts.server_already_exists_description'),
+        duration: 5000
+      });
+      onOpenChange(false);
+      return;
+    }
 
-    // If there are fields needing input and no values provided, open ApiKeysModal
-    if (fieldsNeedingInput.length > 0 && !apiKeyValues) {
-      logger.mcp.info('Deep link server requires configuration fields', {
+    // Determine fields that need user input:
+    // 1. If inputs provided in deep-link, use those
+    // 2. Otherwise, auto-detect from placeholders (legacy behavior)
+    let fieldsNeedingInput: MCPConfigField[];
+
+    if (inputs && Object.keys(inputs).length > 0) {
+      // Use inputs from deep-link
+      fieldsNeedingInput = convertInputsToFields(inputs);
+      logger.mcp.info('Using input definitions from deep link', {
         serverId: config.id,
         fieldCount: fieldsNeedingInput.length,
         fields: fieldsNeedingInput.map(f => f.key)
       });
+    } else {
+      // Fallback to auto-detection from placeholders
+      fieldsNeedingInput = detectRequiredFields(config);
+      logger.mcp.info('Auto-detected fields from placeholders', {
+        serverId: config.id,
+        fieldCount: fieldsNeedingInput.length,
+        fields: fieldsNeedingInput.map(f => f.key)
+      });
+    }
 
+    // If there are fields needing input and no values provided, open ApiKeysModal
+    if (fieldsNeedingInput.length > 0 && !apiKeyValues) {
       setApiKeysModalState({
         isOpen: true,
         fields: fieldsNeedingInput,

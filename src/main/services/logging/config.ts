@@ -1,4 +1,4 @@
-import type { LoggerConfig, LogLevel } from "../../types/logger";
+import type { LoggerConfig, LogLevel, LogRotationConfig } from "../../types/logger";
 
 const LOG_LEVELS: Record<LogLevel, number> = {
   debug: 0,
@@ -29,6 +29,7 @@ export class LoggerConfigService {
         models: false,
         core: true,
         analytics: true,
+        oauth: false,
       },
       output: {
         console: true,
@@ -40,13 +41,22 @@ export class LoggerConfigService {
 
   public initializeFromEnvironment(): void {
     // Always reinitialize to pick up environment variables
-    // This allows the logger to properly load configuration after dotenv runs
+    // This allows the logger to properly load configuration after dotenv runss
     this.config = this.loadConfig();
     this.isInitialized = true;
   }
 
   private loadConfig(): LoggerConfig {
     const env = process.env;
+
+    // Configuración fija (permitimos override por env, no por UI)
+    const rotationConfig: LogRotationConfig = {
+      maxSize: this.parseInt(env.LOG_MAX_SIZE, 10 * 1024 * 1024),
+      maxFiles: this.parseInt(env.LOG_MAX_FILES, 3),
+      maxAge: this.parseInt(env.LOG_MAX_AGE, 7),
+      compress: this.parseBoolean(env.LOG_COMPRESS, false),
+      datePattern: env.LOG_DATE_PATTERN || 'YYYY-MM-DD-HHmmss'
+    };
 
     return {
       enabled: this.parseBoolean(env.DEBUG_ENABLED, true),
@@ -60,13 +70,24 @@ export class LoggerConfigService {
         models: this.parseBoolean(env.DEBUG_MODELS, true),
         core: this.parseBoolean(env.DEBUG_CORE, true),
         analytics: this.parseBoolean(env.DEBUG_ANALYTICS, true),
+        oauth: this.parseBoolean(env.DEBUG_OAUTH, false),
       },
       output: {
         console: true,
         file: this.parseBoolean(env.LOG_TO_FILE, true), // Default to true for testing
-        filePath: env.LOG_FILE_PATH || "./logs/levante.log",
+        filePath: env.LOG_FILE_PATH || "levante.log",
+        rotation: rotationConfig,
       },
     };
+  }
+
+  private parseInt(
+    value: string | undefined,
+    defaultValue: number
+  ): number {
+    if (!value) return defaultValue;
+    const parsed = Number.parseInt(value, 10);
+    return Number.isNaN(parsed) ? defaultValue : parsed;
   }
 
   private parseBoolean(

@@ -5,8 +5,16 @@ import { validateMCPCommand } from './mcp/packageValidator';
 
 const logger = getLogger();
 
+export interface InputDefinition {
+  label: string;
+  required: boolean;
+  type: 'string' | 'password' | 'number' | 'boolean';
+  default?: string;
+  description?: string;
+}
+
 export interface DeepLinkAction {
-  type: 'mcp-add' | 'chat-new';
+  type: 'mcp-add' | 'mcp-configure' | 'chat-new';
   data: Record<string, unknown>;
 }
 
@@ -51,6 +59,11 @@ export class DeepLinkService {
       // Route to appropriate handler
       if (category === 'mcp' && action === 'add') {
         return this.parseMCPAddLink(params);
+      } else if (category === 'mcp' && action === 'configure') {
+        // Format: levante://mcp/configure/{server-id}
+        // The server ID comes after 'configure/' in the pathname
+        const remainingPath = pathname.replace(/^configure\/?/, '');
+        return this.parseMCPConfigureLink(remainingPath, params);
       } else if (category === 'chat' && action === 'new') {
         return this.parseChatNewLink(params);
       }
@@ -106,11 +119,11 @@ export class DeepLinkService {
 
   /**
    * Parse MCP server addition deep link
-   * Format: levante://mcp/add?name=server&transport=stdio&command=npx&args=package-name
+   * Format: levante://mcp/add?name=server&transport=stdio&command=npx&args=package-name&inputs={...}
    */
   private parseMCPAddLink(params: Record<string, string>): DeepLinkAction | null {
     // Support both 'transport' (correct) and 'type' (legacy) for backwards compatibility
-    const { name, transport, type, command, args, url, headers, env } = params;
+    const { name, transport, type, command, args, url, headers, env, inputs } = params;
     const serverType = transport || type;
 
     if (!name || !serverType) {
@@ -235,13 +248,40 @@ export class DeepLinkService {
       }
     }
 
-    logger.core.info('Parsed MCP add deep link', { serverConfig });
+    // Parse inputs if provided (field definitions for configuration)
+    let parsedInputs: Record<string, InputDefinition> | undefined;
+    if (inputs) {
+      try {
+        parsedInputs = JSON.parse(inputs);
+        const sanitizedInputs = this.sanitizeObject(parsedInputs);
+
+        logger.core.debug('Parsed input definitions from deep link', {
+          inputKeys: Object.keys(sanitizedInputs)
+        });
+
+        parsedInputs = sanitizedInputs;
+      } catch (error) {
+        logger.core.error('Failed to parse inputs JSON', {
+          error: error instanceof Error ? error.message : String(error),
+          inputs
+        });
+        // Continue without inputs on parse error
+        parsedInputs = undefined;
+      }
+    }
+
+    logger.core.info('Parsed MCP add deep link', {
+      serverConfig,
+      hasInputs: !!parsedInputs,
+      inputCount: parsedInputs ? Object.keys(parsedInputs).length : 0
+    });
 
     return {
       type: 'mcp-add',
       data: {
         name,
-        config: serverConfig
+        config: serverConfig,
+        inputs: parsedInputs
       }
     };
   }
@@ -268,6 +308,30 @@ export class DeepLinkService {
       data: {
         prompt: decodeURIComponent(prompt),
         autoSend: autoSend === 'true'
+      }
+    };
+  }
+
+  /**
+   * Parse MCP configuration deep link (from discovery tool)
+   * Format: levante://mcp/configure/{server-id}
+   * The server config will be fetched from the registry in the renderer
+   */
+  private parseMCPConfigureLink(serverId: string, _params: Record<string, string>): DeepLinkAction | null {
+    // Decode the server ID in case it contains URL-encoded characters
+    const decodedServerId = decodeURIComponent(serverId).trim();
+
+    if (!decodedServerId) {
+      logger.core.warn('Missing server ID for MCP configure', { serverId });
+      return null;
+    }
+
+    logger.core.info('Parsed MCP configure deep link', { serverId: decodedServerId });
+
+    return {
+      type: 'mcp-configure',
+      data: {
+        serverId: decodedServerId
       }
     };
   }

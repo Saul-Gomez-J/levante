@@ -40,13 +40,15 @@ interface ChatMessageItemProps {
   message: UIMessage;
   isStreaming: boolean;
   onPrompt: (prompt: string) => void;
+  onSendMessage?: (text: string) => void;
+  chatMessages?: UIMessage[];
 }
 
 // ============================================================================
 // Component
 // ============================================================================
 
-export function ChatMessageItem({ message, isStreaming, onPrompt }: ChatMessageItemProps) {
+export function ChatMessageItem({ message, isStreaming, onPrompt, onSendMessage, chatMessages }: ChatMessageItemProps) {
   const isAssistant = message.role === 'assistant';
   const isUser = message.role === 'user';
 
@@ -108,30 +110,77 @@ export function ChatMessageItem({ message, isStreaming, onPrompt }: ChatMessageI
             return null;
           })()}
 
-          {message.parts?.map((part: any, i: number) => {
-            try {
-              // Text content
-              if (part?.type === 'text' && part?.text) {
-                return (
-                  <Response key={`${message.id}-${i}`}>
-                    {part.text}
-                  </Response>
-                );
-              }
+          {/* Render all reasoning parts as a single component */}
+          {(() => {
+            const reasoningParts = message.parts?.filter((p: any) => p?.type === 'data-reasoning') || [];
 
-              // Reasoning (data part)
-              if (part?.value?.type === 'reasoning') {
+            if (reasoningParts.length > 0) {
+              // Combine all reasoning text from multiple blocks
+              // Filter out empty strings and empty objects like "{}"
+              const combinedReasoning = reasoningParts
+                .map((p: any) => p.data?.text || '')
+                .filter(text => {
+                  // Skip empty strings, whitespace-only, and empty object representations
+                  const trimmed = text.trim();
+                  return trimmed.length > 0 && trimmed !== '{}' && trimmed !== '[]';
+                })
+                .join('\n\n---\n\n'); // Separate multiple reasoning blocks with a divider
+
+              // Only show reasoning component if there's actual content
+              if (combinedReasoning && combinedReasoning.trim().length > 0) {
                 return (
                   <Reasoning
-                    key={`${message.id}-${i}`}
+                    key={`${message.id}-reasoning`}
                     className="w-full"
                     isStreaming={isStreaming}
                   >
                     <ReasoningTrigger />
                     <ReasoningContent>
-                      {part.value.text || ''}
+                      {combinedReasoning}
                     </ReasoningContent>
                   </Reasoning>
+                );
+              }
+            }
+            return null;
+          })()}
+
+          {message.parts?.map((part: any, i: number) => {
+            try {
+              // Skip reasoning parts (already rendered above)
+              if (part?.type === 'data-reasoning') {
+                return null;
+              }
+
+              // Text content
+              if (part?.type === 'text' && part?.text) {
+                const trimmedText = part.text.trim();
+
+                // Filter out empty JSON objects/arrays that some models emit
+                // (e.g., Gemini 3 with thinkingConfig outputs "{}" as text)
+                if (trimmedText === '{}' || trimmedText === '[]') {
+                  logger.aiSdk.debug('🚫 Skipping empty JSON text part', {
+                    messageId: message.id,
+                    partIndex: i,
+                    content: trimmedText,
+                  });
+                  return null;
+                }
+
+                // Debug: Log text parts that look like JSON (potential tool echo)
+                if (trimmedText.startsWith('{') || trimmedText.startsWith('[')) {
+                  logger.aiSdk.debug('🔍 Rendering text part that looks like JSON', {
+                    messageId: message.id,
+                    partIndex: i,
+                    preview: trimmedText.substring(0, 200),
+                    length: trimmedText.length,
+                  });
+                }
+
+                return (
+                  <Response key={`${message.id}-${i}`}>
+                    {part.text}
+                  </Response>
                 );
               }
 
@@ -143,6 +192,8 @@ export function ChatMessageItem({ message, isStreaming, onPrompt }: ChatMessageI
                     part={part}
                     messageId={message.id}
                     onPrompt={onPrompt}
+                    onSendMessage={onSendMessage}
+                    chatMessages={chatMessages}
                   />
                 );
               }
@@ -183,9 +234,11 @@ interface ToolCallPartProps {
   part: any;
   messageId: string;
   onPrompt: (prompt: string) => void;
+  onSendMessage?: (text: string) => void;
+  chatMessages?: UIMessage[];
 }
 
-function ToolCallPart({ part, messageId, onPrompt }: ToolCallPartProps) {
+function ToolCallPart({ part, messageId, onPrompt, onSendMessage, chatMessages }: ToolCallPartProps) {
   // Extract tool name from type if toolName field is not available
   // During streaming, AI SDK v5 doesn't include toolName field
   // Format: "tool-{toolName}" -> extract toolName
@@ -209,7 +262,7 @@ function ToolCallPart({ part, messageId, onPrompt }: ToolCallPartProps) {
     arguments: part.input || {},
     result: part.state === 'output-available' ? {
       success: true,
-      content: JSON.stringify(part.output),
+      content: part.output, // Keep original type (object or string)
     } : part.state === 'output-error' ? {
       success: false,
       error: part.errorText,
@@ -232,16 +285,22 @@ function ToolCallPart({ part, messageId, onPrompt }: ToolCallPartProps) {
         toolCall={toolCall}
         className="w-full"
       />
-      {/* Render UI Resources from tool output */}
-      {uiResources.map((resource, resourceIdx) => (
-        <UIResourceMessage
-          key={`${messageId}-ui-${resourceIdx}`}
-          resource={resource}
-          serverId={serverId}
-          className="mt-2"
-          onPrompt={onPrompt}
-        />
-      ))}
+      {/* Render UI Resources from tool output - separated from tool call */}
+      {uiResources.length > 0 && (
+        <div className="my-4">
+          {uiResources.map((resource, resourceIdx) => (
+            <UIResourceMessage
+              key={`${messageId}-ui-${resourceIdx}`}
+              resource={resource}
+              serverId={serverId}
+              className="w-full"
+              onPrompt={onPrompt}
+              onSendMessage={onSendMessage}
+              chatMessages={chatMessages}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

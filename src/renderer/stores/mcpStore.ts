@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { MCPServerConfig, MCPConnectionStatus, MCPProvider, MCPRegistryEntry, MCPSource, MCPCategory } from '../types/mcp';
 import mcpProvidersData from '../data/mcpProviders.json';
+import { useOAuthStore } from './oauthStore';
 
 interface MCPStore {
   // State
@@ -147,6 +148,25 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
         // Track MCP activation
         window.levante.analytics?.trackMCP?.(config.name || config.id, 'active').catch(() => { });
       } else {
+        // Check for OAuth required error first
+        if ((result as any).errorCode === 'OAUTH_REQUIRED') {
+          const enrichedError = new Error(result.error || 'OAuth authorization required');
+          (enrichedError as any).code = 'OAUTH_REQUIRED';
+          (enrichedError as any).metadata = (result as any).metadata;
+          (enrichedError as any).serverConfig = config;
+
+          // Set pending_oauth state (not error) - OAuth flow will handle reconnection
+          set(state => ({
+            connectionStatus: {
+              ...state.connectionStatus,
+              [config.id]: 'pending_oauth'
+            },
+            error: null // Clear error since OAuth is in progress
+          }));
+
+          throw enrichedError;
+        }
+
         // Check for runtime-specific errors that need UI intervention
         if ((result as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' || (result as any).errorCode === 'RUNTIME_NOT_FOUND') {
           // Throw enriched error for UI to catch and show dialog
@@ -166,8 +186,10 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
         }));
       }
     } catch (error) {
-      // Re-throw runtime errors for UI handling
-      if ((error as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' || (error as any).errorCode === 'RUNTIME_NOT_FOUND') {
+      // Re-throw OAuth and runtime errors for UI handling
+      if ((error as any).code === 'OAUTH_REQUIRED' ||
+        (error as any).errorCode === 'RUNTIME_CHOICE_REQUIRED' ||
+        (error as any).errorCode === 'RUNTIME_NOT_FOUND') {
         throw error;
       }
 
@@ -287,6 +309,17 @@ export const useMCPStore = create<MCPStore>((set, get) => ({
 
       // Get server info for analytics before removal
       const server = get().getServerById(serverId);
+
+      // NUEVO: Limpiar credenciales OAuth
+      // (El main process también lo hace, esto es redundante pero seguro)
+      try {
+        await window.levante.oauth.cleanup({ serverId });
+        // También limpiar el estado local del store renderer
+        useOAuthStore.getState().clearServerState(serverId);
+      } catch (oauthError) {
+        // No fallar si la limpieza OAuth falla
+        console.warn('OAuth cleanup warning:', oauthError);
+      }
 
       const result = await window.levante.mcp.removeServer(serverId);
 

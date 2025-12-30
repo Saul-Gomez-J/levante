@@ -114,7 +114,10 @@ export const mcpApi = {
       ipcRenderer.invoke('levante/mcp/providers/get-entries', providerId),
 
     getAllEntries: () =>
-      ipcRenderer.invoke('levante/mcp/providers/get-all-entries')
+      ipcRenderer.invoke('levante/mcp/providers/get-all-entries'),
+
+    getEntry: (serverId: string) =>
+      ipcRenderer.invoke('levante/mcp/providers/get-entry', serverId)
   },
 
   // Resource methods

@@ -8,10 +8,12 @@ import { join } from "path";
 import { config } from "dotenv";
 import { initializeLogger } from "./services/logging";
 import { updateService } from "./services/updateService";
+import { announcementService } from "./services/announcementService";
 import { deepLinkService } from "./services/deepLinkService";
 import { oauthCallbackServer } from "./services/oauthCallbackServer";
 import { analyticsService } from "./services/analytics";
 import { createApplicationMenu } from "./menu";
+import { widgetProxyService } from "./services/widgetProxy";
 
 // Lifecycle modules
 import { initializeServices, registerIPCHandlers } from "./lifecycle/initialization";
@@ -27,6 +29,9 @@ initializeLogger();
 
 // Initialize auto-updates
 updateService.initialize();
+
+// Initialize announcement service
+announcementService.initialize();
 
 // Register custom protocol for deep linking
 if (process.defaultApp) {
@@ -47,6 +52,9 @@ let mainWindow: BrowserWindow | null = null;
 // App ready event
 app.whenReady().then(async () => {
   try {
+    // Start widget proxy HTTP server for serving widget HTML with permissive CSP
+    await widgetProxyService.start();
+
     // Initialize all services
     await initializeServices();
 
@@ -55,6 +63,9 @@ app.whenReady().then(async () => {
 
     // Create main window
     mainWindow = createMainWindow();
+
+    // Ensure user has UUID and is tracked (fire and forget, don't block UI)
+    analyticsService.ensureUserTracked().catch(() => { });
 
     // Track app open (fire and forget, don't block UI)
     analyticsService.trackAppOpen().catch(() => { });

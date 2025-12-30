@@ -6,6 +6,7 @@ import { CheckCircle, Lock, CheckCircle2, XCircle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { SettingsSection } from './SettingsSection';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import type { LastSeenAnnouncements } from '@preload/types';
 
 export const PrivacySection = () => {
   const { t } = useTranslation(['settings', 'wizard']);
@@ -13,6 +14,7 @@ export const PrivacySection = () => {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [anonymousId, setAnonymousId] = useState<string | undefined>(undefined);
+  const [lastSeenAnnouncements, setLastSeenAnnouncements] = useState<LastSeenAnnouncements | undefined>(undefined);
 
   // Load current analytics consent
   useEffect(() => {
@@ -22,6 +24,7 @@ export const PrivacySection = () => {
         if (profile.success && profile.data?.analytics) {
           setAnalyticsConsent(profile.data.analytics.hasConsented);
           setAnonymousId(profile.data.analytics.anonymousUserId ?? undefined);
+          setLastSeenAnnouncements(profile.data.analytics.lastSeenAnnouncements ?? undefined);
         }
       } catch (error) {
         console.error('Failed to load analytics consent:', error);
@@ -43,6 +46,7 @@ export const PrivacySection = () => {
             hasConsented: true,
             consentedAt: new Date().toISOString(),
             anonymousUserId: anonymousId || crypto.randomUUID(),
+            lastSeenAnnouncements, // Preserve per-category announcement tracking
           },
         });
 
@@ -59,6 +63,7 @@ export const PrivacySection = () => {
             hasConsented: false,
             consentedAt: new Date().toISOString(),
             anonymousUserId: anonymousId, // Keep existing ID if any
+            lastSeenAnnouncements, // Preserve per-category announcement tracking
           },
         });
       }
