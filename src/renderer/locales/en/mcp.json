@@ -65,7 +65,8 @@
       "connected": "Connected",
       "disconnected": "Disconnected",
       "connecting": "Connecting...",
-      "error": "Error"
+      "error": "Error",
+      "pending_oauth": "Authorizing..."
     }
   },
   "config": {

@@ -20,6 +20,12 @@ vi.mock('../../logging', () => ({
             warn: vi.fn(),
             error: vi.fn(),
         },
+        oauth: {
+            info: vi.fn(),
+            debug: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+        },
     }),
 }));
 
@@ -102,7 +108,7 @@ describe('Dynamic Client Registration Integration', () => {
         vi.spyOn(OAuthFlowManager.prototype, 'authorize').mockResolvedValue({
             code: 'test-auth-code',
             verifier: 'test-verifier',
-            redirectUri: 'http://localhost:3000/callback',
+            redirectUri: 'http://127.0.0.1:8080/callback',
         });
 
         // Mock OAuthTokenStore.saveTokens

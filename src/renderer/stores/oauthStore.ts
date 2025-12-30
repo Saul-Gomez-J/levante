@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { logger } from '@/services/logger';
+import { useMCPStore } from './mcpStore';
 
 /**
  * OAuth Server Status
@@ -58,6 +59,7 @@ interface OAuthState {
         wwwAuth: string;
     }) => void;
     clearPendingAuth: () => void;
+    clearServerState: (serverId: string) => void;
 }
 
 /**
@@ -80,6 +82,25 @@ export const useOAuthStore = create<OAuthState>((set, get) => ({
                 clientId: undefined, // force DCR if none provided
                 wwwAuthHeader: wwwAuth,
             });
+
+            // OAuth completed successfully - attempt to reconnect the MCP server
+            logger.oauth.info('OAuth completed, attempting to reconnect MCP server', { serverId });
+
+            const serverConfig = useMCPStore.getState().getServerById(serverId);
+            if (serverConfig) {
+                try {
+                    await useMCPStore.getState().connectServer(serverConfig);
+                    logger.oauth.info('MCP server reconnected successfully after OAuth', { serverId });
+                } catch (connectError) {
+                    // If reconnection fails, log but don't throw - user can retry manually
+                    logger.oauth.warn('Failed to reconnect MCP server after OAuth', {
+                        serverId,
+                        error: connectError instanceof Error ? connectError.message : connectError,
+                    });
+                }
+            } else {
+                logger.oauth.warn('Could not find server config for reconnection', { serverId });
+            }
         } catch (error) {
             logger.oauth.error('Automatic OAuth authorization failed', {
                 serverId,
@@ -289,6 +310,27 @@ export const useOAuthStore = create<OAuthState>((set, get) => ({
     },
 
     clearPendingAuth: () => set({ pendingAuth: null }),
+
+    /**
+     * Clear local state for a specific server (used when removing MCP)
+     */
+    clearServerState: (serverId: string) => {
+        set((state) => {
+            const newServers = { ...state.servers };
+            const newLoading = { ...state.loading };
+            const newErrors = { ...state.errors };
+
+            delete newServers[serverId];
+            delete newLoading[serverId];
+            delete newErrors[serverId];
+
+            return {
+                servers: newServers,
+                loading: newLoading,
+                errors: newErrors,
+            };
+        });
+    },
 }));
 
 // Register global listener for OAuth required events from main process

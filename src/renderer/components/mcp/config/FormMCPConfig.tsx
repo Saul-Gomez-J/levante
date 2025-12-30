@@ -12,8 +12,10 @@ import {
 } from '@/components/ui/select';
 import { Loader2, AlertCircle, X } from 'lucide-react';
 import { useMCPStore } from '@/stores/mcpStore';
+import { useOAuthStore } from '@/stores/oauthStore';
 import { MCPServerConfig } from '@/types/mcp';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 interface FormMCPConfigProps {
   serverId: string | null;
@@ -49,7 +51,7 @@ const sanitizeNameToId = (name: string): string => {
 
 export function FormMCPConfig({ serverId, onClose, onConfigChange }: FormMCPConfigProps) {
   const { t } = useTranslation('mcp');
-  const { addServer } = useMCPStore();
+  const { addServer, connectServer } = useMCPStore();
 
   // Form state
   const [name, setName] = useState('');
@@ -232,8 +234,42 @@ export function FormMCPConfig({ serverId, onClose, onConfigChange }: FormMCPConf
         }
       }
 
+      // 1. Guardar configuración
       await addServer(serverConfig);
-      onClose();
+
+      // 2. Intentar conectar automáticamente
+      const toastId = toast.loading(t('messages.connecting', { name: serverConfig.name }));
+
+      try {
+        await connectServer(serverConfig);
+        toast.success(t('messages.added', { name: serverConfig.name }), { id: toastId });
+        onClose();
+      } catch (connectError: any) {
+        // Manejar OAuth requerido
+        if (connectError.code === 'OAUTH_REQUIRED') {
+          const { handleOAuthRequired } = useOAuthStore.getState();
+          handleOAuthRequired({
+            serverId: connectError.serverConfig?.id || serverConfig.id,
+            mcpServerUrl: connectError.metadata?.mcpServerUrl || '',
+            wwwAuth: connectError.metadata?.wwwAuth || ''
+          });
+
+          toast.info(t('messages.oauth_required', { name: serverConfig.name }), { id: toastId });
+          onClose();
+          return;
+        }
+
+        // Manejar errores de runtime
+        if (connectError.errorCode === 'RUNTIME_NOT_FOUND' || connectError.message === 'RUNTIME_NOT_FOUND') {
+          toast.error(t('messages.runtime_not_available'), { id: toastId });
+          onClose();
+          return;
+        }
+
+        // Otros errores: servidor guardado pero no conectado
+        toast.warning(t('messages.added_not_connected', { name: serverConfig.name }), { id: toastId });
+        onClose();
+      }
     } catch (err) {
       setError(t('config.save_error'));
     } finally {

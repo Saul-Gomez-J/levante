@@ -160,12 +160,24 @@ export interface LevanteAPI {
       error?: string;
     }>;
 
+    // Cleanup all OAuth credentials for a removed server
+    cleanup: (params: { serverId: string }) => Promise<{ success: boolean; error?: string }>;
+
     // Listen for OAuth-required events from the main process
     onOAuthRequired: (
       callback: (data: {
         serverId: string;
         mcpServerUrl: string;
         wwwAuth: string;
+      }) => void
+    ) => () => void;
+
+    // Listen for credentials expiration events
+    onCredentialsExpired: (
+      callback: (data: {
+        serverId: string;
+        reason: 'client_secret_expired' | 'registration_revoked';
+        timestamp: number;
       }) => void
     ) => () => void;
 

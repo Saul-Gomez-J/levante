@@ -24,6 +24,12 @@ vi.mock('../../logging', () => ({
             warn: vi.fn(),
             error: vi.fn(),
         },
+        oauth: {
+            info: vi.fn(),
+            debug: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+        },
     }),
 }));
 
@@ -228,6 +234,60 @@ describe('OAuth Integration Tests', () => {
                     clientId: 'test-client',
                 })
             ).rejects.toThrow('Token refresh failed');
+        });
+    });
+
+    describe('Client Credentials Expiration Integration', () => {
+        it('should handle expired credentials during token refresh', async () => {
+            const pastTimestamp = Math.floor(Date.now() / 1000) - 3600;
+
+            // Setup expired tokens
+            const expiredTokens = {
+                accessToken: 'expired-access',
+                refreshToken: 'valid-refresh',
+                expiresAt: Date.now() - 1000,
+                tokenType: 'Bearer' as const,
+            };
+
+            await tokenStore.saveTokens('test-server', expiredTokens);
+
+            // Setup OAuth config with expired client credentials
+            await mockPreferences.set('mcpServers.test-server.oauth', {
+                enabled: true,
+                authServerId: 'https://auth.example.com',
+                clientId: 'test-client',
+                scopes: ['mcp:read'],
+                clientCredentials: {
+                    clientId: 'test-client',
+                    clientSecret: 'test-secret',
+                    registeredAt: Date.now() - 7200000,
+                    authServerId: 'https://auth.example.com',
+                    registrationMetadata: {
+                        client_secret_expires_at: pastTimestamp,
+                    },
+                },
+            });
+
+            // Token refresh should work even with expired client credentials
+            // (tokens are separate from client credentials)
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => ({
+                    access_token: 'new-access',
+                    refresh_token: 'new-refresh',
+                    expires_in: 3600,
+                    token_type: 'Bearer',
+                }),
+            });
+
+            const newTokens = await flowManager.refreshAccessToken({
+                tokenEndpoint: 'https://auth.example.com/token',
+                refreshToken: 'valid-refresh',
+                clientId: 'test-client',
+                clientSecret: 'test-secret',
+            });
+
+            expect(newTokens.accessToken).toBe('new-access');
         });
     });
 });

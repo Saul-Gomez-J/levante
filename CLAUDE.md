@@ -61,6 +61,29 @@ SQLite database with migrations in `database/migrations/`:
 - `messages`: Message storage with streaming support
 - Schema version tracking for migrations
 
+## OAuth System
+
+Levante implements OAuth 2.1 with PKCE for MCP server authentication:
+
+**Key Features:**
+- Dynamic Client Registration (RFC 7591)
+- Client secret expiration handling
+- Token auto-refresh
+- Token revocation on disconnect
+
+**Client Credentials:**
+- Stored encrypted in `ui-preferences.json`
+- Automatic validation of `client_secret_expires_at`
+- Re-registration attempt if secret expires
+- IPC notification on credentials expiration
+
+**Files:**
+- `src/main/services/oauth/` - Core OAuth services
+- `src/main/ipc/oauthHandlers.ts` - IPC handlers
+- `src/renderer/stores/oauthStore.ts` - UI state
+
+For detailed architecture: See [OAuth Architecture](docs/oauth/oauth-architecture.md)
+
 ## Configuration Storage
 
 All configuration is stored in `~/levante/` directory with **selective encryption**:

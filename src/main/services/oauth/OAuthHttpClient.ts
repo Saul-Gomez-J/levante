@@ -134,14 +134,15 @@ export class OAuthHttpClient {
         oldTokens?: OAuthTokens
     ): Promise<OAuthTokens> {
         if (!oldTokens) {
-            oldTokens = (await this.tokenStore.getTokens(serverId)) || undefined;
-            if (!oldTokens) {
+            const storedTokens = await this.tokenStore.getTokens(serverId);
+            if (!storedTokens) {
                 throw this.createError(
                     'NO_TOKENS',
                     'No tokens available to refresh',
                     { serverId }
                 );
             }
+            oldTokens = storedTokens;
         }
 
         if (!oldTokens.refreshToken) {
@@ -209,9 +210,9 @@ export class OAuthHttpClient {
      * @private
      */
     private async getOAuthConfig(serverId: string): Promise<OAuthServerConfig> {
-        const config = await this.preferencesService.get(
+        const config = (await this.preferencesService.get(
             `mcpServers.${serverId}.oauth`
-        );
+        )) as any;
 
         if (!config) {
             throw this.createError(
@@ -219,6 +220,24 @@ export class OAuthHttpClient {
                 'OAuth configuration not found for server',
                 { serverId }
             );
+        }
+
+        // Verificar si hay client credentials y si están expiradas
+        const clientCredentials = config.clientCredentials;
+        if (clientCredentials?.registrationMetadata?.client_secret_expires_at) {
+            const expiresAt =
+                clientCredentials.registrationMetadata.client_secret_expires_at;
+
+            // 0 = nunca expira, cualquier otro valor es timestamp en segundos
+            if (expiresAt !== 0 && Date.now() >= expiresAt * 1000) {
+                logger.oauth.warn('Client credentials expired during token refresh', {
+                    serverId,
+                    expiresAt,
+                });
+
+                // Notificar - el refresh fallará pero queremos informar
+                // La re-autorización será necesaria
+            }
         }
 
         return config as unknown as OAuthServerConfig;

@@ -1,6 +1,13 @@
 import * as http from 'http';
 import * as net from 'net';
 import { getLogger } from '../logging';
+import {
+    OAUTH_LOOPBACK_PORT,
+    OAUTH_LOOPBACK_HOST,
+    OAUTH_CALLBACK_PATH,
+    OAUTH_CALLBACK_TIMEOUT,
+    OAUTH_REDIRECT_URI,
+} from './constants';
 import type {
     LoopbackServerConfig,
     LoopbackServerResult,
@@ -26,15 +33,17 @@ export class OAuthRedirectServer {
     private timeoutHandle?: NodeJS.Timeout;
 
     private readonly DEFAULT_CONFIG: Required<LoopbackServerConfig> = {
-        port: 0, // 0 = random port
-        hostname: '127.0.0.1',
-        callbackPath: '/callback',
-        timeout: 5 * 60 * 1000, // 5 minutos
+        port: OAUTH_LOOPBACK_PORT, // Puerto fijo
+        hostname: OAUTH_LOOPBACK_HOST,
+        callbackPath: OAUTH_CALLBACK_PATH,
+        timeout: OAUTH_CALLBACK_TIMEOUT,
     };
 
     /**
-     * Inicia el servidor loopback
+     * Inicia el servidor loopback en el puerto fijo
      * Retorna el puerto y redirect_uri
+     *
+     * @throws OAuthFlowError si el puerto está ocupado
      */
     async start(
         config: LoopbackServerConfig = {}
@@ -42,10 +51,24 @@ export class OAuthRedirectServer {
         const finalConfig = { ...this.DEFAULT_CONFIG, ...config };
 
         try {
-            // Encontrar puerto disponible
-            this.port = await this.findAvailablePort(finalConfig.port);
+            // Verificar si el puerto está disponible
+            const isAvailable = await this.isPortAvailable(finalConfig.port);
 
-            this.logger.oauth.info('Starting OAuth redirect server', {
+            if (!isAvailable) {
+                this.logger.oauth.error('OAuth loopback port is in use', {
+                    port: finalConfig.port,
+                });
+
+                throw new OAuthFlowError(
+                    `Puerto ${finalConfig.port} está ocupado. Por favor, cierra la aplicación que lo esté usando e intenta de nuevo.`,
+                    'LOOPBACK_SERVER_FAILED',
+                    { port: finalConfig.port, reason: 'PORT_IN_USE' }
+                );
+            }
+
+            this.port = finalConfig.port;
+
+            this.logger.oauth.info('Starting OAuth redirect server on fixed port', {
                 port: this.port,
                 hostname: finalConfig.hostname,
             });
@@ -84,25 +107,37 @@ export class OAuthRedirectServer {
                     resolve();
                 });
 
-                this.server!.on('error', (error) => {
+                this.server!.on('error', (error: NodeJS.ErrnoException) => {
                     this.logger.oauth.error('OAuth redirect server error', {
                         error: error.message,
+                        code: error.code,
                     });
-                    reject(
-                        new OAuthFlowError(
-                            'Failed to start loopback server',
-                            'LOOPBACK_SERVER_FAILED',
-                            { error: error.message }
-                        )
-                    );
+
+                    // Mensaje más descriptivo para EADDRINUSE
+                    if (error.code === 'EADDRINUSE') {
+                        reject(
+                            new OAuthFlowError(
+                                `Puerto ${this.port} está ocupado. Por favor, cierra la aplicación que lo esté usando e intenta de nuevo.`,
+                                'LOOPBACK_SERVER_FAILED',
+                                { error: error.message, port: this.port, reason: 'PORT_IN_USE' }
+                            )
+                        );
+                    } else {
+                        reject(
+                            new OAuthFlowError(
+                                'Failed to start loopback server',
+                                'LOOPBACK_SERVER_FAILED',
+                                { error: error.message }
+                            )
+                        );
+                    }
                 });
             });
 
-            const redirectUri = `http://${finalConfig.hostname}:${this.port}${finalConfig.callbackPath}`;
-
+            // Siempre retornar el redirect URI fijo
             return {
                 port: this.port,
-                redirectUri,
+                redirectUri: OAUTH_REDIRECT_URI,
             };
         } catch (error) {
             this.logger.oauth.error('Failed to start OAuth redirect server', {
@@ -159,28 +194,37 @@ export class OAuthRedirectServer {
     }
 
     /**
-     * Encuentra un puerto disponible
+     * Verifica si el puerto fijo está disponible
+     *
+     * @param port - Puerto a verificar
+     * @returns true si está disponible, false si está ocupado
      */
-    private async findAvailablePort(preferredPort: number = 0): Promise<number> {
-        return new Promise((resolve, reject) => {
+    private async isPortAvailable(port: number): Promise<boolean> {
+        return new Promise((resolve) => {
             const server = net.createServer();
 
-            server.listen(preferredPort, '127.0.0.1', () => {
-                const address = server.address() as net.AddressInfo;
-                const port = address.port;
+            server.once('error', (error: NodeJS.ErrnoException) => {
+                if (error.code === 'EADDRINUSE') {
+                    this.logger.oauth.debug('Port is in use', { port });
+                    resolve(false);
+                } else {
+                    // Otro error, asumimos que el puerto no está disponible
+                    this.logger.oauth.warn('Error checking port availability', {
+                        port,
+                        error: error.message,
+                    });
+                    resolve(false);
+                }
+            });
 
+            server.once('listening', () => {
                 server.close(() => {
-                    this.logger.oauth.debug('Found available port', { port });
-                    resolve(port);
+                    this.logger.oauth.debug('Port is available', { port });
+                    resolve(true);
                 });
             });
 
-            server.on('error', (error) => {
-                this.logger.oauth.error('Failed to find available port', {
-                    error: error.message,
-                });
-                reject(error);
-            });
+            server.listen(port, OAUTH_LOOPBACK_HOST);
         });
     }
 
@@ -301,6 +345,28 @@ export class OAuthRedirectServer {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Authorization Successful - Levante</title>
   <style>
+    :root {
+      --background: 0 0% 100%;
+      --foreground: 0 0% 3.9%;
+      --card: 0 0% 100%;
+      --card-foreground: 0 0% 3.9%;
+      --muted-foreground: 0 0% 45.1%;
+      --border: 0 0% 89.8%;
+      --success: 160 84% 39%;
+      --success-foreground: 0 0% 100%;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --background: 0 0% 11.8%;
+        --foreground: 0 0% 88%;
+        --card: 0 0% 15.3%;
+        --card-foreground: 0 0% 88%;
+        --muted-foreground: 0 0% 65%;
+        --border: 0 0% 30%;
+        --success: 160 84% 39%;
+        --success-foreground: 0 0% 100%;
+      }
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       display: flex;
@@ -308,37 +374,40 @@ export class OAuthRedirectServer {
       justify-content: center;
       min-height: 100vh;
       margin: 0;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
     }
     .container {
-      background: white;
+      background: hsl(var(--card));
+      color: hsl(var(--card-foreground));
+      border: 1px solid hsl(var(--border));
       border-radius: 12px;
       padding: 48px;
       text-align: center;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
       max-width: 400px;
     }
     .icon {
       width: 64px;
       height: 64px;
       margin: 0 auto 24px;
-      background: #10b981;
+      background: hsl(var(--success));
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .checkmark {
-      color: white;
+      color: hsl(var(--success-foreground));
       font-size: 32px;
     }
     h1 {
-      color: #1f2937;
+      color: hsl(var(--card-foreground));
       font-size: 24px;
       margin: 0 0 16px;
     }
     p {
-      color: #6b7280;
+      color: hsl(var(--muted-foreground));
       font-size: 16px;
       line-height: 1.5;
       margin: 0;
@@ -373,6 +442,28 @@ export class OAuthRedirectServer {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title} - Levante</title>
   <style>
+    :root {
+      --background: 0 0% 100%;
+      --foreground: 0 0% 3.9%;
+      --card: 0 0% 100%;
+      --card-foreground: 0 0% 3.9%;
+      --muted-foreground: 0 0% 45.1%;
+      --border: 0 0% 89.8%;
+      --destructive: 0 84.2% 60.2%;
+      --destructive-foreground: 0 0% 98%;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --background: 0 0% 11.8%;
+        --foreground: 0 0% 88%;
+        --card: 0 0% 15.3%;
+        --card-foreground: 0 0% 88%;
+        --muted-foreground: 0 0% 65%;
+        --border: 0 0% 30%;
+        --destructive: 0 62.8% 30.6%;
+        --destructive-foreground: 0 0% 88%;
+      }
+    }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       display: flex;
@@ -380,37 +471,40 @@ export class OAuthRedirectServer {
       justify-content: center;
       min-height: 100vh;
       margin: 0;
-      background: linear-gradient(135deg, #f87171 0%, #dc2626 100%);
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
     }
     .container {
-      background: white;
+      background: hsl(var(--card));
+      color: hsl(var(--card-foreground));
+      border: 1px solid hsl(var(--border));
       border-radius: 12px;
       padding: 48px;
       text-align: center;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.18);
       max-width: 400px;
     }
     .icon {
       width: 64px;
       height: 64px;
       margin: 0 auto 24px;
-      background: #ef4444;
+      background: hsl(var(--destructive));
       border-radius: 50%;
       display: flex;
       align-items: center;
       justify-content: center;
     }
     .cross {
-      color: white;
+      color: hsl(var(--destructive-foreground));
       font-size: 32px;
     }
     h1 {
-      color: #1f2937;
+      color: hsl(var(--card-foreground));
       font-size: 24px;
       margin: 0 0 16px;
     }
     p {
-      color: #6b7280;
+      color: hsl(var(--muted-foreground));
       font-size: 16px;
       line-height: 1.5;
       margin: 0;

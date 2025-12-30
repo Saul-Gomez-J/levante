@@ -102,6 +102,13 @@ export const appApi = {
         error?: string;
       }>,
 
+    // Cleanup all OAuth credentials for a removed server
+    cleanup: (params: { serverId: string }) =>
+      ipcRenderer.invoke('levante/oauth/cleanup', params) as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
+
     // Listen for OAuth required events triggered by 401 responses
     onOAuthRequired: (
       callback: (data: {
@@ -115,6 +122,22 @@ export const appApi = {
 
       return () => {
         ipcRenderer.removeListener('levante/oauth/required', handler);
+      };
+    },
+
+    // Listen for credentials expiration events
+    onCredentialsExpired: (
+      callback: (data: {
+        serverId: string;
+        reason: 'client_secret_expired' | 'registration_revoked';
+        timestamp: number;
+      }) => void
+    ) => {
+      const handler = (_event: any, data: any) => callback(data);
+      ipcRenderer.on('levante/oauth/credentials-expired', handler);
+
+      return () => {
+        ipcRenderer.removeListener('levante/oauth/credentials-expired', handler);
       };
     },
 

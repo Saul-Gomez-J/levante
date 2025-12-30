@@ -11,6 +11,7 @@ import { OAuthDiscoveryService } from './OAuthDiscoveryService';
 import { OAuthFlowManager } from './OAuthFlowManager';
 import { OAuthTokenStore } from './OAuthTokenStore';
 import { OAuthHttpClient } from './OAuthHttpClient';
+import { OAUTH_REDIRECT_URI } from './constants';
 import { safeStorage } from 'electron';
 import { PreferencesService } from '../preferencesService';
 import { getLogger } from '../logging';
@@ -19,6 +20,7 @@ import type {
     AuthorizationServerMetadata,
     OAuthServiceError,
     OAuthClientCredentials,
+    TokenEndpointAuthMethod,
 } from './types';
 
 const logger = getLogger();
@@ -84,16 +86,13 @@ export class OAuthService {
         });
 
         try {
-            // Resolve effective scopes: prefer parsed header -> provided -> defaults
+            // Resolve effective scopes: prefer parsed header -> provided -> later metadata/defaults
             let effectiveScopes = scopes;
             if ((!effectiveScopes || effectiveScopes.length === 0) && wwwAuthHeader) {
                 const parsedHeader = this.discoveryService.parseWWWAuthenticate(wwwAuthHeader);
                 if (parsedHeader.scope) {
                     effectiveScopes = parsedHeader.scope.split(/\s+/).filter(Boolean);
                 }
-            }
-            if (!effectiveScopes || effectiveScopes.length === 0) {
-                effectiveScopes = ['mcp:read', 'mcp:write'];
             }
 
             // Step 1: Discovery of Authorization Server
@@ -114,84 +113,127 @@ export class OAuthService {
                 hasRegistration: !!metadata.registration_endpoint,
             });
 
-            // Step 2: Pre-allocate redirect server port (for DCR consistency)
-            logger.oauth.info('Step 2: Pre-allocating redirect server port');
+            // If no scopes yet, prefer those advertised by the AS, else fallback to MCP defaults
+            if (!effectiveScopes || effectiveScopes.length === 0) {
+                effectiveScopes = metadata.scopes_supported && metadata.scopes_supported.length > 0
+                    ? metadata.scopes_supported
+                    : ['mcp:read', 'mcp:write'];
+            }
 
-            // Start redirect server to get the port we'll use
+            // Step 2: Pre-allocate redirect server (puerto fijo)
+            logger.oauth.info('Step 2: Starting redirect server on fixed port');
+
+            // Start redirect server - siempre usa el puerto fijo
             const redirectServer = this.flowManager['redirectServer'];
             const { redirectUri } = await redirectServer.start();
 
-            logger.oauth.debug('Redirect server started', {
+            logger.oauth.debug('Redirect server started on fixed port', {
                 redirectUri,
+                expectedUri: OAUTH_REDIRECT_URI,
             });
+
+            // Validar que el redirectUri sea el esperado
+            if (redirectUri !== OAUTH_REDIRECT_URI) {
+                await redirectServer.stop();
+                throw this.createError(
+                    'AUTHORIZATION_FAILED',
+                    'Redirect URI mismatch',
+                    { redirectUri, expected: OAUTH_REDIRECT_URI }
+                );
+            }
 
             // Step 3: Dynamic Client Registration (if needed)
             let clientId = providedClientId;
             let clientSecret: string | undefined;
+            let tokenEndpointAuthMethod: TokenEndpointAuthMethod = 'none';
 
             if (!clientId) {
                 logger.oauth.info(
-                    'Step 3: No client_id provided, attempting Dynamic Client Registration'
+                    'Step 3: No client_id provided, checking existing credentials'
                 );
 
-                // Check if AS supports Dynamic Client Registration
-                if (this.discoveryService.supportsClientRegistration(metadata)) {
-                    logger.oauth.info(
-                        'Dynamic Client Registration supported, attempting registration'
-                    );
+                // Primero verificar si hay credenciales existentes válidas
+                const existingCredentials = await this.getValidClientCredentials(serverId);
 
-                    try {
-                        const credentials =
-                            await this.discoveryService.registerClient(
-                                metadata.registration_endpoint!,
-                                authServerId,
-                                [redirectUri] // Pass the pre-allocated redirect URI
-                            );
+                if (existingCredentials) {
+                    logger.oauth.info('Using existing valid client credentials', {
+                        serverId,
+                        clientId: this.sanitizeForLog(existingCredentials.clientId),
+                        hasSecret: !!existingCredentials.clientSecret,
+                    });
 
-                        clientId = credentials.clientId;
-                        clientSecret = credentials.clientSecret;
+                    clientId = existingCredentials.clientId;
+                    clientSecret = existingCredentials.clientSecret;
+                    tokenEndpointAuthMethod = existingCredentials.tokenEndpointAuthMethod ?? 'none';
+                } else {
+                    // No hay credenciales válidas, intentar DCR
+                    logger.oauth.info('No valid credentials, attempting Dynamic Client Registration');
 
-                        // Save credentials to preferences (encrypted)
-                        await this.saveClientCredentials(serverId, credentials);
+                    // Check if AS supports Dynamic Client Registration
+                    if (this.discoveryService.supportsClientRegistration(metadata)) {
+                        logger.oauth.info(
+                            'Dynamic Client Registration supported, attempting registration'
+                        );
 
-                        logger.oauth.info('Dynamic Client Registration successful', {
-                            clientId: this.sanitizeForLog(clientId),
-                            hasClientSecret: !!clientSecret,
-                        });
-                    } catch (registrationError) {
+                        try {
+                            const credentials =
+                                await this.discoveryService.registerClient(
+                                    metadata.registration_endpoint!,
+                                    authServerId,
+                                    {
+                                        redirectUris: [redirectUri],
+                                        // Por ahora, seguimos como public client
+                                        // En fases futuras, esto podría venir de configuración
+                                        preferConfidential: false,
+                                    }
+                                );
+
+                            clientId = credentials.clientId;
+                            clientSecret = credentials.clientSecret;
+                            tokenEndpointAuthMethod = credentials.tokenEndpointAuthMethod ?? 'none';
+
+                            // Save credentials to preferences (encrypted)
+                            await this.saveClientCredentials(serverId, credentials);
+
+                            logger.oauth.info('Dynamic Client Registration successful', {
+                                clientId: this.sanitizeForLog(clientId),
+                                hasClientSecret: !!clientSecret,
+                            });
+                        } catch (registrationError) {
+                            // Cleanup redirect server
+                            await redirectServer.stop();
+
+                            // Dynamic Registration failed
+                            logger.oauth.error('Dynamic Client Registration failed', {
+                                error:
+                                    registrationError instanceof Error
+                                        ? registrationError.message
+                                        : registrationError,
+                            });
+
+                            // For now, we throw an error informing the user
+                            return {
+                                success: false,
+                                error: `Dynamic Client Registration failed: ${registrationError instanceof Error
+                                    ? registrationError.message
+                                    : 'Unknown error'
+                                    }. This server requires manual client configuration (feature coming soon).`,
+                            };
+                        }
+                    } else {
                         // Cleanup redirect server
                         await redirectServer.stop();
 
-                        // Dynamic Registration failed
-                        logger.oauth.error('Dynamic Client Registration failed', {
-                            error:
-                                registrationError instanceof Error
-                                    ? registrationError.message
-                                    : registrationError,
-                        });
+                        // No Dynamic Registration available
+                        logger.oauth.warn(
+                            'Dynamic Client Registration not supported by Authorization Server'
+                        );
 
-                        // For now, we throw an error informing the user
                         return {
                             success: false,
-                            error: `Dynamic Client Registration failed: ${registrationError instanceof Error
-                                ? registrationError.message
-                                : 'Unknown error'
-                                }. This server requires manual client configuration (feature coming soon).`,
+                            error: 'This Authorization Server does not support Dynamic Client Registration. Manual client configuration will be required (feature coming soon).',
                         };
                     }
-                } else {
-                    // Cleanup redirect server
-                    await redirectServer.stop();
-
-                    // No Dynamic Registration available
-                    logger.oauth.warn(
-                        'Dynamic Client Registration not supported by Authorization Server'
-                    );
-
-                    return {
-                        success: false,
-                        error: 'This Authorization Server does not support Dynamic Client Registration. Manual client configuration will be required (feature coming soon).',
-                    };
                 }
             } else {
                 logger.oauth.info('Step 3: Using provided client_id', {
@@ -232,6 +274,7 @@ export class OAuthService {
                 clientId,
                 codeVerifier: authResult.verifier,
                 clientSecret, // Include if we have it from Dynamic Registration
+                tokenEndpointAuthMethod,
             });
 
             logger.oauth.info('Tokens received', {
@@ -421,7 +464,7 @@ export class OAuthService {
             await this.tokenStore.deleteTokens(serverId);
 
             // Remove OAuth config
-            await this.preferencesService.set(`mcpServers.${serverId}.oauth`, undefined);
+            this.preferencesService.delete(`mcpServers.${serverId}.oauth`);
 
             logger.oauth.info('Server disconnected successfully', { serverId });
         } catch (error) {
@@ -606,5 +649,269 @@ export class OAuthService {
     private sanitizeForLog(value: string): string {
         if (!value || value.length < 16) return '[REDACTED]';
         return `${value.substring(0, 8)}...[REDACTED]`;
+    }
+
+    /**
+     * Verifica si el client_secret ha expirado
+     * RFC 7591: client_secret_expires_at = 0 significa que nunca expira
+     *
+     * @param credentials - Credenciales del cliente
+     * @returns true si el secret es válido (no expirado), false si expiró
+     */
+    private isClientSecretValid(credentials: OAuthClientCredentials): boolean {
+        const expiresAt = credentials.registrationMetadata?.client_secret_expires_at;
+
+        // 0 = nunca expira (RFC 7591)
+        if (!expiresAt || expiresAt === 0) {
+            return true;
+        }
+
+        // Añadir buffer de 5 minutos para evitar race conditions
+        const EXPIRY_BUFFER_MS = 5 * 60 * 1000;
+        const expiresAtMs = expiresAt * 1000; // RFC 7591 usa segundos
+
+        return Date.now() < expiresAtMs - EXPIRY_BUFFER_MS;
+    }
+
+    /**
+     * Obtiene credenciales válidas, verificando:
+     * 1. Que existan
+     * 2. Que el client_secret no haya expirado
+     * 3. Que el redirect_uri coincida con el fijo actual
+     *
+     * Si el redirect_uri no coincide, las credenciales se invalidan
+     * y se retorna null para forzar nuevo DCR.
+     *
+     * @param serverId - ID del servidor MCP
+     * @returns Credenciales válidas o null si no hay/no se pueden usar
+     */
+    async getValidClientCredentials(
+        serverId: string
+    ): Promise<OAuthClientCredentials | null> {
+        const credentials = await this.getClientCredentials(serverId);
+
+        if (!credentials) {
+            logger.oauth.debug('No client credentials found', { serverId });
+            return null;
+        }
+
+        // NUEVO: Verificar que el redirect_uri coincida con el fijo actual
+        const storedConfig = await this.preferencesService.get(
+            `mcpServers.${serverId}.oauth`
+        ) as any;
+
+        if (storedConfig?.redirectUri && storedConfig.redirectUri !== OAUTH_REDIRECT_URI) {
+            logger.oauth.warn('Stored redirect_uri does not match fixed port, invalidating credentials', {
+                serverId,
+                storedRedirectUri: storedConfig.redirectUri,
+                expectedRedirectUri: OAUTH_REDIRECT_URI,
+            });
+
+            // Eliminar credenciales con redirect_uri antiguo
+            await this.deleteClientCredentials(serverId);
+
+            // También limpiar el oauth config
+            this.preferencesService.delete(`mcpServers.${serverId}.oauth`);
+
+            // Notificar que las credenciales fueron invalidadas
+            this.notifyCredentialsExpired(serverId, 'registration_revoked');
+
+            return null;
+        }
+
+        // Verificar expiración del client_secret
+        if (!this.isClientSecretValid(credentials)) {
+            logger.oauth.warn('Client secret expired', {
+                serverId,
+                expiresAt: credentials.registrationMetadata?.client_secret_expires_at,
+                clientId: this.sanitizeForLog(credentials.clientId),
+            });
+
+            // Si tiene registration_client_uri, intentar actualizar
+            if (credentials.registrationMetadata?.registration_client_uri) {
+                try {
+                    logger.oauth.info('Attempting client re-registration', { serverId });
+                    const newCredentials = await this.refreshClientRegistration(
+                        serverId,
+                        credentials
+                    );
+                    return newCredentials;
+                } catch (error) {
+                    logger.oauth.error('Failed to refresh client registration', {
+                        serverId,
+                        error: error instanceof Error ? error.message : error,
+                    });
+
+                    // Eliminar credenciales expiradas
+                    await this.deleteClientCredentials(serverId);
+
+                    // Notificar al usuario
+                    this.notifyCredentialsExpired(serverId, 'client_secret_expired');
+
+                    return null;
+                }
+            }
+
+            // No se puede actualizar, eliminar credenciales expiradas
+            logger.oauth.warn(
+                'Cannot refresh registration, deleting expired credentials',
+                { serverId }
+            );
+            await this.deleteClientCredentials(serverId);
+
+            // Notificar al usuario
+            this.notifyCredentialsExpired(serverId, 'client_secret_expired');
+
+            return null;
+        }
+
+        return credentials;
+    }
+
+    /**
+     * Intenta refrescar el registro del cliente usando registration_client_uri
+     * RFC 7592: OAuth 2.0 Dynamic Client Registration Management Protocol
+     *
+     * @param serverId - ID del servidor
+     * @param credentials - Credenciales actuales (expiradas)
+     */
+    private async refreshClientRegistration(
+        serverId: string,
+        credentials: OAuthClientCredentials
+    ): Promise<OAuthClientCredentials> {
+        const registrationUri = credentials.registrationMetadata?.registration_client_uri;
+        const registrationToken = credentials.registrationMetadata?.registration_access_token;
+
+        if (!registrationUri || !registrationToken) {
+            throw this.createError(
+                'CLIENT_REREGISTRATION_FAILED',
+                'Missing registration URI or token',
+                { serverId }
+            );
+        }
+
+        logger.oauth.debug('Refreshing client registration', {
+            serverId,
+            registrationUri: this.sanitizeForLog(registrationUri),
+        });
+
+        // GET current registration
+        const response = await fetch(registrationUri, {
+            method: 'GET',
+            headers: {
+                Authorization: `Bearer ${registrationToken}`,
+                Accept: 'application/json',
+            },
+        });
+
+        if (!response.ok) {
+            throw this.createError(
+                'CLIENT_REREGISTRATION_FAILED',
+                `Registration refresh failed: ${response.status}`,
+                { serverId, status: response.status }
+            );
+        }
+
+        const registrationResponse = (await response.json()) as any;
+
+        // Crear nuevas credenciales
+        const newCredentials: OAuthClientCredentials = {
+            clientId: registrationResponse.client_id,
+            clientSecret: registrationResponse.client_secret,
+            registeredAt: Date.now(),
+            authServerId: credentials.authServerId,
+            tokenEndpointAuthMethod: credentials.tokenEndpointAuthMethod,
+            registrationMetadata: {
+                client_secret_expires_at: registrationResponse.client_secret_expires_at,
+                registration_access_token: registrationResponse.registration_access_token || registrationToken,
+                registration_client_uri: registrationResponse.registration_client_uri || registrationUri,
+            },
+        };
+
+        // Guardar nuevas credenciales
+        await this.saveClientCredentials(serverId, newCredentials);
+
+        logger.oauth.info('Client registration refreshed successfully', {
+            serverId,
+            clientId: this.sanitizeForLog(newCredentials.clientId),
+            newExpiresAt: newCredentials.registrationMetadata?.client_secret_expires_at,
+        });
+
+        return newCredentials;
+    }
+
+    /**
+     * Limpia TODAS las credenciales OAuth de un servidor (tokens + client credentials + config)
+     * Usado cuando se elimina un MCP para evitar credenciales huérfanas.
+     *
+     * A diferencia de disconnect(), este método:
+     * - NO intenta revocar tokens (el servidor ya no existe en config)
+     * - Limpia TODO: tokens, client credentials y oauth config
+     */
+    async cleanupCredentials(serverId: string): Promise<void> {
+        logger.oauth.info('Cleaning up all OAuth credentials for removed server', { serverId });
+
+        try {
+            // 1. Eliminar tokens (access_token, refresh_token)
+            await this.tokenStore.deleteTokens(serverId);
+
+            // 2. Eliminar client credentials (client_id, client_secret)
+            await this.deleteClientCredentials(serverId);
+
+            // 3. Eliminar oauth config completo
+            this.preferencesService.delete(`mcpServers.${serverId}.oauth`);
+
+            logger.oauth.info('OAuth credentials cleaned up successfully', { serverId });
+        } catch (error) {
+            // Log pero no fallar - la limpieza es best-effort
+            logger.oauth.error('Error cleaning up OAuth credentials', {
+                serverId,
+                error: error instanceof Error ? error.message : error,
+            });
+        }
+    }
+
+    /**
+     * Elimina credenciales de cliente del almacenamiento
+     */
+    async deleteClientCredentials(serverId: string): Promise<void> {
+        this.preferencesService.delete(
+            `mcpServers.${serverId}.oauth.clientCredentials`
+        );
+
+        logger.oauth.info('Client credentials deleted', { serverId });
+    }
+
+    /**
+     * Notifica al renderer que las credenciales expiraron
+     * El renderer mostrará un mensaje al usuario
+     */
+    private notifyCredentialsExpired(
+        serverId: string,
+        reason: 'client_secret_expired' | 'registration_revoked'
+    ): void {
+        // Import BrowserWindow lazily to avoid circular deps
+        const electron = require('electron');
+        const BrowserWindow = electron.BrowserWindow || (electron.default && electron.default.BrowserWindow);
+
+        if (!BrowserWindow) {
+            logger.oauth.warn('Could not find BrowserWindow to send notification');
+            return;
+        }
+
+        const mainWindow = BrowserWindow.getAllWindows()[0];
+
+        if (mainWindow) {
+            mainWindow.webContents.send('levante/oauth/credentials-expired', {
+                serverId,
+                reason,
+                timestamp: Date.now(),
+            });
+
+            logger.oauth.info('Credentials expiration notification sent', {
+                serverId,
+                reason,
+            });
+        }
     }
 }
