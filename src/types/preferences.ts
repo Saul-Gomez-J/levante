@@ -134,5 +134,5 @@ export const DEFAULT_PREFERENCES: UIPreferences = {
     preferSystemRuntimes: false,
   },
   mcp: DEFAULT_MCP_PREFERENCES,
-  enableMCP: true,
+  enableMCP: true
 };

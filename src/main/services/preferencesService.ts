@@ -205,6 +205,10 @@ export class PreferencesService {
     }
   }
 
+  public isInitialized(): boolean {
+    return this.initialized;
+  }
+
   private ensureInitialized(): void {
     if (!this.initialized || !this.store) {
       throw new Error('PreferencesService not initialized. Call initialize() first.');

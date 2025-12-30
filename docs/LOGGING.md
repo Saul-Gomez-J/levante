@@ -41,7 +41,25 @@ DEBUG_OAUTH=false      # OAuth flow, authorization, token lifecycle
 
 # Log level control (optional)
 LOG_LEVEL=debug        # debug | info | warn | error
+
+# Log rotation settings (development fallback)
+LOG_MAX_SIZE=10485760    # 10MB
+LOG_MAX_FILES=5          # Keep 5 rotated files
+LOG_MAX_AGE=7            # Delete files older than 7 days
+LOG_COMPRESS=false       # Gzip rotated files
+LOG_DATE_PATTERN=YYYY-MM-DD-HHmmss
 ```
+
+> Nota: la aplicación usa siempre estos valores por defecto o los que definas por entorno; no hay configuración desde la UI.
+
+## Log Rotation
+
+To prevent the log file from growing indefinitely, the system automatically rotates files based on:
+1. **Size**: Rotates when the file exceeds the `maxSize` limit.
+2. **Count**: Keeps only the most recent `maxFiles`.
+3. **Age**: Deletes files older than `maxAge` days.
+
+Rotated files follow the pattern `levante-YYYY-MM-DD-HHmmss.log`. If compression is enabled, they will be saved as `.log.gz`.
 
 ## Log Categories
 

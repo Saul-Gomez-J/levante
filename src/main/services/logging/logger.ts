@@ -66,6 +66,9 @@ export class Logger implements LoggerService {
   }
 
   private setupTransports(): void {
+    // Clear existing transports
+    this.transports = [];
+
     const config = this.configService.getConfig();
 
     if (config.output.console) {
@@ -73,7 +76,7 @@ export class Logger implements LoggerService {
     }
 
     if (config.output.file && config.output.filePath) {
-      this.transports.push(new FileTransport(config.output.filePath));
+      this.transports.push(new FileTransport(config.output.filePath, config.output.rotation));
     }
   }
 
@@ -106,8 +109,15 @@ export class Logger implements LoggerService {
 
   public configure(config: Partial<LoggerConfig>): void {
     this.configService.updateConfig(config);
-    // Re-setup transports with new config
-    this.transports = [];
+    this.setupTransports();
+  }
+
+  /**
+   * Re-setup transports based on current configuration
+   */
+  public refresh(): void {
+    // Force config reload
+    (this.configService as any).initializeFromEnvironment();
     this.setupTransports();
   }
 }
@@ -129,9 +139,8 @@ export function getLogger(): Logger {
   return loggerInstance;
 }
 
-// Initialize logger with environment variables
+// Initialize logger with environment variables or preferences
 export function initializeLogger(): void {
   const logger = getLogger();
-  // Force the config service to reload from environment
-  (logger as any).configService.initializeFromEnvironment();
+  logger.refresh();
 }
