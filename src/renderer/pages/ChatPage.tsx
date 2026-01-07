@@ -79,8 +79,20 @@ const ChatPage = () => {
   // Track if we just created a new session (to avoid loading empty history)
   const justCreatedSessionRef = useRef(false);
 
+  const promptInputRef = useRef<HTMLTextAreaElement>(null);
+
   // Streaming context for mermaid processing
   const { triggerMermaidProcessing } = useStreamingContext();
+
+  const focusPromptInput = useCallback(() => {
+    if (!promptInputRef.current) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      promptInputRef.current?.focus();
+    });
+  }, []);
 
   // Load user name callback
   const loadUserName = useCallback(async () => {
@@ -417,6 +429,7 @@ const ChatPage = () => {
     if (justCreatedSessionRef.current) {
       logger.core.info('Session just created, skipping historical load', { sessionId: currentSessionId });
       justCreatedSessionRef.current = false;
+      focusPromptInput();
       return;
     }
 
@@ -440,8 +453,9 @@ const ChatPage = () => {
       // No session (new chat) - clear messages
       logger.core.info('New chat started, clearing messages');
       setMessages([]);
+      focusPromptInput();
     }
-  }, [currentSession?.id, loadHistoricalMessages, setMessages]);
+  }, [currentSession?.id, loadHistoricalMessages, setMessages, clearAttachments, clearResources, focusPromptInput]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -841,6 +855,7 @@ const ChatPage = () => {
                 selectedPrompts={selectedPrompts}
                 onPromptSelected={selectPrompt}
                 onPromptRemove={removePrompt}
+                inputRef={promptInputRef}
               />
             </div>
           </div>
@@ -898,6 +913,7 @@ const ChatPage = () => {
               selectedPrompts={selectedPrompts}
               onPromptSelected={selectPrompt}
               onPromptRemove={removePrompt}
+              inputRef={promptInputRef}
             />
           </div>
         </>)
