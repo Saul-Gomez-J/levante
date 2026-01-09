@@ -98,6 +98,7 @@ export interface CreateChatSessionInput {
 }
 
 export interface CreateMessageInput {
+  id?: string; // Optional: Frontend-generated ID. If provided, backend uses it; otherwise generates one.
   session_id: string;
   role: "user" | "assistant" | "system";
   content: string;

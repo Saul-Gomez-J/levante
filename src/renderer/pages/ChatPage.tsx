@@ -348,8 +348,9 @@ const ChatPage = () => {
       setPendingMessageAfterStop(null);
 
       // Persist user message to database BEFORE sending to AI (to ensure correct order)
+      const messageId = `user-${Date.now()}`;
       const userMessage = {
-        id: `user-${Date.now()}`,
+        id: messageId,
         role: 'user' as const,
         parts: [{ type: 'text' as const, text: messageText }],
         attachments: undefined,
@@ -357,8 +358,12 @@ const ChatPage = () => {
 
       persistMessage(userMessage)
         .then(() => {
-          // Send the message after persisting
-          sendMessageAI({ text: messageText });
+          // Send the message after persisting with the same ID
+          sendMessageAI({
+            id: messageId, // Use the same ID we persisted to DB
+            role: 'user',
+            parts: [{ type: 'text', text: messageText }],
+          });
         })
         .catch((err) => {
           logger.database.error('Failed to persist message after stop', { error: err });
@@ -373,8 +378,9 @@ const ChatPage = () => {
       setPendingWidgetMessage(null);
 
       // Persist user message to database BEFORE sending to AI
+      const messageId = `user-${Date.now()}`;
       const userMessage = {
-        id: `user-${Date.now()}`,
+        id: messageId,
         role: 'user' as const,
         parts: [{ type: 'text' as const, text: messageText }],
         attachments: undefined,
@@ -382,7 +388,11 @@ const ChatPage = () => {
 
       persistMessage(userMessage)
         .then(() => {
-          sendMessageAI({ text: messageText });
+          sendMessageAI({
+            id: messageId, // Use the same ID we persisted to DB
+            role: 'user',
+            parts: [{ type: 'text', text: messageText }],
+          });
         })
         .catch((err) => {
           logger.database.error('Failed to persist widget message', { error: err });
@@ -621,12 +631,18 @@ const ChatPage = () => {
           await updateSessionModel(currentSession.id, model);
         }
 
-        // Send to AI with attachments using AI SDK 6 format: { text, files }
-        // The ElectronChatTransport will pass these to the IPC layer
+        // Send to AI with attachments AND the same ID we persisted to DB
+        // This ensures AI SDK UI state matches database
         await sendMessageAI(
           {
-            text: messageText,
-            files: fileParts.length > 0 ? fileParts : undefined
+            id: messageId, // Use the same ID we persisted to DB
+            role: 'user',
+            parts: fileParts.length > 0
+              ? [
+                  { type: 'text', text: messageText },
+                  ...fileParts
+                ]
+              : [{ type: 'text', text: messageText }]
           },
           {
             body: {
@@ -738,11 +754,17 @@ const ChatPage = () => {
           await updateSessionModel(currentSession.id, model);
         }
 
-        // Send to AI with attachments using AI SDK 6 format: { text, files }
+        // Send to AI with attachments AND the same ID we persisted to DB
         await sendMessageAI(
           {
-            text: messageText,
-            files: fileParts.length > 0 ? fileParts : undefined
+            id: messageId, // Use the same ID we persisted to DB
+            role: 'user',
+            parts: fileParts.length > 0
+              ? [
+                  { type: 'text', text: messageText },
+                  ...fileParts
+                ]
+              : [{ type: 'text', text: messageText }]
           },
           {
             body: {

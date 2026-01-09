@@ -231,11 +231,14 @@ export class ChatService {
       contentLength: input.content.length,
       hasToolCalls: !!input.tool_calls,
       hasAttachments: !!input.attachments,
-      attachmentCount: input.attachments?.length || 0
+      attachmentCount: input.attachments?.length || 0,
+      providedId: !!input.id // Log if frontend supplied an ID
     });
 
     try {
-      const id = this.generateId();
+      // Use frontend-provided ID when present, otherwise generate a new one.
+      // This ensures consistency between AI SDK UI state and database.
+      const id = input.id || this.generateId();
       const now = Date.now();
 
       const attachmentsString = input.attachments ? JSON.stringify(input.attachments) : null;

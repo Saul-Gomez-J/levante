@@ -437,6 +437,7 @@ export const useChatStore = create<ChatStore>()(
           }
 
           const input: CreateMessageInput = {
+            id: message.id, // Pass frontend-generated ID so DB matches AI SDK UI state
             session_id: currentSession.id,
             role: message.role,
             content: content || '', // Fallback to empty string if no text
