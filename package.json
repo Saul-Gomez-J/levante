@@ -44,7 +44,7 @@
     "@mcp-ui/client": "^5.17.1",
     "@mcp-ui/server": "^5.16.3",
     "@modelcontextprotocol/sdk": "^1.25.1",
-    "@openrouter/ai-sdk-provider": "^1.5.4",
+    "@openrouter/ai-sdk-provider": "6.0.0-alpha.1",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-aspect-ratio": "^1.1.7",
@@ -117,7 +117,7 @@
     "use-stick-to-bottom": "^1.1.1",
     "vaul": "^1.1.2",
     "winston": "^3.19.0",
-    "zod": "^4.1.12",
+    "zod": "^4.3.5",
     "zustand": "^5.0.9"
   },
   "devDependencies": {

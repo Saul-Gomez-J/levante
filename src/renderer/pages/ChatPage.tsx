@@ -37,7 +37,57 @@ import { usePreference } from '@/hooks/usePreferences';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
+import type { UIMessage } from 'ai';
 import { createElectronChatTransport } from '@/transports/ElectronChatTransport';
+
+/**
+ * Custom sendAutomaticallyWhen function that only auto-continues when tools are APPROVED
+ * but NOT YET EXECUTED.
+ *
+ * This prevents two types of infinite loops:
+ * 1. When a tool is DENIED → do NOT auto-continue
+ * 2. When a tool is already EXECUTED (output-available) → do NOT auto-continue
+ *
+ * Only auto-continue when there are tools in 'approval-responded' state with approved: true
+ * that haven't been executed yet.
+ */
+function shouldAutoSendAfterApproval({ messages }: { messages: UIMessage[] }): boolean {
+  const lastAssistant = messages.filter(m => m.role === 'assistant').pop();
+  if (!lastAssistant || !lastAssistant.parts) return false;
+
+  // Find all tool parts in the last assistant message
+  const toolParts = lastAssistant.parts.filter((p: any) =>
+    p.type === 'tool-invocation' ||
+    p.type?.startsWith('tool-') ||
+    p.type === 'dynamic-tool'
+  );
+
+  // If no tool parts, no need to auto-continue
+  if (toolParts.length === 0) return false;
+
+  // If ALL tools are already executed, do NOT auto-continue (nothing left to do)
+  const allToolsExecuted = toolParts.every((p: any) => p.state === 'output-available');
+  if (allToolsExecuted) return false;
+
+  // If ANY tool is blocked (waiting approval, denied, or rejected), don't continue
+  const hasBlockingTools = toolParts.some((p: any) =>
+    p.state === 'approval-requested' ||
+    p.state === 'output-denied' ||
+    (p.state === 'approval-responded' && p.approval?.approved === false)
+  );
+  if (hasBlockingTools) return false;
+
+  // Only continue if there's at least one tool approved and waiting for execution
+  const hasApprovedToolsWaiting = toolParts.some((p: any) =>
+    p.state === 'approval-responded' && p.approval?.approved === true
+  );
+
+  return hasApprovedToolsWaiting;
+}
+
+// Tool approval imports
+import { useToolApproval } from '@/hooks/useToolApproval';
+import { ToolApprovalDialog } from '@/components/chat/ToolApprovalDialog';
 
 const logger = getRendererLogger();
 
@@ -200,9 +250,13 @@ const ChatPage = () => {
     status,
     stop,
     error: chatError,
+    addToolApprovalResponse,
   } = useChat({
     id: currentSession?.id || 'new-chat',
     transport,
+
+    // Auto-continue after tool approval (only if approved, not if denied)
+    sendAutomaticallyWhen: shouldAutoSendAfterApproval,
 
     // Persist messages after AI finishes
     onFinish: async ({ message }) => {
@@ -340,6 +394,67 @@ const ChatPage = () => {
       // Trigger mermaid processing
       triggerMermaidProcessing();
     },
+  });
+
+  // Handler cuando se deniega una tool (llamado DESPUÉS de stop() vía onBeforeDeny)
+  const handleToolDenied = useCallback((info: {
+    toolName: string;
+    serverId: string;
+    feedback?: string;
+  }) => {
+    logger.mcp.info('Tool execution denied by user', {
+      toolName: info.toolName,
+      serverId: info.serverId,
+      hasFeedback: !!info.feedback,
+    });
+
+    // Nota: stop() ya fue llamado en onBeforeDeny antes de este callback
+
+    // 1. Actualizar mensajes para incluir un indicador visual de la denegación
+    setMessages((prevMessages) => {
+      // Encontrar el último mensaje del assistant (que contiene el tool call)
+      const lastAssistantIndex = [...prevMessages]
+        .map((m) => m.role)
+        .lastIndexOf('assistant');
+
+      if (lastAssistantIndex === -1) return prevMessages;
+
+      const updatedMessages = [...prevMessages];
+      const lastAssistantMsg = updatedMessages[lastAssistantIndex];
+
+      // Añadir una parte de texto indicando la denegación
+      const denialPart = {
+        type: 'text' as const,
+        text: `\n\n⚠️ **Tool Denied**: ${info.toolName.replace(`${info.serverId}_`, '')}${info.feedback ? `\n> ${info.feedback}` : ''}`,
+      };
+
+      updatedMessages[lastAssistantIndex] = {
+        ...lastAssistantMsg,
+        parts: [...(lastAssistantMsg.parts || []), denialPart],
+      };
+
+      return updatedMessages;
+    });
+
+    // 2. Focus en el input para que el usuario pueda escribir
+    focusPromptInput();
+
+    logger.mcp.info('Tool denial processed, chat ready for new input');
+  }, [setMessages, focusPromptInput]);
+
+  // Tool approval hook - handles auto-approval for approved servers
+  // NOTE: onBeforeDeny removed - server handles denial via short-circuit
+  const {
+    pendingApproval,
+    handleApprove,
+    handleApproveForSession,
+    handleDeny,
+    handleClose,
+  } = useToolApproval({
+    sessionId: currentSession?.id ?? null,
+    messages,
+    addToolApprovalResponse,
+    onToolDenied: handleToolDenied,
   });
 
   // Handle pending message after stop
@@ -979,6 +1094,18 @@ const ChatPage = () => {
           </div>
         </>)
       )}
+
+      {/* Tool Approval Dialog */}
+      <ToolApprovalDialog
+        isOpen={pendingApproval !== null}
+        toolName={pendingApproval?.toolName ?? ''}
+        serverId={pendingApproval?.serverId ?? ''}
+        input={pendingApproval?.input ?? {}}
+        onApprove={handleApprove}
+        onApproveForSession={handleApproveForSession}
+        onDeny={handleDeny}
+        onClose={handleClose}
+      />
     </div>
   );
 };

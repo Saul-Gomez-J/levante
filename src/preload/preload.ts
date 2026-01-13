@@ -222,6 +222,11 @@ export interface LevanteAPI {
   stopStreaming: (
     streamId?: string
   ) => Promise<{ success: boolean; error?: string }>;
+  sendToolApprovalResponse: (
+    approvalId: string,
+    approved: boolean,
+    reason?: string
+  ) => Promise<{ success: boolean; error?: string }>;
 
   // Model functionality
   models: {

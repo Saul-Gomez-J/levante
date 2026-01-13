@@ -363,6 +363,45 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
         },
       };
     }
+
+    // Handle tool approval requests (MCP tools with needsApproval: true)
+    // For tools with needsApproval, the AI SDK sends tool-approval-request with full tool data.
+    // We need to emit tool-input-* chunks FIRST so the AI SDK creates the message part with
+    // toolName and input, then emit tool-approval-request to update the state.
+    if (chunk.toolApproval) {
+      // DEBUG: Log what we're receiving and emitting
+      console.log('[Transport] Received toolApproval chunk:', {
+        id: chunk.toolApproval.id,
+        toolCallId: chunk.toolApproval.toolCallId,
+        toolName: chunk.toolApproval.toolName,
+        input: chunk.toolApproval.input,
+        inputStringified: JSON.stringify(chunk.toolApproval.input),
+        inputType: typeof chunk.toolApproval.input,
+        inputKeys: chunk.toolApproval.input ? Object.keys(chunk.toolApproval.input as object) : [],
+      });
+      console.log('[Transport] RAW toolApproval:', chunk.toolApproval);
+
+      // First, emit tool input chunks so AI SDK has the tool info
+      yield {
+        type: "tool-input-start",
+        toolCallId: chunk.toolApproval.toolCallId,
+        toolName: chunk.toolApproval.toolName,
+      };
+
+      yield {
+        type: "tool-input-available",
+        toolCallId: chunk.toolApproval.toolCallId,
+        toolName: chunk.toolApproval.toolName,
+        input: chunk.toolApproval.input,
+      };
+
+      // Then emit the approval request to update the part state
+      yield {
+        type: "tool-approval-request",
+        approvalId: chunk.toolApproval.id,
+        toolCallId: chunk.toolApproval.toolCallId,
+      };
+    }
   }
 
   /**

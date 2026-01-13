@@ -10,6 +10,7 @@
 import { ipcMain, IpcMainInvokeEvent } from "electron";
 import { getLogger } from "../services/logging";
 import { AIService, ChatRequest } from "../services/aiService";
+import { resolveApproval } from "../services/ai/toolApprovalManager";
 
 const logger = getLogger();
 
@@ -31,6 +32,9 @@ export function setupChatHandlers(): void {
 
   // Non-streaming chat handler
   ipcMain.handle("levante/chat/send", handleChatSend);
+
+  // Tool approval response handler
+  ipcMain.handle("levante/chat/tool-approval-response", handleToolApprovalResponse);
 
   logger.core.info("Chat handlers registered successfully");
 }
@@ -159,6 +163,46 @@ async function handleChatSend(
       ...result,
     };
   } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    };
+  }
+}
+
+/**
+ * Handle tool approval response from the renderer.
+ * Called when the user clicks "Approve" or "Deny" in the approval dialog.
+ * This resolves the pending approval promise in toolApprovalManager,
+ * allowing the AI stream to continue.
+ */
+async function handleToolApprovalResponse(
+  _event: IpcMainInvokeEvent,
+  { approvalId, approved, reason }: {
+    approvalId: string;
+    approved: boolean;
+    reason?: string;
+  }
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    logger.aiSdk.info("Received tool approval response from renderer", {
+      approvalId,
+      approved,
+      reason,
+    });
+
+    const resolved = resolveApproval(approvalId, approved, reason);
+
+    return {
+      success: resolved,
+      error: resolved ? undefined : "No pending approval found with that ID",
+    };
+  } catch (error) {
+    logger.aiSdk.error("Error handling tool approval response", {
+      approvalId,
+      error: error instanceof Error ? error.message : error,
+    });
+
     return {
       success: false,
       error: error instanceof Error ? error.message : "Unknown error",

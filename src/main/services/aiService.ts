@@ -20,6 +20,10 @@ import type { ReasoningConfig } from "../../types/reasoning";
 import { getMCPTools } from "./ai/mcpToolsAdapter";
 import { buildSystemPrompt } from "./ai/systemPromptBuilder";
 import { isToolUseNotSupportedError } from "./ai/toolErrorDetector";
+import {
+  waitForApproval,
+  cancelAllPendingApprovals
+} from "./ai/toolApprovalManager";
 import { calculateMaxSteps } from "./ai/stepsCalculator";
 import { InferenceDispatcher } from "./inference/InferenceDispatcher";
 import { attachmentStorage } from "./attachmentStorage";
@@ -63,6 +67,16 @@ export interface ChatStreamChunk {
     mime: string;
     dataUrl: string;
     filename: string;
+  };
+  toolApproval?: {
+    id: string;
+    toolCallId: string;
+    toolName: string;
+    input: Record<string, any>;
+  };
+  toolApprovalProcessed?: {
+    approvalId: string;
+    approved: boolean;
   };
 }
 
@@ -1094,10 +1108,29 @@ export class AIService {
       for await (const chunk of result.fullStream) {
         // Log ALL chunks for debugging (except frequent text-delta)
         if (chunk.type !== "text-delta" && chunk.type !== "reasoning-delta") {
-          this.logger.aiSdk.debug("🔄 Stream chunk", {
+          this.logger.aiSdk.info("🔄 Stream chunk received", {
             type: chunk.type,
             chunkKeys: Object.keys(chunk),
           });
+
+          // Log tool-input chunks in detail to see the arguments
+          if (chunk.type === "tool-input-delta") {
+            this.logger.aiSdk.debug("🔧 Tool input delta", {
+              id: (chunk as any).id,
+              delta: (chunk as any).delta,
+            });
+          }
+          if (chunk.type === "tool-input-start") {
+            this.logger.aiSdk.debug("🔧 Tool input start", {
+              id: (chunk as any).id,
+              toolName: (chunk as any).toolName,
+            });
+          }
+          if (chunk.type === "tool-input-end") {
+            this.logger.aiSdk.debug("🔧 Tool input end", {
+              id: (chunk as any).id,
+            });
+          }
         }
 
         // Log the actual model used when we receive finish-step
@@ -1175,13 +1208,15 @@ export class AIService {
             break;
 
           case "tool-call":
+            // AI SDK v6 usa "input" no "arguments"
+            const toolCallInput = (chunk as any).input || {};
             this.logger.aiSdk.debug("Tool call chunk received", {
               type: chunk.type,
               toolCallId: chunk.toolCallId,
               toolName: chunk.toolName,
-              toolNameType: typeof chunk.toolName,
-              toolNameLength: chunk.toolName?.length,
-              hasArguments: !!(chunk as any).arguments,
+              input: toolCallInput,
+              inputStringified: JSON.stringify(toolCallInput),
+              hasInput: Object.keys(toolCallInput).length > 0,
             });
 
             // Debug: Check if tool name is empty
@@ -1192,7 +1227,7 @@ export class AIService {
                   toolCallId: chunk.toolCallId,
                   toolName: chunk.toolName,
                   toolNameString: JSON.stringify(chunk.toolName),
-                  arguments: (chunk as any).arguments,
+                  input: toolCallInput,
                   availableTools: Object.keys(tools),
                   fullChunk: JSON.stringify(chunk, null, 2),
                 }
@@ -1206,7 +1241,7 @@ export class AIService {
               toolCall: {
                 id: chunk.toolCallId,
                 name: chunk.toolName,
-                arguments: (chunk as any).arguments || {},
+                arguments: toolCallInput,  // Corregido: usar input del chunk
                 status: "running" as const,
                 timestamp: Date.now(),
               },
@@ -1256,6 +1291,257 @@ export class AIService {
                 timestamp: Date.now(),
               },
             };
+            break;
+
+          case "tool-approval-request":
+            // chunk tiene: approvalId, toolCall: { toolCallId, toolName, input }
+            // NOTA: AI SDK v6 usa "input" no "args"
+            const approvalChunk = chunk as any;
+            const approvalId = approvalChunk.approvalId;
+            const toolCallId = approvalChunk.toolCall?.toolCallId || '';
+            const toolName = approvalChunk.toolCall?.toolName || '';
+            const toolInput = approvalChunk.toolCall?.input || {};
+
+            this.logger.aiSdk.info("Tool approval requested - PAUSING STREAM", {
+              approvalId,
+              toolCallId,
+              toolName,
+              input: toolInput,
+            });
+
+            // DEBUG: Log result object methods to understand API
+            this.logger.aiSdk.debug("Result object inspection", {
+              resultKeys: Object.keys(result),
+              resultType: typeof result,
+              hasAddToolApprovalResponse: typeof (result as any).addToolApprovalResponse === 'function',
+              hasSubmitToolApproval: typeof (result as any).submitToolApproval === 'function',
+              methods: Object.getOwnPropertyNames(Object.getPrototypeOf(result)),
+            });
+
+            // 1. Enviar solicitud al frontend para mostrar dialogo
+            yield {
+              toolApproval: {
+                id: approvalId,
+                toolCallId,
+                toolName,
+                input: toolInput,
+              },
+            };
+
+            // 2. PAUSAR el stream esperando la respuesta del usuario
+            try {
+              const userResponse = await waitForApproval(approvalId, toolName, toolInput);
+
+              this.logger.aiSdk.info("User responded to approval request", {
+                approvalId,
+                toolName,
+                approved: userResponse.approved,
+                reason: userResponse.reason,
+              });
+
+              // 3. Notificar al frontend que la aprobacion fue procesada
+              yield {
+                toolApprovalProcessed: {
+                  approvalId,
+                  approved: userResponse.approved,
+                },
+              };
+
+              // 4. El flujo de AI SDK Core requiere dos llamadas:
+              //    - El stream actual termina aquí
+              //    - Necesitamos construir el mensaje de aprobación y hacer otra llamada
+              //    Por ahora, hacemos una llamada recursiva con los mensajes actualizados
+
+              if (userResponse.approved) {
+                this.logger.aiSdk.info("Tool approved - executing manually and continuing");
+
+                // ESTRATEGIA: Ejecutar la tool manualmente y enviar tool-result estándar
+                // El sistema de aprobación del SDK está diseñado para useChat, no para
+                // streamText directo con OpenRouter. Ejecutamos manualmente para evitar
+                // problemas de compatibilidad.
+
+                // 1. Encontrar y ejecutar la tool
+                const toolDef = (tools as Record<string, any>)[toolName];
+                let toolExecutionResult: any;
+                let toolExecutionError: string | null = null;
+
+                if (toolDef && typeof toolDef.execute === 'function') {
+                  try {
+                    this.logger.aiSdk.info("Executing approved tool", { toolName, input: toolInput });
+
+                    // Notificar al frontend que la tool está ejecutándose
+                    yield {
+                      toolCall: {
+                        id: toolCallId,
+                        name: toolName,
+                        arguments: toolInput,
+                        status: "running" as const,
+                        timestamp: Date.now(),
+                      },
+                    };
+
+                    toolExecutionResult = await toolDef.execute(toolInput);
+
+                    this.logger.aiSdk.info("Tool executed successfully", {
+                      toolName,
+                      resultType: typeof toolExecutionResult,
+                    });
+
+                    // Notificar al frontend el resultado
+                    yield {
+                      toolResult: {
+                        id: toolCallId,
+                        result: toolExecutionResult,
+                        status: "success" as const,
+                        timestamp: Date.now(),
+                      },
+                    };
+                  } catch (execError) {
+                    toolExecutionError = execError instanceof Error
+                      ? execError.message
+                      : String(execError);
+
+                    this.logger.aiSdk.error("Tool execution failed", { toolName, error: toolExecutionError });
+
+                    yield {
+                      toolResult: {
+                        id: toolCallId,
+                        result: { error: toolExecutionError },
+                        status: "error" as const,
+                        timestamp: Date.now(),
+                      },
+                    };
+
+                    toolExecutionResult = { error: toolExecutionError };
+                  }
+                } else {
+                  toolExecutionError = `Tool "${toolName}" not found`;
+                  this.logger.aiSdk.error(toolExecutionError, { availableTools: Object.keys(tools) });
+                  toolExecutionResult = { error: toolExecutionError };
+                }
+
+                // 2. Convertir mensajes y añadir el resultado de la tool
+                const modelMessages = await convertToModelMessages(
+                  sanitizeMessagesForModel(messagesWithFileParts)
+                );
+
+                // Añadir assistant message con tool-call
+                modelMessages.push({
+                  role: 'assistant',
+                  content: [{
+                    type: 'tool-call',
+                    toolCallId: toolCallId,
+                    toolName: toolName,
+                    input: toolInput,
+                  }],
+                });
+
+                // Añadir tool message con tool-result (formato estándar)
+                // NOTA: El SDK v6 requiere output con formato { type, value }
+                const toolOutput = toolExecutionError
+                  ? { type: 'error-json' as const, value: toolExecutionResult }
+                  : { type: 'json' as const, value: toolExecutionResult };
+
+                modelMessages.push({
+                  role: 'tool',
+                  content: [{
+                    type: 'tool-result',
+                    toolCallId: toolCallId,
+                    toolName: toolName,
+                    output: toolOutput,
+                  }],
+                });
+
+                this.logger.aiSdk.debug("Second call with tool-result", {
+                  messageCount: modelMessages.length,
+                  toolResult: typeof toolExecutionResult,
+                });
+
+                // 3. Segunda llamada para que el modelo procese el resultado
+                // IMPORTANTE: No pasar tools para evitar que el modelo solicite más tools
+                // después de la aprobación manual. Esto previene loops infinitos.
+                const systemPrompt = await buildSystemPrompt(
+                  webSearch,
+                  false, // Deshabilitar MCP en segunda llamada
+                  0,     // Sin tools
+                  builtInToolsConfig.mermaidValidation,
+                  builtInToolsConfig.mcpDiscovery
+                );
+
+                this.logger.aiSdk.info("Making second call WITHOUT tools to get model response");
+
+                const secondResult = streamText({
+                  model: modelProvider,
+                  messages: modelMessages,
+                  // NO pasar tools - el modelo solo debe responder al resultado
+                  system: systemPrompt,
+                  // Solo 1 paso - el modelo debe responder directamente
+                  stopWhen: stepCountIs(1),
+                  providerOptions: await getReasoningProviderOptions(model, undefined, false),
+                });
+
+                // Procesar respuesta del modelo (solo texto esperado)
+                let secondStreamEnded = false;
+                for await (const secondChunk of secondResult.fullStream) {
+                  // Log para debug
+                  if (secondChunk.type !== "text-delta") {
+                    this.logger.aiSdk.debug("Second stream chunk", {
+                      type: secondChunk.type,
+                      keys: Object.keys(secondChunk),
+                    });
+                  }
+
+                  switch (secondChunk.type) {
+                    case "text-delta":
+                      yield { delta: secondChunk.text };
+                      break;
+                    case "finish":
+                    case "finish-step":
+                      secondStreamEnded = true;
+                      this.logger.aiSdk.debug("Second stream finished", { type: secondChunk.type });
+                      break;
+                    case "error":
+                      yield {
+                        error: secondChunk.error instanceof Error
+                          ? secondChunk.error.message
+                          : String(secondChunk.error),
+                        done: true,
+                      };
+                      return;
+                    default:
+                      // Ignorar otros chunks (tool-call, tool-result, etc.)
+                      // El modelo no debería generar estos sin tools
+                      this.logger.aiSdk.warn("Unexpected chunk type in second stream", {
+                        type: secondChunk.type,
+                      });
+                      break;
+                  }
+                }
+
+                this.logger.aiSdk.info("Second stream completed successfully");
+                yield { done: true };
+                return;
+              } else {
+                this.logger.aiSdk.info("Tool denied by user", { toolName, reason: userResponse.reason });
+
+                // Informar al usuario que la tool fue denegada
+                yield {
+                  delta: `\n\n*Tool "${toolName}" was denied by user: ${userResponse.reason || 'No reason provided'}*\n\n`,
+                };
+              }
+
+            } catch (error) {
+              // El usuario cancelo o hubo timeout
+              this.logger.aiSdk.warn("Approval was cancelled or timed out", {
+                approvalId,
+                toolName,
+                error: error instanceof Error ? error.message : error,
+              });
+
+              yield {
+                delta: `\n\n*Tool "${toolName}" approval timed out or was cancelled*\n\n`,
+              };
+            }
             break;
 
           case "error":
@@ -1310,6 +1596,9 @@ export class AIService {
               done: true,
             };
             return;
+
+          default:
+            break;
         }
       }
 
@@ -1346,6 +1635,9 @@ export class AIService {
       } else {
         this.logger.aiSdk.debug("No reasoning found in finishData");
       }
+
+      // Limpiar aprobaciones pendientes al terminar el stream
+      cancelAllPendingApprovals();
 
       yield { done: true };
     } catch (error) {

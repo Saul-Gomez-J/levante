@@ -35,6 +35,16 @@ export interface ChatStreamChunk {
     dataUrl: string;
     filename: string;
   };
+  toolApproval?: {
+    id: string;           // approvalId para responder
+    toolCallId: string;
+    toolName: string;
+    input: unknown;
+  };
+  toolApprovalProcessed?: {
+    approvalId: string;
+    approved: boolean;
+  };
 }
 
 // MCP Types for preload

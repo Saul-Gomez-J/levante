@@ -71,4 +71,24 @@ export const chatApi = {
       }
     }
   },
+
+  /**
+   * Send the user's tool approval response to the main process.
+   * This unblocks the AI stream that is waiting for user approval.
+   *
+   * @param approvalId - ID of the approval request
+   * @param approved - true if user approved, false if denied
+   * @param reason - Optional reason (mainly for denials)
+   */
+  sendToolApprovalResponse: (
+    approvalId: string,
+    approved: boolean,
+    reason?: string
+  ): Promise<{ success: boolean; error?: string }> => {
+    return ipcRenderer.invoke('levante/chat/tool-approval-response', {
+      approvalId,
+      approved,
+      reason,
+    })
+  },
 };

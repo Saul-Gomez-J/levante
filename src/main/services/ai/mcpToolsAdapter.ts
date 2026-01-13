@@ -226,6 +226,8 @@ function createAISDKTool(serverId: string, mcpTool: Tool) {
   const aiTool = tool({
     description: mcpTool.description || `Tool from MCP server ${serverId}`,
     inputSchema: inputSchema,
+    // Siempre requiere aprobación - la lógica de auto-aprobación está en el Renderer
+    needsApproval: true,
     execute: async (args: any) => {
       try {
         logger.aiSdk.debug("Executing MCP tool", {
