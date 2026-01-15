@@ -31,6 +31,8 @@ interface ToolApprovalInlineProps {
   onApprove: () => void;
   /** Callback cuando el usuario deniega */
   onDeny: () => void;
+  /** Callback cuando el usuario aprueba para toda la sesión */
+  onApproveForSession?: (serverId: string) => void;
   /** Clases CSS adicionales */
   className?: string;
 }
@@ -45,6 +47,7 @@ export function ToolApprovalInline({
   approvalId,
   onApprove,
   onDeny,
+  onApproveForSession,
   className,
 }: ToolApprovalInlineProps) {
   const { t } = useTranslation('chat');
@@ -60,6 +63,14 @@ export function ToolApprovalInline({
   const serverId = toolName.includes('_')
     ? toolName.split('_')[0]
     : 'unknown';
+
+  // Handler para aprobar para toda la sesión
+  const handleApproveForSession = () => {
+    // Primero aprobar esta herramienta
+    onApprove();
+    // Luego registrar el servidor para auto-aprobación
+    onApproveForSession?.(serverId);
+  };
 
   return (
     <div
@@ -106,7 +117,7 @@ export function ToolApprovalInline({
       )}
 
       {/* Actions */}
-      <div className="flex gap-2 pt-2">
+      <div className="flex flex-wrap gap-2 pt-2">
         <Button
           variant="outline"
           size="sm"
@@ -117,6 +128,7 @@ export function ToolApprovalInline({
           {t('tool_approval.deny')}
         </Button>
         <Button
+          variant="outline"
           size="sm"
           onClick={onApprove}
           className="gap-1"
@@ -124,6 +136,17 @@ export function ToolApprovalInline({
           <Check className="w-3 h-3" />
           {t('tool_approval.approve')}
         </Button>
+        {/* Botón para aprobar todas las herramientas del servidor para esta sesión */}
+        {onApproveForSession && (
+          <Button
+            size="sm"
+            onClick={handleApproveForSession}
+            className="gap-1"
+          >
+            <Check className="w-3 h-3" />
+            {t('tool_approval.approve_for_session')}
+          </Button>
+        )}
       </div>
     </div>
   );

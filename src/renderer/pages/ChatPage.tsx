@@ -34,6 +34,7 @@ import { useMCPResources } from '@/hooks/useMCPResources';
 import { useFileAttachments } from '@/hooks/useFileAttachments';
 import { useModelSelection, isInferenceModel } from '@/hooks/useModelSelection';
 import { usePreference } from '@/hooks/usePreferences';
+import { useToolAutoApproval } from '@/hooks/useToolAutoApproval';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
@@ -65,6 +66,13 @@ const ChatPage = () => {
     clearResources,
     getContextString,
   } = useMCPResources();
+
+  // Tool auto-approval hook
+  const {
+    approveServerForSession,
+    isServerAutoApproved,
+    clearAutoApprovals,
+  } = useToolAutoApproval();
 
   // Chat store
   const currentSession = useChatStore((state) => state.currentSession);
@@ -514,9 +522,10 @@ const ChatPage = () => {
     // Update ref
     previousSessionIdRef.current = currentSessionId;
 
-    // Clear attachments and MCP resources when changing sessions
+    // Clear attachments, MCP resources, and auto-approvals when changing sessions
     clearAttachments();
     clearResources();
+    clearAutoApprovals();
 
     // If we just created this session, skip loading historical messages
     // (the messages are already in useChat state from sendMessageAI)
@@ -549,7 +558,7 @@ const ChatPage = () => {
       setMessages([]);
       focusPromptInput();
     }
-  }, [currentSession?.id, loadHistoricalMessages, setMessages, clearAttachments, clearResources, focusPromptInput]);
+  }, [currentSession?.id, loadHistoricalMessages, setMessages, clearAttachments, clearResources, clearAutoApprovals, focusPromptInput]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -981,6 +990,8 @@ const ChatPage = () => {
                   chatMessages={messages}
                   onEditMessage={handleEditMessage}
                   addToolApprovalResponse={addToolApprovalResponse}
+                  onApproveServerForSession={approveServerForSession}
+                  isServerAutoApproved={isServerAutoApproved}
                 />
               ))}
 

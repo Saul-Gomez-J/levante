@@ -31,6 +31,8 @@ import { cn } from '@/lib/utils';
 import { getRendererLogger } from '@/services/logger';
 import type { UIMessage } from '@ai-sdk/react';
 import { useState, useMemo } from 'react';
+import { Check } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 const logger = getRendererLogger();
 
@@ -47,6 +49,10 @@ interface ChatMessageItemProps {
   onEditMessage?: (messageId: string, newContent: string) => Promise<void>;
   // Función del AI SDK para responder a aprobaciones de herramientas
   addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
+  /** Callback para aprobar un servidor MCP para toda la sesión */
+  onApproveServerForSession?: (serverId: string) => void;
+  /** Función para verificar si un servidor está auto-aprobado */
+  isServerAutoApproved?: (serverId: string) => boolean;
 }
 
 // ============================================================================
@@ -60,7 +66,9 @@ export function ChatMessageItem({
   onSendMessage,
   chatMessages,
   onEditMessage,
-  addToolApprovalResponse
+  addToolApprovalResponse,
+  onApproveServerForSession,
+  isServerAutoApproved,
 }: ChatMessageItemProps) {
   const isAssistant = message.role === 'assistant';
   const isUser = message.role === 'user';
@@ -295,6 +303,37 @@ export function ChatMessageItem({
                     // Si está esperando aprobación, mostrar UI de aprobación
                     if (part.state === 'approval-requested' && addToolApprovalResponse) {
                       const toolName = part.toolName || part.type.replace(/^tool-/, '');
+
+                      // Extraer serverId y verificar auto-aprobación
+                      const serverId = toolName.includes('_') ? toolName.split('_')[0] : 'unknown';
+
+                      // Si el servidor está auto-aprobado, aprobar automáticamente
+                      if (isServerAutoApproved?.(serverId)) {
+                        logger.aiSdk.info('🤖 Auto-approving tool for pre-approved server', {
+                          serverId,
+                          toolName,
+                          approvalId: part.approval?.id || part.toolCallId,
+                        });
+
+                        // Aprobar automáticamente (usar queueMicrotask para evitar problemas de render)
+                        queueMicrotask(() => {
+                          addToolApprovalResponse({
+                            id: part.approval?.id || part.toolCallId,
+                            approved: true,
+                          });
+                        });
+
+                        // Mostrar indicador de auto-aprobación mientras se procesa
+                        return (
+                          <div key={`${message.id}-${i}`} className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Check className="w-4 h-4 text-green-500" />
+                            <span>Auto-approved: {toolName.split('_').slice(1).join('_')}</span>
+                            <Badge variant="outline" className="text-xs">{serverId}</Badge>
+                          </div>
+                        );
+                      }
+
+                      // Mostrar UI de aprobación normal
                       return (
                         <ToolApprovalInline
                           key={`${message.id}-${i}`}
@@ -313,6 +352,7 @@ export function ChatMessageItem({
                               approved: false,
                             });
                           }}
+                          onApproveForSession={onApproveServerForSession}
                         />
                       );
                     }
