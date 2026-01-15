@@ -232,19 +232,6 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
   private *convertChunkToUIMessageChunks(
     chunk: ChatStreamChunk
   ): Generator<UIMessageChunk> {
-    // LOG DIAGNÓSTICO: Ver qué chunks llegan del main process
-    if (chunk.toolCall || chunk.toolResult || chunk.toolApproval) {
-      console.log('🚚 Transport: Chunk received', {
-        hasToolCall: !!chunk.toolCall,
-        hasToolResult: !!chunk.toolResult,
-        hasToolApproval: !!chunk.toolApproval,
-        toolCallStatus: chunk.toolCall?.status,
-        toolCallName: chunk.toolCall?.name || chunk.toolApproval?.toolName,
-        approvalId: chunk.toolApproval?.approvalId,
-        allChunkKeys: Object.keys(chunk),
-      });
-    }
-
     // Handle errors
     if (chunk.error) {
       // End text part if one was started
@@ -296,16 +283,6 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
 
     // Handle tool approval requests (for needsApproval: true tools)
     if (chunk.toolApproval) {
-      // DIAGNOSTIC: Log what arrives from backend
-      console.log('🛡️ [FLOW-7] Transport: toolApproval chunk received from backend', {
-        approvalId: chunk.toolApproval.approvalId,
-        toolCallId: chunk.toolApproval.toolCallId,
-        toolName: chunk.toolApproval.toolName,
-        inputValue: chunk.toolApproval.input,
-        inputType: typeof chunk.toolApproval.input,
-        inputKeys: chunk.toolApproval.input ? Object.keys(chunk.toolApproval.input) : [],
-      });
-
       // Garantizar que input sea siempre un objeto - Anthropic requiere este campo
       const safeInput = chunk.toolApproval.input ?? {};
 
@@ -315,18 +292,6 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
 
       // Emit tool-approval-request chunk for AI SDK to set state to 'approval-requested'
       // toolCallId debe estar tanto en el nivel superior como dentro de toolCall
-      console.log('🛡️ [FLOW-8] Transport: Yielding tool-approval-request to AI SDK', {
-        toolCallId: chunk.toolApproval.toolCallId,
-        toolName: chunk.toolApproval.toolName,
-        approvalId: chunk.toolApproval.approvalId,
-        input: safeInput,
-        toolCall: {
-          toolCallId: chunk.toolApproval.toolCallId,
-          toolName: chunk.toolApproval.toolName,
-          input: safeInput,
-        },
-      });
-
       yield {
         type: "tool-approval-request",
         toolCallId: chunk.toolApproval.toolCallId,
@@ -343,15 +308,6 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
 
     // Handle tool calls (MCP integration) - only for tools without approval
     if (chunk.toolCall) {
-      // DIAGNOSTIC: Log completo del toolCall recibido del backend
-      console.log('🔧 [FLOW-5] Transport: toolCall chunk received from backend', {
-        toolCallId: chunk.toolCall.id,
-        toolName: chunk.toolCall.name,
-        arguments: chunk.toolCall.arguments,
-        argumentsType: typeof chunk.toolCall.arguments,
-        argumentsKeys: chunk.toolCall.arguments ? Object.keys(chunk.toolCall.arguments) : [],
-      });
-
       // Start of tool input
       yield {
         type: "tool-input-start",
@@ -360,13 +316,6 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       };
 
       // Tool arguments are available immediately
-      console.log('🔧 [FLOW-6] Transport: Yielding tool-input-available', {
-        toolCallId: chunk.toolCall.id,
-        toolName: chunk.toolCall.name,
-        input: chunk.toolCall.arguments,
-        inputKeys: chunk.toolCall.arguments ? Object.keys(chunk.toolCall.arguments) : [],
-      });
-
       yield {
         type: "tool-input-available",
         toolCallId: chunk.toolCall.id,
