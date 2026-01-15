@@ -307,6 +307,9 @@ export class MCPUseService implements IMCPService {
         this.clients.set(config.id, client);
         this.sessions.set(config.id, session);
 
+        // Set up tools/list_changed notification handler
+        this.setupToolsListChangedHandler(config.id, session);
+
         this.logger.mcp.info("Successfully connected to MCP server (mcp-use)", {
           serverId: config.id,
           codeMode: codeModeConfig.enabled,
@@ -801,6 +804,82 @@ export class MCPUseService implements IMCPService {
         serverId,
         mcpServerUrl,
         wwwAuth
+      });
+    }
+  }
+
+  /**
+   * Set up handler for tools/list_changed MCP notification.
+   * When tools list changes on the server, update the cache and notify the renderer.
+   */
+  private async setupToolsListChangedHandler(
+    serverId: string,
+    session: MCPSession
+  ): Promise<void> {
+    try {
+      // Check if the session/connector supports notifications
+      // mcp-use's connector may have different event mechanisms
+      const connector = session.connector;
+
+      // Try to set up notification handler if supported
+      // The connector may have an 'on' method for MCP notifications
+      if (connector && typeof (connector as any).on === 'function') {
+        (connector as any).on('notification', async (notification: any) => {
+          if (notification.method === 'notifications/tools/list_changed') {
+            this.logger.mcp.info('Tools list changed notification received', { serverId });
+
+            try {
+              // Fetch updated tools list
+              const tools = await this.listTools(serverId);
+
+              // Update tools cache in preferences
+              const preferencesService = new PreferencesService();
+              await preferencesService.initialize();
+              const prefs = await preferencesService.getAll();
+
+              const toolsCache = prefs.mcp?.toolsCache || {};
+              toolsCache[serverId] = {
+                tools,
+                lastUpdated: Date.now()
+              };
+
+              await preferencesService.set('mcp.toolsCache', toolsCache);
+
+              // Notify renderer
+              const { BrowserWindow } = await import('electron');
+              const mainWindow = BrowserWindow.getAllWindows()[0];
+
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('levante/mcp/tools-updated', {
+                  serverId,
+                  tools
+                });
+              }
+
+              this.logger.mcp.info('Tools cache updated after list_changed notification', {
+                serverId,
+                toolCount: tools.length
+              });
+            } catch (error) {
+              this.logger.mcp.error('Failed to update tools cache after list_changed', {
+                serverId,
+                error: error instanceof Error ? error.message : error
+              });
+            }
+          }
+        });
+
+        this.logger.mcp.debug('Tools list_changed notification handler registered', { serverId });
+      } else {
+        // mcp-use connector doesn't support notifications directly
+        // This is expected behavior - tools will be refreshed on demand
+        this.logger.mcp.debug('Connector does not support notifications, tools will refresh on demand', { serverId });
+      }
+    } catch (error) {
+      // Non-critical error - don't fail the connection
+      this.logger.mcp.debug('Failed to set up tools list_changed handler', {
+        serverId,
+        error: error instanceof Error ? error.message : error
       });
     }
   }

@@ -170,3 +170,6 @@ export type MCPConnectionStatus =
   | "connecting"
   | "error"
   | "pending_oauth";
+
+// Re-export tool selection types from main
+export type { Tool, ServerTool, ToolsCache, DisabledTools } from '../../main/types/mcp';
