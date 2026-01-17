@@ -281,32 +281,7 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       }
     }
 
-    // Handle tool approval requests (for needsApproval: true tools)
-    if (chunk.toolApproval) {
-      // Garantizar que input sea siempre un objeto - Anthropic requiere este campo
-      const safeInput = chunk.toolApproval.input ?? {};
-
-      // NO emitir tool-input-start aquí - el part ya fue creado por el chunk toolCall
-      // Si emitimos tool-input-start de nuevo, resetea el part a 'input-streaming'
-      // y tool-approval-request nunca puede transicionar a 'approval-requested'
-
-      // Emit tool-approval-request chunk for AI SDK to set state to 'approval-requested'
-      // toolCallId debe estar tanto en el nivel superior como dentro de toolCall
-      yield {
-        type: "tool-approval-request",
-        toolCallId: chunk.toolApproval.toolCallId,
-        toolName: chunk.toolApproval.toolName,
-        approvalId: chunk.toolApproval.approvalId,
-        input: safeInput,
-        toolCall: {
-          toolCallId: chunk.toolApproval.toolCallId,
-          toolName: chunk.toolApproval.toolName,
-          input: safeInput,
-        },
-      } as any;
-    }
-
-    // Handle tool calls (MCP integration) - only for tools without approval
+    // Handle tool calls (MCP integration)
     if (chunk.toolCall) {
       // Start of tool input
       yield {

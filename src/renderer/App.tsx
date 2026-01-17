@@ -276,6 +276,7 @@ function App() {
 
           if (result.success && result.data) {
             const entry = result.data;
+            const displayName = entry.displayName || entry.name;
 
             logger.core.info('Found registry entry for MCP configure', {
               serverId: entry.id,
@@ -286,7 +287,7 @@ function App() {
             // Build the config from registry entry template
             const config: Partial<MCPServerConfig> = {
               id: entry.id,
-              name: entry.name,
+              name: entry.name, // Use technical name for config, not displayName
               transport: entry.transport.type,
               ...(entry.configuration.template || {})
             };
@@ -308,7 +309,7 @@ function App() {
             // Open the modal
             setMcpModalConfig({
               config,
-              name: entry.name,
+              name: displayName,
               sourceUrl: entry.metadata?.homepage || entry.metadata?.repository,
               inputs: Object.keys(inputs).length > 0 ? inputs : undefined
             });

@@ -101,12 +101,5 @@
     "loading_content": "Cargando contenido...",
     "error_loading": "Error al cargar el contenido",
     "no_content": "No hay contenido disponible"
-  },
-  "tool_approval": {
-    "show_parameters": "Mostrar parámetros",
-    "hide_parameters": "Ocultar parámetros",
-    "deny": "Denegar",
-    "approve": "Aprobar",
-    "approve_for_session": "Aprobar para esta sesión"
   }
 }

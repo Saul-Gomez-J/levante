@@ -243,36 +243,17 @@ function createAISDKTool(serverId: string, mcpTool: Tool) {
   const aiTool = tool({
     description: mcpTool.description || `Tool from MCP server ${serverId}`,
     inputSchema: inputSchema,
-
-    // ═══════════════════════════════════════════════════════
-    // Todas las herramientas MCP requieren aprobación del usuario
-    // ═══════════════════════════════════════════════════════
-    needsApproval: true,
-
     execute: async (args: any) => {
       try {
-        // DIAGNOSTIC: Log detallado de los args que recibe execute
-        // Este es el punto crítico donde los argumentos deben llegar correctamente
-        logger.aiSdk.info("🔧 [FLOW-9] MCP Tool execute() called", {
+        logger.aiSdk.debug("Executing MCP tool", {
           serverId,
           toolName: mcpTool.name,
           args,
-          argsType: typeof args,
-          argsKeys: args ? Object.keys(args) : [],
-          argsStringified: JSON.stringify(args),
-          argsIsEmpty: args && Object.keys(args).length === 0,
         });
 
         const result = await mcpService.callTool(serverId, {
           name: mcpTool.name,
           arguments: args,
-        });
-
-        logger.aiSdk.info("🔧 [FLOW-10] MCP Tool callTool completed", {
-          serverId,
-          toolName: mcpTool.name,
-          hasResult: !!result,
-          isError: result?.isError,
         });
 
         logger.aiSdk.debug("[AI-SDK] Raw MCP tool result", {
@@ -411,12 +392,9 @@ function createAISDKTool(serverId: string, mcpTool: Tool) {
     },
   });
 
-  // LOG DIAGNÓSTICO: Confirmar que needsApproval está configurado
-  logger.aiSdk.info("🔧 Created AI SDK tool with approval", {
+  logger.aiSdk.debug("Successfully created AI SDK tool", {
     serverId,
     toolName: mcpTool.name,
-    hasNeedsApproval: true,
-    toolKeys: Object.keys(aiTool),
   });
 
   return aiTool;

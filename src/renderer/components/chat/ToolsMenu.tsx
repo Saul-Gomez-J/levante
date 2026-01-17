@@ -17,6 +17,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger
 } from '@/components/ui/collapsible';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ToolsWarning } from '@/components/settings/ToolsWarning';
 import type { Tool } from '@/types/mcp';
 
@@ -34,6 +35,7 @@ export function ToolsMenu({
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
   const [expandedServers, setExpandedServers] = useState<Record<string, boolean>>({});
+  const [activeTab, setActiveTab] = useState<'enabled' | 'disabled'>('enabled');
 
   // MCP Store
   const {
@@ -59,13 +61,9 @@ export function ToolsMenu({
     loadDisabledTools();
   }, [loadToolsCache, loadDisabledTools]);
 
-  // Show ALL configured servers (including disabled ones so user can re-enable them)
-  const allServers = activeServers;
-
-  // Get only connected and enabled servers for tool count
-  const connectedServers = activeServers.filter(
-    server => server.enabled !== false && connectionStatus[server.id] === 'connected'
-  );
+  // Separate servers into enabled and disabled
+  const enabledServers = activeServers.filter(server => server.enabled !== false);
+  const disabledServers = activeServers.filter(server => server.enabled === false);
 
   // Total enabled tools count
   const totalEnabledTools = getEnabledToolsTotal();
@@ -133,33 +131,84 @@ export function ToolsMenu({
               <ToolsWarning />
             </div>
 
-            {/* Server Tools List */}
-            {allServers.length > 0 ? (
-              <div className="flex-1 overflow-y-auto p-2 space-y-2">
-                <div className="text-xs text-muted-foreground px-2 mb-2">
-                  {t('tools_menu.tool_selection', 'Select tools to use')}
-                </div>
+            {/* Server Tools List with Tabs */}
+            {activeServers.length > 0 ? (
+              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'enabled' | 'disabled')} className="flex-1 flex flex-col overflow-hidden">
+                <TabsList className="mx-2 grid w-auto grid-cols-2">
+                  <TabsTrigger value="enabled" className="text-xs">
+                    {t('tools_menu.enabled', 'Enabled')} ({enabledServers.length})
+                  </TabsTrigger>
+                  <TabsTrigger value="disabled" className="text-xs">
+                    {t('tools_menu.disabled', 'Disabled')} ({disabledServers.length})
+                  </TabsTrigger>
+                </TabsList>
 
-                {allServers.map((server) => (
-                  <ServerToolsSection
-                    key={server.id}
-                    serverId={server.id}
-                    serverName={server.name || server.id}
-                    serverEnabled={server.enabled !== false}
-                    isConnected={connectionStatus[server.id] === 'connected'}
-                    onServerToggle={(enabled) => enabled ? enableServer(server.id) : disableServer(server.id)}
-                    isExpanded={expandedServers[server.id] || false}
-                    onToggleExpand={() => toggleServerExpansion(server.id)}
-                    tools={toolsCache[server.id]?.tools || []}
-                    isLoading={loadingTools[server.id] || false}
-                    enabledCount={getEnabledToolsCount(server.id)}
-                    isToolEnabled={(toolName) => isToolEnabled(server.id, toolName)}
-                    onToggleTool={(toolName, enabled) => toggleTool(server.id, toolName, enabled)}
-                    onToggleAll={(enabled) => toggleAllTools(server.id, enabled)}
-                    onRefresh={() => fetchServerTools(server.id)}
-                  />
-                ))}
-              </div>
+                <TabsContent value="enabled" className="flex-1 overflow-y-auto p-2 space-y-2 mt-2">
+                  {enabledServers.length > 0 ? (
+                    <>
+                      <div className="text-xs text-muted-foreground px-2 mb-2">
+                        {t('tools_menu.tool_selection', 'Select tools to use')}
+                      </div>
+                      {enabledServers.map((server) => (
+                        <ServerToolsSection
+                          key={server.id}
+                          serverId={server.id}
+                          serverName={server.name || server.id}
+                          serverEnabled={server.enabled !== false}
+                          isConnected={connectionStatus[server.id] === 'connected'}
+                          onServerToggle={(enabled) => enabled ? enableServer(server.id) : disableServer(server.id)}
+                          isExpanded={expandedServers[server.id] || false}
+                          onToggleExpand={() => toggleServerExpansion(server.id)}
+                          tools={toolsCache[server.id]?.tools || []}
+                          isLoading={loadingTools[server.id] || false}
+                          enabledCount={getEnabledToolsCount(server.id)}
+                          isToolEnabled={(toolName) => isToolEnabled(server.id, toolName)}
+                          onToggleTool={(toolName, enabled) => toggleTool(server.id, toolName, enabled)}
+                          onToggleAll={(enabled) => toggleAllTools(server.id, enabled)}
+                          onRefresh={() => fetchServerTools(server.id)}
+                        />
+                      ))}
+                    </>
+                  ) : (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      {t('tools_menu.no_enabled_servers', 'No enabled servers')}
+                    </div>
+                  )}
+                </TabsContent>
+
+                <TabsContent value="disabled" className="flex-1 overflow-y-auto p-2 space-y-2 mt-2">
+                  {disabledServers.length > 0 ? (
+                    <>
+                      <div className="text-xs text-muted-foreground px-2 mb-2">
+                        {t('tools_menu.disabled_servers_info', 'Toggle to enable')}
+                      </div>
+                      {disabledServers.map((server) => (
+                        <ServerToolsSection
+                          key={server.id}
+                          serverId={server.id}
+                          serverName={server.name || server.id}
+                          serverEnabled={server.enabled !== false}
+                          isConnected={connectionStatus[server.id] === 'connected'}
+                          onServerToggle={(enabled) => enabled ? enableServer(server.id) : disableServer(server.id)}
+                          isExpanded={expandedServers[server.id] || false}
+                          onToggleExpand={() => toggleServerExpansion(server.id)}
+                          tools={toolsCache[server.id]?.tools || []}
+                          isLoading={loadingTools[server.id] || false}
+                          enabledCount={getEnabledToolsCount(server.id)}
+                          isToolEnabled={(toolName) => isToolEnabled(server.id, toolName)}
+                          onToggleTool={(toolName, enabled) => toggleTool(server.id, toolName, enabled)}
+                          onToggleAll={(enabled) => toggleAllTools(server.id, enabled)}
+                          onRefresh={() => fetchServerTools(server.id)}
+                        />
+                      ))}
+                    </>
+                  ) : (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      {t('tools_menu.no_disabled_servers', 'No disabled servers')}
+                    </div>
+                  )}
+                </TabsContent>
+              </Tabs>
             ) : (
               <div className="p-4 text-center text-sm text-muted-foreground">
                 {t('tools_menu.no_servers', 'No MCP servers connected')}

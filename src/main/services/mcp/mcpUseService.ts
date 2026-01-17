@@ -134,6 +134,13 @@ export class MCPUseService implements IMCPService {
         if (tokens) {
           this.logger.mcp.debug("Using existing OAuth token", { serverId: config.id });
           // IMPORTANT: mcp-use adds "Bearer " prefix automatically, so pass token without prefix
+          // TEMP: full token log for debugging connectivity issues; remove after verification
+          this.logger.mcp.warn('DEBUG FULL OAUTH TOKEN (temporary)', {
+            serverId: config.id,
+            tokenType: tokens.tokenType,
+            accessToken: tokens.accessToken,
+          });
+          // Use authToken (mcp-use will add "Bearer " prefix automatically)
           (serverConfig as any).authToken = tokens.accessToken;
           hasOAuthToken = true;
         } else {
@@ -426,8 +433,23 @@ export class MCPUseService implements IMCPService {
       });
 
       // Handle different content formats from mcp-use
+      // MCP spec 2025-06-18: structuredContent is preferred over content
       let content: any[];
-      if (Array.isArray(result.content)) {
+
+      if (result.structuredContent) {
+        // Prefer structuredContent (modern MCP spec field)
+        // Convert to text for backward compatibility and LLM consumption
+        this.logger.mcp.debug("Using structuredContent as primary content source", {
+          serverId,
+          toolName: toolCall.name,
+          hasLegacyContent: !!result.content,
+        });
+        content = [{
+          type: "text",
+          text: JSON.stringify(result.structuredContent, null, 2)
+        }];
+      } else if (Array.isArray(result.content)) {
+        // Fallback to legacy content field
         content = result.content;
       } else if (result.content !== undefined && result.content !== null) {
         // If content is not an array, wrap it in an array
