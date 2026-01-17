@@ -1,6 +1,4 @@
-// NOTE: mcp-use is dynamically imported to avoid Logger.get() being called at module load time
-// Types are imported separately as they don't trigger module execution
-import type { MCPClientOptions, MCPSession } from 'mcp-use';
+import { MCPClient, Logger as MCPLogger, type MCPClientOptions, type MCPSession } from 'mcp-use';
 import type {
   MCPServerConfig,
   Tool,
@@ -21,10 +19,6 @@ import { RuntimeResolver } from "../runtime/RuntimeResolver.js";
 import { RuntimeManager } from "../runtime/runtimeManager.js";
 import { PreferencesService } from "../preferencesService.js";
 import { OAuthService } from "../oauth/OAuthService.js";
-
-// Dynamic import references - populated in initialize()
-let MCPClient: any;
-let MCPLogger: any;
 
 /**
  * Modern MCP service implementation using mcp-use framework.
@@ -53,26 +47,17 @@ export class MCPUseService implements IMCPService {
   }
 
   /**
-   * Initialize mcp-use library with dynamic import.
-   * This must be called before using any mcp-use functionality.
-   *
-   * We use dynamic import to avoid Logger.get() being called at module load time,
-   * which would fail because winston isn't configured yet.
+   * Initialize mcp-use Logger. Must be called before using MCPClient.
+   * This configures Winston for the mcp-use library.
    */
   async initialize(): Promise<void> {
     if (!MCPUseService.mcpUseLoaded) {
       try {
-        // Dynamically import mcp-use - this triggers the module to load
-        // But by this point, winston should be available as a dependency
-        const mcpUse = await import('mcp-use');
-        MCPClient = mcpUse.MCPClient;
-        MCPLogger = mcpUse.Logger;
-
         // Configure the mcp-use logger to disable console output
         await MCPLogger.configure({ console: false });
 
         MCPUseService.mcpUseLoaded = true;
-        this.logger.mcp.debug('mcp-use dynamically loaded and Logger configured');
+        this.logger.mcp.debug('mcp-use Logger configured');
       } catch (error) {
         this.logger.mcp.error('Failed to initialize mcp-use', {
           error: error instanceof Error ? error.message : error
