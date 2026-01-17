@@ -94,7 +94,7 @@
     "keytar": "^7.9.0",
     "langchain": "^1.2.3",
     "lucide-react": "^0.541.0",
-    "mcp-use": "^1.11.2",
+    "mcp-use": "^1.13.4",
     "mermaid": "^11.12.2",
     "next-themes": "^0.4.6",
     "pdf-parse": "^2.4.5",

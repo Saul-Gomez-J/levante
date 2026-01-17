@@ -48,13 +48,14 @@ export class MCPUseService implements IMCPService {
 
   /**
    * Initialize mcp-use Logger. Must be called before using MCPClient.
-   * This configures Winston for the mcp-use library.
+   * This configures the mcp-use library logger.
    */
   async initialize(): Promise<void> {
     if (!MCPUseService.mcpUseLoaded) {
       try {
-        // Configure the mcp-use logger to disable console output
-        await MCPLogger.configure({ console: false });
+        // Configure the mcp-use logger with minimal output
+        // Use 'error' level to minimize console output (only errors shown)
+        await MCPLogger.configure({ level: 'error', format: 'minimal' });
 
         MCPUseService.mcpUseLoaded = true;
         this.logger.mcp.debug('mcp-use Logger configured');
