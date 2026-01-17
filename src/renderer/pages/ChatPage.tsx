@@ -34,9 +34,12 @@ import { useMCPResources } from '@/hooks/useMCPResources';
 import { useFileAttachments } from '@/hooks/useFileAttachments';
 import { useModelSelection, isInferenceModel } from '@/hooks/useModelSelection';
 import { usePreference } from '@/hooks/usePreferences';
+import { useToolAutoApproval } from '@/hooks/useToolAutoApproval';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
+// lastAssistantMessageIsCompleteWithApprovalResponses removed - using custom function
+// that only triggers for approvals, not denials
 import { createElectronChatTransport } from '@/transports/ElectronChatTransport';
 
 const logger = getRendererLogger();
@@ -63,6 +66,13 @@ const ChatPage = () => {
     clearResources,
     getContextString,
   } = useMCPResources();
+
+  // Tool auto-approval hook
+  const {
+    approveServerForSession,
+    isServerAutoApproved,
+    clearAutoApprovals,
+  } = useToolAutoApproval();
 
   // Chat store
   const currentSession = useChatStore((state) => state.currentSession);
@@ -200,9 +210,53 @@ const ChatPage = () => {
     status,
     stop,
     error: chatError,
+    addToolApprovalResponse, // Función para responder a aprobaciones de herramientas
   } = useChat({
     id: currentSession?.id || 'new-chat',
     transport,
+
+    // ═══════════════════════════════════════════════════════
+    // CRÍTICO: Controla cuándo se envían automáticamente las respuestas de aprobación
+    // Solo continuamos si hay APROBACIONES (approved: true)
+    // NO continuamos si hay DENEGACIONES (approved: false) - respetamos la decisión del usuario
+    // ═══════════════════════════════════════════════════════
+    sendAutomaticallyWhen: ({ messages }) => {
+      // Obtener el último mensaje del asistente
+      const lastAssistantMessage = messages
+        .slice()
+        .reverse()
+        .find((m) => m.role === 'assistant');
+
+      if (!lastAssistantMessage) return false;
+
+      const toolParts =
+        lastAssistantMessage.parts?.filter((p: any) =>
+          p.type?.startsWith('tool-')
+        ) || [];
+
+      // Verificar si hay tool parts con approval respondida
+      const partsWithApprovalResponse = toolParts.filter(
+        (p: any) => p.state === 'approval-responded' && p.approval
+      );
+
+      if (partsWithApprovalResponse.length === 0) return false;
+
+      // Solo continuar si TODAS las respuestas son aprobaciones (ninguna denegación)
+      const allApproved = partsWithApprovalResponse.every(
+        (p: any) => p.approval.approved === true
+      );
+
+      logger.aiSdk.debug('sendAutomaticallyWhen check', {
+        hasApprovalResponses: partsWithApprovalResponse.length > 0,
+        allApproved,
+        approvalDetails: partsWithApprovalResponse.map((p: any) => ({
+          toolType: p.type,
+          approved: p.approval?.approved,
+        })),
+      });
+
+      return allApproved;
+    },
 
     // Persist messages after AI finishes
     onFinish: async ({ message }) => {
@@ -468,9 +522,10 @@ const ChatPage = () => {
     // Update ref
     previousSessionIdRef.current = currentSessionId;
 
-    // Clear attachments and MCP resources when changing sessions
+    // Clear attachments, MCP resources, and auto-approvals when changing sessions
     clearAttachments();
     clearResources();
+    clearAutoApprovals();
 
     // If we just created this session, skip loading historical messages
     // (the messages are already in useChat state from sendMessageAI)
@@ -503,7 +558,7 @@ const ChatPage = () => {
       setMessages([]);
       focusPromptInput();
     }
-  }, [currentSession?.id, loadHistoricalMessages, setMessages, clearAttachments, clearResources, focusPromptInput]);
+  }, [currentSession?.id, loadHistoricalMessages, setMessages, clearAttachments, clearResources, clearAutoApprovals, focusPromptInput]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -934,6 +989,9 @@ const ChatPage = () => {
                   onSendMessage={handleSendMessage}
                   chatMessages={messages}
                   onEditMessage={handleEditMessage}
+                  addToolApprovalResponse={addToolApprovalResponse}
+                  onApproveServerForSession={approveServerForSession}
+                  isServerAutoApproved={isServerAutoApproved}
                 />
               ))}
 

@@ -148,13 +148,6 @@ export class MCPUseService implements IMCPService {
         if (tokens) {
           this.logger.mcp.debug("Using existing OAuth token", { serverId: config.id });
           // IMPORTANT: mcp-use adds "Bearer " prefix automatically, so pass token without prefix
-          // TEMP: full token log for debugging connectivity issues; remove after verification
-          this.logger.mcp.warn('DEBUG FULL OAUTH TOKEN (temporary)', {
-            serverId: config.id,
-            tokenType: tokens.tokenType,
-            accessToken: tokens.accessToken,
-          });
-          // Use authToken (mcp-use will add "Bearer " prefix automatically)
           (serverConfig as any).authToken = tokens.accessToken;
           hasOAuthToken = true;
         } else {

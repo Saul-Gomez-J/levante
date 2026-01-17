@@ -29,6 +29,13 @@ export interface ChatStreamChunk {
     status: 'success' | 'error';
     timestamp: number;
   };
+  // Información de aprobación de herramienta (para needsApproval: true)
+  toolApproval?: {
+    approvalId: string;
+    toolCallId: string;
+    toolName: string;
+    input: Record<string, any>;
+  };
   generatedAttachment?: {
     type: 'image' | 'audio' | 'video';
     mime: string;

@@ -101,5 +101,12 @@
     "loading_content": "Loading content...",
     "error_loading": "Failed to load content",
     "no_content": "No content available"
+  },
+  "tool_approval": {
+    "show_parameters": "Show parameters",
+    "hide_parameters": "Hide parameters",
+    "deny": "Deny",
+    "approve": "Approve",
+    "approve_for_session": "Approve for session"
   }
 }
