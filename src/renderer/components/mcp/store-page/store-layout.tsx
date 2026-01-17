@@ -125,15 +125,14 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
   };
 
   useEffect(() => {
-    // Load initial data (solo instalados, NO sincronizar proveedores)
+    // Load initial data
+    // Note: loadActiveServers is now called globally in useMCPEvents hook
+    // but we call it here too to ensure the data is fresh when entering the page
     loadActiveServers();
 
     // ✅ ELIMINADO: syncAllProviders() - ahora es lazy (se ejecuta al cambiar de tab)
-
-    // Refresh connection status every 30 seconds
-    const interval = setInterval(refreshConnectionStatus, 30000);
-    return () => clearInterval(interval);
-  }, [loadActiveServers, refreshConnectionStatus]);
+    // ✅ ELIMINADO: setInterval(refreshConnectionStatus) - ahora se hace globalmente en useMCPEvents
+  }, [loadActiveServers]);
 
   // ✅ NUEVO: Lazy loading de proveedores cuando se cambia a modo "store"
   useEffect(() => {
