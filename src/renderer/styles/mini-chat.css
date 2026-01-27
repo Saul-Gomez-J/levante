@@ -105,10 +105,16 @@
   .mini-chat-model-select {
     border-color: rgba(255, 255, 255, 0.1);
     background: rgba(255, 255, 255, 0.05);
+    color: #ffffff;
   }
   
   .mini-chat-model-select:hover {
     background: rgba(255, 255, 255, 0.1);
+  }
+
+  .mini-chat-model-select option {
+    background: #1e1e1e;
+    color: #ffffff;
   }
 }
 
@@ -271,6 +277,7 @@
   .mini-chat-input {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
   }
   
   .mini-chat-input::placeholder {
@@ -279,6 +286,7 @@
   
   .mini-chat-input:focus {
     background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
   }
 }
 
