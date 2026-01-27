@@ -149,19 +149,21 @@ export const useMiniChatStore = create<MiniChatState>()(
         }
 
         try {
-          // Build messages for API
+          // Build messages for API (UIMessage format requires 'parts')
           const allMessages = [
             ...messages.map((m) => ({
               id: m.id,
               role: m.role as 'user' | 'assistant',
               content: m.content,
               createdAt: m.timestamp,
+              parts: [{ type: 'text' as const, text: m.content }],
             })),
             {
               id: generateId(),
               role: 'user' as const,
               content: userContent,
               createdAt: new Date(),
+              parts: [{ type: 'text' as const, text: userContent }],
             },
           ];
 

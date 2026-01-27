@@ -7,6 +7,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useMiniChatStore } from '@/stores/miniChatStore';
+import { modelService } from '@/services/modelService';
 
 interface Model {
   id: string;
@@ -22,19 +23,19 @@ export function MiniChatHeader() {
   useEffect(() => {
     async function loadModels() {
       try {
-        // Get selected models from preferences
-        const result = await window.levante.models.getSelected();
-        if (result.success && result.data) {
-          const modelList = result.data.map((m: { id: string; name?: string }) => ({
-            id: m.id,
-            name: m.name || m.id.split('/').pop() || m.id,
-          }));
-          setModels(modelList);
+        // Initialize model service and get available models
+        await modelService.initialize();
+        const availableModels = await modelService.getAvailableModels();
+        
+        const modelList = availableModels.map((m) => ({
+          id: m.id,
+          name: m.name || m.id.split('/').pop() || m.id,
+        }));
+        setModels(modelList);
 
-          // Set default model if none selected
-          if (!selectedModel && modelList.length > 0) {
-            setSelectedModel(modelList[0].id);
-          }
+        // Set default model if none selected
+        if (!selectedModel && modelList.length > 0) {
+          setSelectedModel(modelList[0].id);
         }
       } catch (error) {
         console.error('Failed to load models:', error);

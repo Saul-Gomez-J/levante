@@ -59,9 +59,7 @@ export function createMiniChatWindow(): BrowserWindow {
     skipTaskbar: true,
     show: false,
     alwaysOnTop: true,
-    visibleOnAllWorkspaces: true,
     hasShadow: true,
-    roundedCorners: true,
     // macOS specific styling
     ...(process.platform === 'darwin' && {
       vibrancy: 'popover',
@@ -79,6 +77,9 @@ export function createMiniChatWindow(): BrowserWindow {
   // Set always on top level based on platform
   const alwaysOnTopLevel = process.platform === 'darwin' ? 'floating' : 'pop-up-menu';
   miniChatWindow.setAlwaysOnTop(true, alwaysOnTopLevel);
+
+  // Make visible on all workspaces/desktops
+  miniChatWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
   // Load the mini-chat page
   if (process.env['MAIN_WINDOW_VITE_DEV_SERVER_URL']) {
