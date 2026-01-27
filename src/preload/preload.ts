@@ -57,6 +57,7 @@ import { analyticsApi } from "./api/analytics";
 import { mermaidApi } from "./api/mermaid";
 import { widgetApi } from "./api/widget";
 import { announcementsApi } from "./api/announcements";
+import { miniChatApi, onMiniChatShown, onMiniChatHidden } from "./api/miniChat";
 
 // Re-export types for backwards compatibility
 export type {
@@ -780,6 +781,15 @@ export interface LevanteAPI {
       error?: string;
     }>;
   };
+
+  // Mini Chat API
+  miniChat: {
+    hide: () => Promise<{ success: boolean }>;
+    resize: (height: number) => Promise<{ success: boolean }>;
+    toggle: () => Promise<{ success: boolean }>;
+  };
+  onMiniChatShown: (callback: () => void) => () => void;
+  onMiniChatHidden: (callback: () => void) => () => void;
 }
 
 // Assemble the complete API from modules
@@ -833,6 +843,11 @@ const api: LevanteAPI = {
 
   // Announcements API
   announcements: announcementsApi,
+
+  // Mini Chat API
+  miniChat: miniChatApi,
+  onMiniChatShown,
+  onMiniChatHidden,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to
