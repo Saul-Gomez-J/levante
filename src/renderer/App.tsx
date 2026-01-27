@@ -11,6 +11,7 @@ import { useChatStore, initializeChatStore } from '@/stores/chatStore'
 import { logger } from '@/services/logger'
 import { modelService } from '@/services/modelService'
 import { setupMermaidValidationHandler } from '@/services/mermaidValidationService'
+import { useMCPEvents } from '@/hooks/useMCPEvents'
 
 import { useTranslation } from 'react-i18next'
 import { toast, Toaster } from 'sonner'
@@ -24,6 +25,9 @@ function App() {
   const [wizardCompleted, setWizardCompleted] = useState<boolean | null>(null)
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
   const { i18n } = useTranslation()
+
+  // Listen for MCP events (tools/list_changed, etc.)
+  useMCPEvents()
 
   // MCP Deep Link Modal state
   const [mcpModalOpen, setMcpModalOpen] = useState(false)
@@ -272,6 +276,7 @@ function App() {
 
           if (result.success && result.data) {
             const entry = result.data;
+            const displayName = entry.displayName || entry.name;
 
             logger.core.info('Found registry entry for MCP configure', {
               serverId: entry.id,
@@ -282,7 +287,7 @@ function App() {
             // Build the config from registry entry template
             const config: Partial<MCPServerConfig> = {
               id: entry.id,
-              name: entry.name,
+              name: entry.name, // Use technical name for config, not displayName
               transport: entry.transport.type,
               ...(entry.configuration.template || {})
             };
@@ -304,7 +309,7 @@ function App() {
             // Open the modal
             setMcpModalConfig({
               config,
-              name: entry.name,
+              name: displayName,
               sourceUrl: entry.metadata?.homepage || entry.metadata?.repository,
               inputs: Object.keys(inputs).length > 0 ? inputs : undefined
             });
