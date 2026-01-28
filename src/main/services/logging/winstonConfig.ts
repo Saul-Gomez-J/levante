@@ -12,6 +12,7 @@ export function isProduction(): boolean {
 
 // Formato desarrollo: legible con colores
 export const developmentFormat = winston.format.combine(
+  winston.format.colorize({ all: true }),
   winston.format.timestamp(),
   winston.format.printf((info) => {
     const { timestamp, level, message, category, ...meta } = info;
@@ -22,8 +23,7 @@ export const developmentFormat = winston.format.combine(
     const categoryStr = category ? `[${String(category).toUpperCase()}]` : '';
     const metaStr = Object.keys(meta).length > 0 ? `\n${JSON.stringify(meta, null, 2)}` : '';
     return `${formattedTime} ${categoryStr} [${level.toUpperCase()}] ${message}${metaStr}`;
-  }),
-  winston.format.colorize({ all: true })
+  })
 );
 
 // Formato producción: JSON estructurado
@@ -31,6 +31,22 @@ export const productionFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
   winston.format.json()
+);
+
+// Formato desarrollo para archivos: legible sin colores ANSI
+export const developmentFileFormat = winston.format.combine(
+  winston.format.timestamp(),
+  winston.format.printf((info) => {
+    const { timestamp, level, message, category, ...meta } = info;
+    const formattedTime = formatTimestampWithTimezone(
+      new Date(timestamp as string),
+      getLogTimezone()
+    );
+    const categoryStr = category ? `[${String(category).toUpperCase()}]` : '';
+    const metaStr = Object.keys(meta).length > 0 ? `\n${JSON.stringify(meta, null, 2)}` : '';
+    // Sin colores ANSI para archivos
+    return `${formattedTime} ${categoryStr} [${level.toUpperCase()}] ${message}${metaStr}`;
+  })
 );
 
 // Console transport
@@ -63,7 +79,7 @@ export function createFileTransport(
       ? `${rotationConfig.maxAge * 3}d`  // Mantener errores más tiempo
       : rotationConfig.maxFiles.toString(),
     zippedArchive: rotationConfig.compress,
-    format: productionFormat,
+    format: isProduction() ? productionFormat : developmentFileFormat,
     level: errorOnly ? 'error' : undefined,
     auditFile: path.join(dirname, errorOnly ? '.winston-error-audit.json' : '.winston-audit.json'),
   });

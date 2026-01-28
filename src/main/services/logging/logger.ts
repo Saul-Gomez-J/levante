@@ -126,18 +126,34 @@ export class Logger implements LoggerService {
 
   // ← CAMBIO: Recrear Winston logger con nueva config
   public configure(config: Partial<LoggerConfig>): void {
+    const oldConfig = this.configService.getConfig();
     this.configService.updateConfig(config);
 
-    // Cerrar logger anterior y crear uno nuevo
-    this.winstonLogger.close();
-    this.winstonLogger = this.createWinstonLogger();
+    const oldLogger = this.winstonLogger;
+    try {
+      this.winstonLogger = this.createWinstonLogger();
+      oldLogger.close();
+    } catch (error) {
+      // Rollback: mantener logger anterior si falla
+      console.error('[Logger] Failed to reconfigure logger, keeping previous configuration:', error);
+      this.configService.updateConfig(oldConfig);
+      this.winstonLogger = oldLogger;
+    }
   }
 
   // ← CAMBIO: Recrear Winston logger
   public refresh(): void {
-    (this.configService as any).initializeFromEnvironment();
-    this.winstonLogger.close();
-    this.winstonLogger = this.createWinstonLogger();
+    this.configService.initializeFromEnvironment();
+
+    const oldLogger = this.winstonLogger;
+    try {
+      this.winstonLogger = this.createWinstonLogger();
+      oldLogger.close();
+    } catch (error) {
+      // Mantener logger anterior si falla
+      console.error('[Logger] Failed to refresh logger, keeping previous instance:', error);
+      this.winstonLogger = oldLogger;
+    }
   }
 }
 
