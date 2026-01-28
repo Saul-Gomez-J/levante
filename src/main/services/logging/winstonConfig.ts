@@ -73,7 +73,7 @@ export function createFileTransport(
   return new DailyRotateFile({
     dirname,
     filename: errorOnly ? `${basename}-error-%DATE%.log` : `${basename}-%DATE%.log`,
-    datePattern: rotationConfig.datePattern || 'YYYY-MM-DD-HHmmss',
+    datePattern: rotationConfig.datePattern || 'YYYY-MM-DD',
     maxSize: rotationConfig.maxSize,
     maxFiles: errorOnly
       ? `${rotationConfig.maxAge * 3}d`  // Mantener errores más tiempo
