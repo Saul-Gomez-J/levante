@@ -110,20 +110,146 @@ Always include relevant context for better debugging:
 
 ```typescript
 // Good
-logger.aiSdk.debug('Model provider loaded', { 
-  provider: 'openai', 
-  models: 15, 
-  loadTime: '45ms' 
+logger.aiSdk.debug('Model provider loaded', {
+  provider: 'openai',
+  models: 15,
+  loadTime: '45ms'
 });
 
 // Better
-logger.mcp.error('Server connection failed', { 
+logger.mcp.error('Server connection failed', {
   serverId: 'filesystem',
   error: error.message,
   attempt: 3,
   timestamp: Date.now()
 });
 ```
+
+## Arquitectura Winston
+
+Levante usa Winston como sistema de logging con las siguientes características:
+
+### Producción vs Desarrollo
+
+El comportamiento del logger cambia según `NODE_ENV`:
+
+**Desarrollo** (`NODE_ENV=development` o no configurado):
+- Salida a consola con colores
+- Log level: `debug` (muy verboso)
+- Categorías verbose habilitadas por defecto: ai-sdk, mcp, database, oauth
+- Archivo único: `levante-YYYY-MM-DD-HHmmss.log` (datePattern configurable)
+- Rotación: 10MB, 3 archivos, 7 días
+
+**Producción** (`NODE_ENV=production`):
+- Sin salida a consola (solo archivo)
+- Log level: `warn` (solo warnings y errores)
+- Categorías verbose deshabilitadas
+- Dos archivos:
+  - Todos: `levante-YYYY-MM-DD-HHmmss.log`
+  - Errores: `levante-error-YYYY-MM-DD-HHmmss.log`
+- Rotación: 50MB, 10 archivos, 30 días (errores: 90 días)
+- Compresión gzip habilitada por defecto
+
+### Archivos de Log
+
+**Ubicación**: `~/levante/`
+
+**Desarrollo**:
+```
+~/levante/
+├── levante-2025-01-28-143025.log    # Con datePattern YYYY-MM-DD-HHmmss
+├── levante-2025-01-28-120000.log    # Rotado anteriormente
+└── .winston-audit.json               # Tracking de Winston
+```
+
+**Producción**:
+```
+~/levante/
+├── levante-2025-01-28-143025.log        # Todos los logs
+├── levante-error-2025-01-28-143025.log  # Solo errores
+├── levante-2025-01-27-120000.log.gz     # Comprimidos (del día anterior)
+├── .winston-audit.json
+└── .winston-error-audit.json
+```
+
+### Sistema de Rotación
+
+Winston's `winston-daily-rotate-file` maneja:
+- **Rotación temporal**: Según datePattern configurado (soporta precisión de segundos con moment.js)
+- **Límite de tamaño**: Máximo por archivo antes de comprimir
+- **Compresión automática**: Gzip en producción
+- **Limpieza por edad**: Elimina logs antiguos según maxAge
+- **Tracking**: `.winston-audit.json` para gestión de archivos
+
+### Formato de Logs
+
+**Desarrollo** (legible, con colores):
+```
+[2025-01-28 14:30:25] [AI-SDK] [DEBUG] Model provider loaded
+{
+  "provider": "openai",
+  "models": 15
+}
+```
+
+**Producción** (JSON estructurado):
+```json
+{
+  "timestamp": "2025-01-28T14:30:25.123Z",
+  "level": "error",
+  "category": "ai-sdk",
+  "message": "Model provider failed",
+  "provider": "openai",
+  "error": "API key invalid"
+}
+```
+
+### Winston Transports
+
+Levante usa los siguientes transports de Winston:
+
+1. **Console Transport** (solo desarrollo):
+   - Formato legible con colores ANSI
+   - Errores a stderr, resto a stdout
+
+2. **DailyRotateFile Transport** (siempre):
+   - Todos los logs (nivel configurado)
+   - Rotación automática
+
+3. **DailyRotateFile Transport** (solo producción):
+   - Solo errores (level: error)
+   - Retención más larga (3x maxAge)
+
+### Variables de Entorno
+
+Las variables de entorno pueden override los defaults de producción/desarrollo:
+
+```bash
+# Forzar level específico (override defaults)
+LOG_LEVEL=debug
+
+# Forzar console en producción
+DEBUG_ENABLED=true
+
+# Rotación personalizada
+LOG_MAX_SIZE=20971520     # 20MB
+LOG_MAX_FILES=5
+LOG_MAX_AGE=14            # 14 días
+LOG_COMPRESS=true
+```
+
+### Migración desde Sistema Custom
+
+El sistema Winston mantiene compatibilidad 100% con el API anterior:
+- Mismo API de logger: `logger.aiSdk.debug(...)`
+- Mismas variables de entorno
+- Mismo formato de LogRotationConfig
+- Mismo comportamiento de timezone
+
+**Cambios internos** (no afectan uso):
+- Transports custom reemplazados por winston transports
+- Rotación manejada por winston-daily-rotate-file (usa moment.js, soporta todos los formatos de fecha incluyendo segundos)
+- Mismo date pattern que el sistema custom (`YYYY-MM-DD-HHmmss`)
 
 ## Log Format
 

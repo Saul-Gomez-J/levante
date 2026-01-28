@@ -285,50 +285,20 @@ Environment variables loaded from:
 
 ## Logging System
 
-Levante uses a centralized logging system for better development experience and debugging:
+Levante utiliza **Winston** para logging centralizado con sistema de categorías:
 
-### Usage
+- **Categorías**: ai-sdk, mcp, database, ipc, preferences, models, core, analytics, oauth
+- **Niveles**: debug, info, warn, error
+- **Producción**: Logs JSON estructurados con archivo de errores separado
+- **Desarrollo**: Salida coloreada legible en consola
+- **Zero Overhead**: Categorías deshabilitadas no ejecutan código de log
+- **Rotación**: Automática con winston-daily-rotate-file
 
-```typescript
-// Main Process
-import { getLogger } from './services/logging';
-const logger = getLogger();
+**Configuración por Entorno**:
+- `NODE_ENV=development`: Verbose, consola, rotación pequeña
+- `NODE_ENV=production`: Minimal, solo archivo, rotación grande
 
-// Renderer Process  
-import { logger } from '@/services/logger';
-
-// Usage examples
-logger.aiSdk.debug('Model provider loaded', { provider: 'openai' });
-logger.mcp.info('Server started', { serverId: 'filesystem' });
-logger.database.error('Migration failed', { error: error.message });
-logger.core.info('Application initialized');
-```
-
-### Categories
-
-- **ai-sdk**: AI service operations, model interactions, streaming
-- **mcp**: MCP server management, tool execution, health monitoring  
-- **database**: Database operations and migrations
-- **ipc**: Inter-process communication
-- **preferences**: Settings and configuration management
-- **core**: General application lifecycle and errors
-
-### Configuration
-
-Control logging via `.env.local`:
-
-```bash
-DEBUG_ENABLED=true
-DEBUG_AI_SDK=true
-DEBUG_MCP=true
-DEBUG_DATABASE=false
-DEBUG_IPC=false
-DEBUG_PREFERENCES=false
-DEBUG_CORE=true
-LOG_LEVEL=debug
-```
-
-See [docs/LOGGING.md](docs/LOGGING.md) for complete documentation.
+Ver [docs/LOGGING.md](docs/LOGGING.md) para documentación completa.
 - No utilices pnpm dev
 
 ## Developer Documentation

@@ -1,44 +1,55 @@
+import winston from 'winston';
 import type {
   LoggerService,
   CategoryLogger,
   LogCategory,
   LogLevel,
   LogContext,
-  LogEntry,
-  LogTransport,
   LoggerConfig
 } from '../../types/logger';
 import { LoggerConfigService } from './config';
-import { ConsoleTransport, FileTransport } from './transports';
+import {
+  isProduction,
+  createConsoleTransport,
+  createFileTransport,
+  createProductionFileTransports
+} from './winstonConfig';
 
+// CategoryLogger con zero overhead (MANTENER)
 class CategoryLoggerImpl implements CategoryLogger {
   constructor(
     private category: LogCategory,
-    private logger: Logger
+    private logger: Logger,
+    private configService: LoggerConfigService
   ) { }
 
   debug(message: string, context?: LogContext): void {
+    // Zero overhead: early return ANTES de llamar a Winston
+    if (!this.configService.shouldLog(this.category, 'debug')) return;
     this.logger.log(this.category, 'debug', message, context);
   }
 
   info(message: string, context?: LogContext): void {
+    if (!this.configService.shouldLog(this.category, 'info')) return;
     this.logger.log(this.category, 'info', message, context);
   }
 
   warn(message: string, context?: LogContext): void {
+    if (!this.configService.shouldLog(this.category, 'warn')) return;
     this.logger.log(this.category, 'warn', message, context);
   }
 
   error(message: string, context?: LogContext): void {
+    if (!this.configService.shouldLog(this.category, 'error')) return;
     this.logger.log(this.category, 'error', message, context);
   }
 }
 
 export class Logger implements LoggerService {
   private configService: LoggerConfigService;
-  private transports: LogTransport[] = [];
+  private winstonLogger: winston.Logger;  // ← NUEVO: Winston logger
 
-  // Category loggers
+  // Category loggers (MANTENER IGUAL)
   public readonly aiSdk: CategoryLogger;
   public readonly mcp: CategoryLogger;
   public readonly database: CategoryLogger;
@@ -51,74 +62,82 @@ export class Logger implements LoggerService {
 
   constructor() {
     this.configService = new LoggerConfigService();
-    this.setupTransports();
+    this.winstonLogger = this.createWinstonLogger();  // ← CAMBIO: crear Winston
 
-    // Initialize category loggers
-    this.aiSdk = new CategoryLoggerImpl('ai-sdk', this);
-    this.mcp = new CategoryLoggerImpl('mcp', this);
-    this.database = new CategoryLoggerImpl('database', this);
-    this.ipc = new CategoryLoggerImpl('ipc', this);
-    this.preferences = new CategoryLoggerImpl('preferences', this);
-    this.models = new CategoryLoggerImpl('models', this);
-    this.core = new CategoryLoggerImpl('core', this);
-    this.analytics = new CategoryLoggerImpl('analytics', this);
-    this.oauth = new CategoryLoggerImpl('oauth', this);
+    // Initialize category loggers (MANTENER IGUAL)
+    this.aiSdk = new CategoryLoggerImpl('ai-sdk', this, this.configService);
+    this.mcp = new CategoryLoggerImpl('mcp', this, this.configService);
+    this.database = new CategoryLoggerImpl('database', this, this.configService);
+    this.ipc = new CategoryLoggerImpl('ipc', this, this.configService);
+    this.preferences = new CategoryLoggerImpl('preferences', this, this.configService);
+    this.models = new CategoryLoggerImpl('models', this, this.configService);
+    this.core = new CategoryLoggerImpl('core', this, this.configService);
+    this.analytics = new CategoryLoggerImpl('analytics', this, this.configService);
+    this.oauth = new CategoryLoggerImpl('oauth', this, this.configService);
   }
 
-  private setupTransports(): void {
-    // Clear existing transports
-    this.transports = [];
-
+  // ← NUEVO: Crear Winston logger
+  private createWinstonLogger(): winston.Logger {
     const config = this.configService.getConfig();
+    const transports: winston.transport[] = [];
 
+    // Console transport
     if (config.output.console) {
-      this.transports.push(new ConsoleTransport());
+      transports.push(createConsoleTransport());
     }
 
-    if (config.output.file && config.output.filePath) {
-      this.transports.push(new FileTransport(config.output.filePath, config.output.rotation));
-    }
-  }
-
-  public log(category: LogCategory, level: LogLevel, message: string, context?: LogContext): void {
-    if (!this.isEnabled(category, level)) {
-      return;
-    }
-
-    const entry: LogEntry = {
-      timestamp: new Date(),
-      category,
-      level,
-      message,
-      context,
-    };
-
-    for (const transport of this.transports) {
-      try {
-        transport.write(entry);
-      } catch (error) {
-        // Fallback to console.error if transport fails
-        console.error(`Logger transport error:`, error);
+    // File transports
+    if (config.output.file && config.output.filePath && config.output.rotation) {
+      if (isProduction()) {
+        // Producción: JSON estructurado + archivo de errores separado
+        transports.push(...createProductionFileTransports(
+          config.output.filePath,
+          config.output.rotation
+        ));
+      } else {
+        // Desarrollo: archivo único con todos los logs
+        transports.push(createFileTransport(
+          config.output.filePath,
+          config.output.rotation,
+          false
+        ));
       }
     }
+
+    return winston.createLogger({
+      level: config.level,
+      transports,
+      exitOnError: false,
+    });
+  }
+
+  // ← CAMBIO: Usar Winston en lugar de custom transports
+  public log(category: LogCategory, level: LogLevel, message: string, context?: LogContext): void {
+    // Winston ya filtra por level, pero ya filtramos por category arriba (zero overhead)
+    this.winstonLogger.log(level, message, {
+      category,
+      ...context,
+    });
   }
 
   public isEnabled(category: LogCategory, level: LogLevel): boolean {
     return this.configService.shouldLog(category, level);
   }
 
+  // ← CAMBIO: Recrear Winston logger con nueva config
   public configure(config: Partial<LoggerConfig>): void {
     this.configService.updateConfig(config);
-    this.setupTransports();
+
+    // Cerrar logger anterior y crear uno nuevo
+    this.winstonLogger.close();
+    this.winstonLogger = this.createWinstonLogger();
   }
 
-  /**
-   * Re-setup transports based on current configuration
-   */
+  // ← CAMBIO: Recrear Winston logger
   public refresh(): void {
-    // Force config reload
     (this.configService as any).initializeFromEnvironment();
-    this.setupTransports();
+    this.winstonLogger.close();
+    this.winstonLogger = this.createWinstonLogger();
   }
 }
 
