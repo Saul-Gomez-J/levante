@@ -57,6 +57,7 @@ import { analyticsApi } from "./api/analytics";
 import { mermaidApi } from "./api/mermaid";
 import { widgetApi } from "./api/widget";
 import { announcementsApi } from "./api/announcements";
+import { logViewerApi } from "./api/logViewer";
 
 // Re-export types for backwards compatibility
 export type {
@@ -750,6 +751,37 @@ export interface LevanteAPI {
     enablePrivacy: (id: string) => Promise<{ success: boolean; error?: string }>;
   };
 
+  // Log viewer functionality
+  logViewer: {
+    startWatching: () => Promise<{ success: boolean; error?: string }>;
+    stopWatching: () => Promise<{ success: boolean; error?: string }>;
+    isWatching: () => Promise<{ success: boolean; data?: boolean; error?: string }>;
+    getRecent: (limit: number) => Promise<{
+      success: boolean;
+      data?: Array<{
+        id: string;
+        timestamp: Date;
+        category: LogCategory;
+        level: LogLevel;
+        message: string;
+        context?: Record<string, any>;
+        raw?: string;
+      }>;
+      error?: string;
+    }>;
+    getCurrentFile: () => Promise<{ success: boolean; data?: string; error?: string }>;
+    getDirectory: () => Promise<{ success: boolean; data?: string; error?: string }>;
+    onNewEntry: (callback: (entry: {
+      id: string;
+      timestamp: Date;
+      category: LogCategory;
+      level: LogLevel;
+      message: string;
+      context?: Record<string, any>;
+      raw?: string;
+    }) => void) => () => void;
+  };
+
   // Widget proxy functionality
   widget: {
     store: (html: string, options?: {
@@ -833,6 +865,9 @@ const api: LevanteAPI = {
 
   // Announcements API
   announcements: announcementsApi,
+
+  // Log viewer API
+  logViewer: logViewerApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

@@ -99,3 +99,32 @@ export interface LoggerService {
   configure(config: Partial<LoggerConfig>): void;
   isEnabled(category: LogCategory, level: LogLevel): boolean;
 }
+
+/**
+ * Extended log entry with UI-specific fields for log viewer
+ */
+export interface LogEntryUI extends LogEntry {
+  id: string; // UUID for React keys
+  raw?: string; // Original raw line for debugging
+}
+
+/**
+ * Information about a log file
+ */
+export interface LogFileInfo {
+  name: string;
+  path: string;
+  size: number;
+  modified: Date;
+  isCurrent: boolean;
+}
+
+/**
+ * Statistics about logs
+ */
+export interface LogStats {
+  total: number;
+  byCategory: Record<LogCategory, number>;
+  byLevel: Record<LogLevel, number>;
+  timeRange: { start: Date; end: Date };
+}

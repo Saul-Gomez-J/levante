@@ -34,7 +34,8 @@
     "settings": "Configuración",
     "mcp": "Tienda",
     "active_mcps": "MCPs Activos",
-    "inference": "Inferencia"
+    "inference": "Inferencia",
+    "logs": "Registros"
   },
   "status": {
     "loading": "Cargando...",
