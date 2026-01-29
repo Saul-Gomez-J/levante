@@ -19,6 +19,7 @@ import { widgetProxyService } from "./services/widgetProxy";
 import { initializeServices, registerIPCHandlers } from "./lifecycle/initialization";
 import { createMainWindow } from "./lifecycle/window";
 import { registerAppEvents, setupDeepLinkHandling } from "./lifecycle/events";
+import { setupLogViewerHandlers } from "./ipc/logViewerHandlers";
 
 // Mini Chat modules
 import { createSystemTray, destroySystemTray } from "./tray/systemTray";
@@ -73,6 +74,9 @@ app.whenReady().then(async () => {
 
     // Create main window
     mainWindow = createMainWindow();
+
+    // Register log viewer handlers (requires mainWindow instance)
+    setupLogViewerHandlers(mainWindow);
 
     // Ensure user has UUID and is tracked (fire and forget, don't block UI)
     analyticsService.ensureUserTracked().catch(() => { });
