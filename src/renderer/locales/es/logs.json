@@ -1,0 +1,18 @@
+{
+  "controls": {
+    "start_watching": "Iniciar Escucha",
+    "stop_watching": "Detener Escucha"
+  },
+  "filters": {
+    "categories": "Categorías",
+    "levels": "Niveles",
+    "search": "Buscar en logs...",
+    "clear": "Limpiar Logs",
+    "auto_scroll": "Desplazamiento Automático"
+  },
+  "status": {
+    "watching": "Escuchando logs",
+    "stopped": "Detenido",
+    "loading": "Cargando logs..."
+  }
+}
