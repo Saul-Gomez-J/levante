@@ -788,7 +788,7 @@ export interface LevanteAPI {
     resize: (height: number) => Promise<{ success: boolean }>;
     toggle: () => Promise<{ success: boolean }>;
     getHeight: () => Promise<{ success: boolean; height: number }>;
-    openInMainWindow: (data: { messages: any[]; model: string }) => Promise<{ success: boolean; sessionId?: string; error?: string }>;
+    openInMainWindow: (data: { messages: any[]; model: string; sessionId?: string }) => Promise<{ success: boolean; sessionId?: string; error?: string }>;
   };
   onMiniChatShown: (callback: () => void) => () => void;
   onMiniChatHidden: (callback: () => void) => () => void;

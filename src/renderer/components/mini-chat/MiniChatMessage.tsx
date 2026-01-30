@@ -7,28 +7,35 @@
  */
 
 import React from 'react';
+import { type UIMessage } from '@ai-sdk/react';
 import { MiniChatRichMessage } from './MiniChatRichMessage';
 
+/**
+ * Helper function to extract text content from UIMessage parts (AI SDK v5)
+ */
+function getMessageContent(message: UIMessage): string {
+  if (!message.parts) return '';
+  return message.parts
+    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .map(p => p.text)
+    .join('');
+}
+
 interface MiniChatMessageProps {
-  message: {
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-    timestamp: Date;
-    parts?: Array<any>;
-  };
+  message: UIMessage;
   isStreaming?: boolean;
 }
 
 export function MiniChatMessage({ message, isStreaming }: MiniChatMessageProps) {
-  const { role, content, parts } = message;
+  const { role, parts } = message;
+  const content = getMessageContent(message);
 
   return (
     <div className={`mini-chat-message ${role}${isStreaming ? ' streaming' : ''}`}>
       {role === 'user' ? (
-        // User messages: simple text display with fallback to parts
+        // User messages: simple text display
         <div className="mini-chat-message-content">
-          {content || (parts?.[0]?.type === 'text' ? parts[0].text : '')}
+          {content}
         </div>
       ) : (
         // Assistant messages: rich content rendering

@@ -11,9 +11,21 @@ import { MiniChatMessage } from './MiniChatMessage';
 import { MiniChatInput } from './MiniChatInput';
 import { useMiniChatStore } from '@/stores/miniChatStore';
 import { StreamingProvider } from '@/contexts/StreamingContext';
-import { useChat } from '@ai-sdk/react';
+import { useChat, type UIMessage } from '@ai-sdk/react';
 import { createElectronChatTransport } from '@/transports/ElectronChatTransport';
 import { useChatStore } from '@/stores/chatStore';
+
+/**
+ * Helper function to extract text content from UIMessage parts (AI SDK v5)
+ * In v5, messages no longer have a direct 'content' property - we must extract from parts
+ */
+function getMessageContent(message: UIMessage): string {
+  if (!message.parts) return '';
+  return message.parts
+    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .map(p => p.text)
+    .join('');
+}
 
 export function MiniChatContainer() {
   const { selectedModel, error, currentSessionId, ensureSession, setCurrentSessionId } = useMiniChatStore();
@@ -57,11 +69,12 @@ export function MiniChatContainer() {
 
     // Persist messages after AI finishes
     onFinish: async ({ message }) => {
+      const messageContent = getMessageContent(message);
       console.log('[MiniChat onFinish] AI response finished', {
         messageId: message.id,
         role: message.role,
-        hasContent: !!message.content,
-        contentType: typeof message.content,
+        hasContent: !!messageContent,
+        contentType: typeof messageContent,
         hasParts: !!message.parts,
         partsCount: message.parts?.length,
         partsTypes: message.parts?.map((p: any) => typeof p),
@@ -159,7 +172,7 @@ export function MiniChatContainer() {
     },
   });
 
-  const isStreaming = status === 'streaming' || status === 'in_progress';
+  const isStreaming = status === 'submitted';
 
   // Clear messages callback for header
   const handleClearMessages = () => {
@@ -198,12 +211,13 @@ export function MiniChatContainer() {
         <StreamingProvider>
           <div ref={messagesRef} className="mini-chat-messages">
             {messages.map((msg) => {
+              const msgContent = getMessageContent(msg);
               console.log('[MiniChat] Rendering message:', {
                 id: msg.id,
                 role: msg.role,
-                hasContent: !!msg.content,
-                contentType: typeof msg.content,
-                contentLength: msg.content?.length,
+                hasContent: !!msgContent,
+                contentType: typeof msgContent,
+                contentLength: msgContent?.length,
                 hasParts: !!msg.parts,
                 partsLength: msg.parts?.length,
                 partsTypes: msg.parts?.map((p: any) => typeof p),

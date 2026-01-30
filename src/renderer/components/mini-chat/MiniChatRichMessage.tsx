@@ -6,6 +6,7 @@
  */
 
 import React from 'react';
+import { type UIMessage } from '@ai-sdk/react';
 import { Response } from '@/components/ai-elements/response';
 import { Wrench, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,34 +15,25 @@ import { cn } from '@/lib/utils';
 // TYPES
 // ═══════════════════════════════════════════════════════
 
-interface MiniChatMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  parts?: Array<any>;
-}
-
 interface MiniChatRichMessageProps {
-  message: MiniChatMessage;
+  message: UIMessage;
   isStreaming?: boolean;
 }
 
-interface ToolCallPart {
-  type: 'tool-call';
-  toolCallId: string;
-  toolName: string;
-  args?: Record<string, any>;
-  result?: any;
+/**
+ * Helper function to extract text content from UIMessage parts (AI SDK v5)
+ */
+function getMessageContent(message: UIMessage): string {
+  if (!message.parts) return '';
+  return message.parts
+    .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+    .map(p => p.text)
+    .join('');
 }
 
-interface ToolResultPart {
-  type: 'tool-result';
-  toolCallId: string;
-  toolName: string;
-  result: any;
-  isError?: boolean;
-}
+// Note: These interfaces are for documentation only
+// Actual parts from AI SDK v5 have different structure
+// Tool parts have type like 'tool-${toolName}' with toolCallId and state properties
 
 // ═══════════════════════════════════════════════════════
 // SIMPLIFIED TOOL CALL COMPONENT
@@ -100,7 +92,8 @@ function MiniChatToolCall({
  * Falls back to simple content rendering if parts are unavailable.
  */
 export function MiniChatRichMessage({ message, isStreaming }: MiniChatRichMessageProps) {
-  const { content, parts } = message;
+  const { parts } = message;
+  const content = getMessageContent(message);
 
   // DEBUGGING: Log message structure
   console.log('[MiniChatRichMessage] Processing message:', {
@@ -208,27 +201,26 @@ export function MiniChatRichMessage({ message, isStreaming }: MiniChatRichMessag
         }
 
         // Tool call part - clickeable to open in main window
-        if (part.type === 'tool-call') {
-          const toolPart = part as ToolCallPart;
-          return (
-            <MiniChatToolCall
-              key={`tool-call-${index}`}
-              toolName={toolPart.toolName}
-              status="running"
-              onClick={handleOpenInMain}
-              disabled={isStreaming}
-            />
-          );
-        }
+        // In AI SDK v5, tool parts have type like 'tool-${toolName}'
+        if (typeof part.type === 'string' && part.type.startsWith('tool-')) {
+          const toolName = part.type.replace('tool-', '');
+          const toolState = (part as any).state;
 
-        // Tool result part - clickeable to open in main window
-        if (part.type === 'tool-result') {
-          const toolResult = part as ToolResultPart;
+          // Determine status based on state
+          let status: 'pending' | 'running' | 'success' | 'error' = 'running';
+          if (toolState === 'output-available' || toolState === 'output-streaming') {
+            status = 'success';
+          } else if (toolState === 'error' || toolState === 'output-denied') {
+            status = 'error';
+          } else if (toolState === 'input-streaming') {
+            status = 'running';
+          }
+
           return (
             <MiniChatToolCall
-              key={`tool-result-${index}`}
-              toolName={toolResult.toolName}
-              status={toolResult.isError ? 'error' : 'success'}
+              key={`tool-${index}`}
+              toolName={toolName}
+              status={status}
               onClick={handleOpenInMain}
               disabled={isStreaming}
             />
