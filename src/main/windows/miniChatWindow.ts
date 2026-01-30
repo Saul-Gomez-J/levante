@@ -118,12 +118,6 @@ export function createMiniChatWindow(): BrowserWindow {
     return { action: 'deny' };
   });
 
-  // Open DevTools in development mode for debugging
-  if (process.env.NODE_ENV === 'development') {
-    miniChatWindow.webContents.openDevTools({ mode: 'detach' });
-    logger.core.debug('Mini chat DevTools opened for debugging');
-  }
-
   logger.core.info('Mini chat window created');
   return miniChatWindow;
 }

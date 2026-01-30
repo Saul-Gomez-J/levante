@@ -38,12 +38,6 @@ export function MiniChatInput({ sendMessage, isStreaming, stop }: MiniChatInputP
     setInputValue(''); // Clear input immediately
     setError(null);
 
-    console.log('[MiniChatInput] Sending message:', {
-      userContent,
-      selectedModel,
-      currentSessionId
-    });
-
     try {
       // Generate ID once and use it for both persistence and useChat
       const messageId = `user-${Date.now()}`;
@@ -88,14 +82,11 @@ export function MiniChatInput({ sendMessage, isStreaming, stop }: MiniChatInputP
       }
 
       // Send message to AI
-      // Use the same structure as ChatPage: object with parts array
-      console.log('[MiniChatInput] Calling sendMessage with:', { messageId, userContent });
       await sendMessage({
         id: messageId,  // ← Same ID as persisted in DB
         role: 'user',
         parts: [{ type: 'text', text: userContent }],
       });
-      console.log('[MiniChatInput] sendMessage completed');
     } catch (error) {
       console.error('Error sending mini-chat message:', error);
       setError(error instanceof Error ? error.message : 'Failed to send message');

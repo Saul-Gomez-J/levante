@@ -95,26 +95,6 @@ export function MiniChatRichMessage({ message, isStreaming }: MiniChatRichMessag
   const { parts } = message;
   const content = getMessageContent(message);
 
-  // DEBUGGING: Log message structure
-  console.log('[MiniChatRichMessage] Processing message:', {
-    id: message.id,
-    role: message.role,
-    hasContent: !!content,
-    contentType: typeof content,
-    contentValue: content,
-    hasParts: !!parts,
-    partsLength: parts?.length,
-    partsDetail: parts?.map((p, i) => ({
-      index: i,
-      type: typeof p,
-      value: p,
-      isObject: p && typeof p === 'object',
-      hasType: p && typeof p === 'object' && 'type' in p,
-      typeValue: p && typeof p === 'object' && 'type' in p ? p.type : undefined,
-      keys: p && typeof p === 'object' ? Object.keys(p) : []
-    }))
-  });
-
   // Filter out empty JSON objects/arrays from parts
   const isEmptyJSON = (part: any): boolean => {
     if (!part || typeof part !== 'object') return false;
@@ -130,17 +110,10 @@ export function MiniChatRichMessage({ message, isStreaming }: MiniChatRichMessag
       const { selectedModel, currentSessionId } = miniChatStore.useMiniChatStore.getState();
 
       if (!currentSessionId) {
-        console.warn('No session ID available - cannot transfer to main window');
         return;
       }
 
-      console.log('Transferring conversation to main window', {
-        model: selectedModel,
-        sessionId: currentSessionId,
-      });
-
       // Call IPC to transfer conversation
-      // Now we only pass sessionId - messages are already in DB
       const result = await window.levante.miniChat.openInMainWindow({
         messages: [], // Empty - not needed anymore
         model: selectedModel,
@@ -171,23 +144,13 @@ export function MiniChatRichMessage({ message, isStreaming }: MiniChatRichMessag
       <div className="mini-chat-message-content mini-chat-response">
         {parts.map((part, index) => {
           try {
-            console.log(`[MiniChatRichMessage] Processing part ${index}:`, {
-              partType: typeof part,
-              partValue: part,
-              isObject: part && typeof part === 'object',
-              hasTypeKey: part && typeof part === 'object' && 'type' in part,
-              typeValue: part && typeof part === 'object' && 'type' in part ? part.type : 'N/A'
-            });
-
             // Skip empty JSON objects
             if (isEmptyJSON(part)) {
-              console.log(`[MiniChatRichMessage] Skipping empty JSON at index ${index}`);
               return null;
             }
 
             // Validate that part is an object before accessing properties
             if (!part || typeof part !== 'object') {
-              console.warn('[MiniChatRichMessage] Invalid part type:', typeof part, part);
               return null;
             }
 
@@ -228,7 +191,6 @@ export function MiniChatRichMessage({ message, isStreaming }: MiniChatRichMessag
         }
 
             // Unknown part type - skip
-            console.log(`[MiniChatRichMessage] Unknown part type at index ${index}:`, part.type);
             return null;
           } catch (partError) {
             console.error(`[MiniChatRichMessage] Error rendering part ${index}:`, {

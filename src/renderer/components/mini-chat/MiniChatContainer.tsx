@@ -69,25 +69,6 @@ export function MiniChatContainer() {
 
     // Persist messages after AI finishes
     onFinish: async ({ message }) => {
-      const messageContent = getMessageContent(message);
-      console.log('[MiniChat onFinish] AI response finished', {
-        messageId: message.id,
-        role: message.role,
-        hasContent: !!messageContent,
-        contentType: typeof messageContent,
-        hasParts: !!message.parts,
-        partsCount: message.parts?.length,
-        partsTypes: message.parts?.map((p: any) => typeof p),
-        partsDetail: message.parts?.map((p: any, i: number) => ({
-          index: i,
-          type: typeof p,
-          isObject: p && typeof p === 'object',
-          hasTypeKey: p && typeof p === 'object' && 'type' in p,
-          typeValue: p && typeof p === 'object' && 'type' in p ? p.type : 'N/A',
-          value: p
-        }))
-      });
-
       // Get latest session ID from store (avoid closure issue)
       const sessionId = useMiniChatStore.getState().currentSessionId;
 
@@ -99,41 +80,19 @@ export function MiniChatContainer() {
       // Persist the AI response using the same logic as main chat
       try {
         // Extract text content from parts (with type validation)
-        console.log('[MiniChat onFinish] Extracting text parts...');
         const textParts = message.parts?.filter((p: any) => {
-          const isValid = p && typeof p === 'object' && p.type === 'text';
-          console.log('[MiniChat onFinish] Checking part for text:', {
-            isValid,
-            partType: typeof p,
-            partTypeValue: p && typeof p === 'object' ? p.type : 'N/A',
-            part: p
-          });
-          return isValid;
+          return p && typeof p === 'object' && p.type === 'text';
         }) || [];
-
-        console.log('[MiniChat onFinish] Text parts found:', textParts.length);
 
         let content = textParts
           .map((p: any) => p.text)
           .join('\n')
           .trim();
 
-        console.log('[MiniChat onFinish] Extracted content:', content);
-
         // Extract tool calls from parts (with type validation)
-        console.log('[MiniChat onFinish] Extracting tool call parts...');
         const toolCallParts = message.parts?.filter((p: any) => {
-          const isValid = p && typeof p === 'object' && typeof p.type === 'string' && p.type.startsWith('tool-');
-          console.log('[MiniChat onFinish] Checking part for tool call:', {
-            isValid,
-            partType: typeof p,
-            partTypeValue: p && typeof p === 'object' && typeof p.type === 'string' ? p.type : 'N/A',
-            part: p
-          });
-          return isValid;
+          return p && typeof p === 'object' && typeof p.type === 'string' && p.type.startsWith('tool-');
         }) || [];
-
-        console.log('[MiniChat onFinish] Tool call parts found:', toolCallParts.length);
 
         let toolCallsData = null;
         if (toolCallParts.length > 0) {
@@ -157,13 +116,7 @@ export function MiniChatContainer() {
           reasoningText: null,
         });
 
-        if (result.success) {
-          console.log('Mini-chat message persisted:', {
-            messageId: message.id,
-            sessionId,
-            role: message.role,
-          });
-        } else {
+        if (!result.success) {
           console.error('Failed to persist mini-chat message:', result.error);
         }
       } catch (error) {
@@ -210,29 +163,13 @@ export function MiniChatContainer() {
       {hasContent && (
         <StreamingProvider>
           <div ref={messagesRef} className="mini-chat-messages">
-            {messages.map((msg) => {
-              const msgContent = getMessageContent(msg);
-              console.log('[MiniChat] Rendering message:', {
-                id: msg.id,
-                role: msg.role,
-                hasContent: !!msgContent,
-                contentType: typeof msgContent,
-                contentLength: msgContent?.length,
-                hasParts: !!msg.parts,
-                partsLength: msg.parts?.length,
-                partsTypes: msg.parts?.map((p: any) => typeof p),
-                firstPartSample: msg.parts?.[0],
-                allPartsRaw: msg.parts
-              });
-
-              return (
-                <MiniChatMessage
-                  key={msg.id}
-                  message={msg}
-                  isStreaming={isStreaming && msg.id === messages[messages.length - 1]?.id}
-                />
-              );
-            })}
+            {messages.map((msg) => (
+              <MiniChatMessage
+                key={msg.id}
+                message={msg}
+                isStreaming={isStreaming && msg.id === messages[messages.length - 1]?.id}
+              />
+            ))}
 
             {isStreaming && messages.length === 0 && (
               <div className="mini-chat-message assistant">

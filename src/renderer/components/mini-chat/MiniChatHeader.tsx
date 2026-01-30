@@ -69,10 +69,6 @@ export function MiniChatHeader({ onClearMessages }: MiniChatHeaderProps = {}) {
 
     // Automatically switch provider if necessary
     if (newProviderId && activeProvider && newProviderId !== activeProvider.id) {
-      console.log('Mini-chat: Switching provider', {
-        from: activeProvider.id,
-        to: newProviderId
-      });
       await modelService.setActiveProvider(newProviderId);
     }
 
