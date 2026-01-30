@@ -1,15 +1,22 @@
 /**
- * Mini Chat Input
- * 
+ * Mini Chat Input (Refactored with useChat)
+ *
  * Input field for quick chat interactions.
  * Supports Enter to send, Shift+Enter for newline.
  */
 
 import React, { useRef, useEffect } from 'react';
 import { useMiniChatStore } from '@/stores/miniChatStore';
+import { useChat } from '@ai-sdk/react';
 
-export function MiniChatInput() {
-  const { inputValue, setInputValue, sendMessage, isStreaming } = useMiniChatStore();
+interface MiniChatInputProps {
+  sendMessage: ReturnType<typeof useChat>['sendMessage'];
+  isStreaming: boolean;
+  stop: () => void;
+}
+
+export function MiniChatInput({ sendMessage, isStreaming, stop }: MiniChatInputProps) {
+  const { inputValue, setInputValue, selectedModel, setError, ensureSession, currentSessionId, setCurrentSessionId } = useMiniChatStore();
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-focus input when component mounts
@@ -20,20 +27,102 @@ export function MiniChatInput() {
     return () => clearTimeout(timer);
   }, []);
 
+  const handleSend = async () => {
+    if (!inputValue.trim()) return;
+    if (!selectedModel) {
+      setError('Please select a model first');
+      return;
+    }
+
+    const userContent = inputValue.trim();
+    setInputValue(''); // Clear input immediately
+    setError(null);
+
+    console.log('[MiniChatInput] Sending message:', {
+      userContent,
+      selectedModel,
+      currentSessionId
+    });
+
+    try {
+      // Generate ID once and use it for both persistence and useChat
+      const messageId = `user-${Date.now()}`;
+
+      // Ensure session exists before first message
+      if (!currentSessionId) {
+        const sessionId = await ensureSession(selectedModel);
+        if (!sessionId) {
+          setError('Failed to create session');
+          return;
+        }
+        setCurrentSessionId(sessionId);
+
+        // Persist the user message manually for first message with the same ID
+        await window.levante.db.messages.create({
+          id: messageId,  // ← Use same ID
+          session_id: sessionId,
+          role: 'user',
+          content: userContent,
+          tool_calls: null,
+          attachments: null,
+          reasoningText: null,
+        });
+      } else {
+        // For subsequent messages, also persist user message with same ID
+        await window.levante.db.messages.create({
+          id: messageId,  // ← Use same ID
+          session_id: currentSessionId,
+          role: 'user',
+          content: userContent,
+          tool_calls: null,
+          attachments: null,
+          reasoningText: null,
+        });
+      }
+
+      // Resize window to show conversation
+      try {
+        await window.levante?.miniChat?.resize?.(400);
+      } catch {
+        // Ignore resize errors
+      }
+
+      // Send message to AI
+      // Use the same structure as ChatPage: object with parts array
+      console.log('[MiniChatInput] Calling sendMessage with:', { messageId, userContent });
+      await sendMessage({
+        id: messageId,  // ← Same ID as persisted in DB
+        role: 'user',
+        parts: [{ type: 'text', text: userContent }],
+      });
+      console.log('[MiniChatInput] sendMessage completed');
+    } catch (error) {
+      console.error('Error sending mini-chat message:', error);
+      setError(error instanceof Error ? error.message : 'Failed to send message');
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // Enter to send (without Shift)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if (!isStreaming && inputValue.trim()) {
-        sendMessage();
+        handleSend();
       }
+    }
+
+    // Escape to stop
+    if (e.key === 'Escape' && isStreaming) {
+      stop();
     }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isStreaming && inputValue.trim()) {
-      sendMessage();
+    if (isStreaming) {
+      stop();
+    } else if (inputValue.trim()) {
+      handleSend();
     }
   };
 
@@ -46,16 +135,16 @@ export function MiniChatInput() {
         onChange={(e) => setInputValue(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder="Ask anything... (Enter to send)"
-        disabled={isStreaming}
+        disabled={false}
         rows={1}
       />
       <button
         type="submit"
         className="mini-chat-send-btn"
-        disabled={isStreaming || !inputValue.trim()}
+        disabled={!isStreaming && !inputValue.trim()}
       >
         {isStreaming ? (
-          <span className="mini-chat-spinner" />
+          <span className="mini-chat-stop">⏹</span>
         ) : (
           <span>↑</span>
         )}

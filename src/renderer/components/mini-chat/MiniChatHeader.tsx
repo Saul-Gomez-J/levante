@@ -11,8 +11,12 @@ import { modelService } from '@/services/modelService';
 import { ModelSearchableSelect } from '@/components/ai-elements/model-searchable-select';
 import type { GroupedModelsByProvider } from '../../../types/models';
 
-export function MiniChatHeader() {
-  const { selectedModel, setSelectedModel, clearMessages } = useMiniChatStore();
+interface MiniChatHeaderProps {
+  onClearMessages?: () => void;
+}
+
+export function MiniChatHeader({ onClearMessages }: MiniChatHeaderProps = {}) {
+  const { selectedModel, setSelectedModel, reset } = useMiniChatStore();
   const [groupedModels, setGroupedModels] = useState<GroupedModelsByProvider | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -81,7 +85,10 @@ export function MiniChatHeader() {
   };
 
   const handleClear = () => {
-    clearMessages();
+    // Clear messages via callback (from useChat in Container)
+    onClearMessages?.();
+    // Reset store session state
+    reset();
     // Reset window size
     window.levante?.miniChat?.resize?.(140);
   };

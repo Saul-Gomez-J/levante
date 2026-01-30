@@ -42,6 +42,7 @@ export interface ChatStreamChunk {
   delta?: string;
   done?: boolean;
   error?: string;
+  parts?: Array<any>; // Rich content parts for rendering
   sources?: Array<{ url: string; title?: string }>;
   reasoningText?: string;
   reasoningId?: string; // Stable ID for reasoning block reconciliation
@@ -1351,6 +1352,16 @@ export class AIService {
         };
       } else {
         this.logger.aiSdk.debug("No reasoning found in finishData");
+      }
+
+      // Extract response parts for rich rendering (mini-chat, etc.)
+      const responseParts = (result as any).response?.messages?.[0]?.content;
+      if (responseParts && Array.isArray(responseParts)) {
+        this.logger.aiSdk.debug("📦 Sending response parts", {
+          partsCount: responseParts.length,
+          partTypes: responseParts.map((p: any) => p.type),
+        });
+        yield { parts: responseParts };
       }
 
       yield { done: true };

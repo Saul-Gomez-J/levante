@@ -8,6 +8,7 @@
 import { BrowserWindow, screen, shell, ipcMain } from 'electron';
 import { join } from 'path';
 import { getLogger } from '../services/logging';
+import { chatService } from '../services/chatService';
 
 const logger = getLogger();
 
@@ -116,6 +117,12 @@ export function createMiniChatWindow(): BrowserWindow {
     shell.openExternal(url);
     return { action: 'deny' };
   });
+
+  // Open DevTools in development mode for debugging
+  if (process.env.NODE_ENV === 'development') {
+    miniChatWindow.webContents.openDevTools({ mode: 'detach' });
+    logger.core.debug('Mini chat DevTools opened for debugging');
+  }
 
   logger.core.info('Mini chat window created');
   return miniChatWindow;
@@ -236,5 +243,119 @@ export function registerMiniChatIPC(): void {
     return { success: false, height: DEFAULT_CONFIG.height };
   });
 
+  ipcMain.handle('levante/mini-chat/open-in-main', async (_, data: { messages: any[]; model: string; sessionId?: string }) => {
+    try {
+      const { messages, model, sessionId } = data;
+
+      logger.core.info('Opening mini-chat conversation in main window', {
+        messageCount: messages.length,
+        model,
+        hasSessionId: !!sessionId,
+      });
+
+      let finalSessionId: string;
+
+      // If session already exists (automatic persistence enabled)
+      if (sessionId) {
+        finalSessionId = sessionId;
+        logger.core.info('Using existing mini-chat session', { sessionId });
+
+        // Verify that the session exists in DB
+        const sessionCheck = await chatService.getSession(sessionId);
+        if (!sessionCheck.success || !sessionCheck.data) {
+          logger.core.error('Session not found, creating new one', { sessionId });
+          // Fallback: create new session
+          const newSession = await chatService.createSession({
+            title: 'Mini Chat',
+            model,
+            session_type: 'chat',
+          });
+          if (!newSession.success || !newSession.data) {
+            return { success: false, error: 'Failed to create fallback session' };
+          }
+          finalSessionId = newSession.data.id;
+        }
+      } else {
+        // Legacy mode: create new session (no prior persistence)
+        const firstUserMessage = messages.find(m => m.role === 'user');
+        const title = firstUserMessage?.content
+          ? firstUserMessage.content.substring(0, 50).trim() + (firstUserMessage.content.length > 50 ? '...' : '')
+          : 'Mini Chat Conversation';
+
+        const sessionResult = await chatService.createSession({
+          title,
+          model,
+          session_type: 'chat',
+        });
+
+        if (!sessionResult.success || !sessionResult.data) {
+          logger.core.error('Failed to create session for mini-chat transfer', {
+            error: sessionResult.error,
+          });
+          return { success: false, error: sessionResult.error || 'Failed to create session' };
+        }
+
+        finalSessionId = sessionResult.data.id;
+
+        // Persist all messages (legacy mode)
+        for (const msg of messages) {
+          let toolCalls: object[] | null = null;
+          if (msg.parts && Array.isArray(msg.parts)) {
+            const toolParts = msg.parts.filter(
+              (p: any) => p.type === 'tool-call' || p.type === 'tool-result'
+            );
+            if (toolParts.length > 0) {
+              toolCalls = toolParts;
+            }
+          }
+
+          await chatService.createMessage({
+            id: msg.id,
+            session_id: finalSessionId,
+            role: msg.role,
+            content: msg.content || '',
+            tool_calls: toolCalls,
+            attachments: null,
+            reasoningText: null,
+          });
+        }
+
+        logger.core.info('All messages persisted (legacy mode)', { sessionId: finalSessionId });
+      }
+
+      // Show and focus main window
+      const mainWindow = getMainWindowForMiniChat();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.show();
+        mainWindow.focus();
+        mainWindow.webContents.send('levante/session/load', { sessionId: finalSessionId });
+        logger.core.info('Notified main window to load session', { sessionId: finalSessionId });
+      } else {
+        logger.core.error('Main window not found or destroyed');
+        return { success: false, error: 'Main window not available' };
+      }
+
+      // Hide mini-chat
+      hideMiniChat();
+
+      return { success: true, sessionId: finalSessionId };
+    } catch (error) {
+      logger.core.error('Error opening mini-chat in main window', {
+        error: error instanceof Error ? error.message : error,
+      });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  });
+
   logger.core.debug('Mini chat IPC handlers registered');
+}
+
+/**
+ * Gets main window reference (helper for openInMainWindow handler)
+ */
+export function getMainWindowForMiniChat(): BrowserWindow | null {
+  return BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w !== miniChatWindow) || null;
 }

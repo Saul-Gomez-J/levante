@@ -1,6 +1,6 @@
 /**
  * Window Management Exports
- * 
+ *
  * Central export point for all window-related functionality.
  */
 
@@ -13,4 +13,5 @@ export {
   getMiniChatWindow,
   destroyMiniChatWindow,
   registerMiniChatIPC,
+  getMainWindowForMiniChat,
 } from './miniChatWindow';

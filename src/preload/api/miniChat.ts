@@ -34,6 +34,17 @@ export const miniChatApi = {
   getHeight: (): Promise<{ success: boolean; height: number }> => {
     return ipcRenderer.invoke('levante/mini-chat/get-height');
   },
+
+  /**
+   * Open mini-chat conversation in main window
+   */
+  openInMainWindow: (data: {
+    messages: any[];
+    model: string;
+    sessionId?: string;
+  }): Promise<{ success: boolean; sessionId?: string; error?: string }> => {
+    return ipcRenderer.invoke('levante/mini-chat/open-in-main', data);
+  },
 };
 
 /**
@@ -55,5 +66,16 @@ export function onMiniChatHidden(callback: () => void): () => void {
   ipcRenderer.on('levante/mini-chat/hidden', handler);
   return () => {
     ipcRenderer.removeListener('levante/mini-chat/hidden', handler);
+  };
+}
+
+/**
+ * Subscribe to session load event (triggered when mini-chat transfers to main window)
+ */
+export function onSessionLoad(callback: (data: { sessionId: string }) => void): () => void {
+  const handler = (_event: any, data: any) => callback(data);
+  ipcRenderer.on('levante/session/load', handler);
+  return () => {
+    ipcRenderer.removeListener('levante/session/load', handler);
   };
 }
