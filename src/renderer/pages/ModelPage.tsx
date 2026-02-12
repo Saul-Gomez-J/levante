@@ -22,7 +22,7 @@ import { Loader2, CheckCircle, XCircle, RefreshCw, Search, Plus } from 'lucide-r
 import { useModelStore } from '@/stores/modelStore';
 import type { ProviderConfig } from '../../types/models';
 import { useTranslation } from 'react-i18next';
-import { OpenRouterConfig, GatewayConfig, LocalConfig, CloudConfig } from './ModelPage/ProviderConfigs';
+import { OpenRouterConfig, LevantePlatformConfig, GatewayConfig, LocalConfig, CloudConfig } from './ModelPage/ProviderConfigs';
 import { ModelList } from './ModelPage/ModelList';
 import { AddInferenceModelDialog } from '@/components/dialogs/AddInferenceModelDialog';
 
@@ -86,6 +86,8 @@ const ModelPage = () => {
     switch (provider.type) {
       case 'openrouter':
         return <OpenRouterConfig provider={provider} />;
+      case 'levante-platform':
+        return <LevantePlatformConfig provider={provider} />;
       case 'vercel-gateway':
         return <GatewayConfig provider={provider} />;
       case 'local':

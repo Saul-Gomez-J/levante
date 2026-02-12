@@ -6,6 +6,7 @@ import {
   safeFetch,
   normalizeEndpoint,
 } from "../utils/urlValidator";
+import { getOAuthService } from "./oauth";
 
 interface ModelResponse {
   object: string;
@@ -374,6 +375,44 @@ export class ModelFetchService {
       logger.models.error("Failed to fetch Hugging Face models", {
         error: error instanceof Error ? error.message : error,
         hasApiKey: !!apiKey,
+      });
+      throw error;
+    }
+  }
+
+  // Fetch Levante Platform models
+  // Uses OAuth tokens instead of API keys
+  static async fetchLevantePlatformModels(baseUrl?: string): Promise<any[]> {
+    const LEVANTE_PLATFORM_SERVER_ID = "levante-platform";
+    const effectiveBaseUrl = baseUrl || "https://platform.levante.ai";
+
+    try {
+      // Get OAuth service and check for valid tokens
+      const oauthService = getOAuthService();
+      const tokens = await oauthService.getExistingToken(LEVANTE_PLATFORM_SERVER_ID);
+
+      if (!tokens) {
+        logger.models.warn("No OAuth tokens for Levante Platform. Please authorize first.");
+        return [];
+      }
+
+      // Fetch models using OAuth token
+      const response = await safeFetch(`${effectiveBaseUrl}/api/v1/models`, {
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Levante Platform API error: ${response.statusText}`);
+      }
+
+      const data: ModelResponse = await response.json();
+      return data.data || [];
+    } catch (error) {
+      logger.models.error("Failed to fetch Levante Platform models", {
+        error: error instanceof Error ? error.message : error,
       });
       throw error;
     }

@@ -27,7 +27,7 @@ export interface Model {
 }
 
 export type CloudProviderType = 'openai' | 'anthropic' | 'google' | 'groq' | 'xai' | 'huggingface';
-export type ProviderType = 'openrouter' | 'vercel-gateway' | 'local' | CloudProviderType;
+export type ProviderType = 'openrouter' | 'vercel-gateway' | 'local' | 'levante-platform' | CloudProviderType;
 
 export interface ProviderConfig {
   id: string;

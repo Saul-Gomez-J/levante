@@ -258,6 +258,9 @@ export interface LevanteAPI {
       modelId: string,
       inferenceProvider: string
     ) => Promise<{ success: boolean; data?: any; error?: string }>;
+    // Levante Platform uses OAuth tokens instead of API keys
+    // baseUrl is optional - defaults to https://platform.levante.ai
+    fetchLevantePlatform: (baseUrl?: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
   };
 
   // Inference functionality
