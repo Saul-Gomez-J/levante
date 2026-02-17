@@ -24,7 +24,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Loader2, Filter, X, ChevronRight, ChevronDown } from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import type { Model, GroupedModelsByProvider } from '../../../types/models';
 import type { ModelCategory } from '../../../types/modelCategories';
 import { useTranslation } from 'react-i18next';
@@ -38,6 +38,8 @@ export interface ModelSearchableSelectProps {
   loading?: boolean;
   placeholder?: string;
   className?: string;
+  useCustomPortalContainer?: boolean;
+  expandMiniChatOnOpen?: boolean;
 }
 
 export const ModelSearchableSelect = ({
@@ -48,12 +50,119 @@ export const ModelSearchableSelect = ({
   loading = false,
   placeholder,
   className,
+  useCustomPortalContainer = false,
+  expandMiniChatOnOpen = false,
 }: ModelSearchableSelectProps) => {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<ModelCategory | null>(null);
   const [collapsedProviders, setCollapsedProviders] = useState<Set<string>>(new Set());
+
+  // Ref al contenedor custom del portal (si se usa)
+  const portalContainerRef = useRef<HTMLDivElement | null>(null);
+
+  // Ref para almacenar la altura original antes de expandir
+  const originalHeightRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (useCustomPortalContainer) {
+      // Crear contenedor para el portal si no existe
+      let container = document.getElementById('mini-chat-popover-portal');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'mini-chat-popover-portal';
+        container.style.position = 'absolute';
+        container.style.top = '0';
+        container.style.left = '0';
+        container.style.width = '100%';
+        container.style.height = '100%';
+        container.style.zIndex = '99999';
+        container.style.pointerEvents = 'none';
+        document.body.appendChild(container);
+      }
+
+      // Sync dark mode class from document to portal container
+      const syncDarkMode = () => {
+        if (container) {
+          if (document.documentElement.classList.contains('dark')) {
+            container.classList.add('dark');
+          } else {
+            container.classList.remove('dark');
+          }
+        }
+      };
+
+      // Initial sync
+      syncDarkMode();
+
+      // Observe changes to the dark class on document
+      const observer = new MutationObserver(syncDarkMode);
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+
+      portalContainerRef.current = container as HTMLDivElement;
+
+      return () => {
+        observer.disconnect();
+      };
+    }
+
+    return () => {
+      // Cleanup: remover contenedor si el componente se desmonta
+      if (useCustomPortalContainer && portalContainerRef.current) {
+        portalContainerRef.current.remove();
+      }
+    };
+  }, [useCustomPortalContainer]);
+
+  // Handler para abrir/cerrar el popover
+  const handleOpenChange = useCallback((newOpen: boolean) => {
+    setOpen(newOpen);
+  }, []);
+
+  // Effect para manejar el resize del mini-chat cuando cambia el estado open
+  useEffect(() => {
+    if (!expandMiniChatOnOpen || !window.levante?.miniChat) {
+      return;
+    }
+
+    async function handleResize() {
+      if (open) {
+        // Abriendo: guardar la altura actual antes de expandir
+        if (window.levante?.miniChat?.getHeight) {
+          try {
+            const result = await window.levante.miniChat.getHeight();
+            if (result.success) {
+              originalHeightRef.current = result.height;
+            }
+          } catch (error) {
+            console.error('Failed to get mini-chat height:', error);
+          }
+        }
+
+        // Expandir a altura máxima cuando se abre
+        if (window.levante?.miniChat?.resize) {
+          window.levante.miniChat.resize(500);
+        }
+      } else {
+        // Cerrando: restaurar a la altura original guardada
+        if (window.levante?.miniChat?.resize && originalHeightRef.current !== null) {
+          // Pequeño delay para asegurar que el popover ya se cerró
+          setTimeout(() => {
+            if (window.levante?.miniChat?.resize && originalHeightRef.current !== null) {
+              window.levante.miniChat.resize(originalHeightRef.current);
+              originalHeightRef.current = null;
+            }
+          }, 100);
+        }
+      }
+    }
+
+    handleResize();
+  }, [open, expandMiniChatOnOpen]);
 
   // Toggle provider collapse
   const toggleProviderCollapse = (providerId: string, e?: React.MouseEvent) => {
@@ -217,7 +326,7 @@ export const ModelSearchableSelect = ({
   }, [models, groupedModels, value]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
@@ -243,7 +352,12 @@ export const ModelSearchableSelect = ({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0" align="start">
+      <PopoverContent
+        className="w-[300px] p-0"
+        align="start"
+        container={useCustomPortalContainer ? portalContainerRef.current : undefined}
+        style={useCustomPortalContainer ? { pointerEvents: 'auto' } : undefined}
+      >
         <Command shouldFilter={false}>
           <div className="flex items-center border-b px-3">
             <CommandInput

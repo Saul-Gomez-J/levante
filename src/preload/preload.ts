@@ -57,6 +57,7 @@ import { analyticsApi } from "./api/analytics";
 import { mermaidApi } from "./api/mermaid";
 import { widgetApi } from "./api/widget";
 import { announcementsApi } from "./api/announcements";
+import { miniChatApi, onMiniChatShown, onMiniChatHidden, onSessionLoad } from "./api/miniChat";
 import { logViewerApi } from "./api/logViewer";
 
 // Re-export types for backwards compatibility
@@ -815,6 +816,18 @@ export interface LevanteAPI {
       error?: string;
     }>;
   };
+
+  // Mini Chat API
+  miniChat: {
+    hide: () => Promise<{ success: boolean }>;
+    resize: (height: number) => Promise<{ success: boolean }>;
+    toggle: () => Promise<{ success: boolean }>;
+    getHeight: () => Promise<{ success: boolean; height: number }>;
+    openInMainWindow: (data: { messages: any[]; model: string; sessionId?: string }) => Promise<{ success: boolean; sessionId?: string; error?: string }>;
+  };
+  onMiniChatShown: (callback: () => void) => () => void;
+  onMiniChatHidden: (callback: () => void) => () => void;
+  onSessionLoad: (callback: (data: { sessionId: string }) => void) => () => void;
 }
 
 // Assemble the complete API from modules
@@ -868,6 +881,12 @@ const api: LevanteAPI = {
 
   // Announcements API
   announcements: announcementsApi,
+
+  // Mini Chat API
+  miniChat: miniChatApi,
+  onMiniChatShown,
+  onMiniChatHidden,
+  onSessionLoad,
 
   // Log viewer API
   logViewer: logViewerApi,

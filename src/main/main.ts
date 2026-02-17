@@ -21,6 +21,16 @@ import { createMainWindow } from "./lifecycle/window";
 import { registerAppEvents, setupDeepLinkHandling } from "./lifecycle/events";
 import { setupLogViewerHandlers } from "./ipc/logViewerHandlers";
 
+// Mini Chat modules
+import { createSystemTray, destroySystemTray } from "./tray/systemTray";
+import { registerGlobalShortcuts, unregisterAllShortcuts } from "./shortcuts/globalShortcuts";
+import {
+  createMiniChatWindow,
+  toggleMiniChat,
+  destroyMiniChatWindow,
+  registerMiniChatIPC
+} from "./windows";
+
 // Load environment variables
 config({ path: join(__dirname, "../../.env.local") });
 config({ path: join(__dirname, "../../.env") });
@@ -86,6 +96,28 @@ app.whenReady().then(async () => {
 
     // Setup deep link handling (Windows/Linux)
     setupDeepLinkHandling();
+
+    // Initialize Mini Chat system
+    registerMiniChatIPC();
+    
+    // Create system tray for background operation
+    createSystemTray({
+      onToggleMiniChat: toggleMiniChat,
+      onShowMainWindow: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    });
+
+    // Register global shortcuts (e.g., Cmd+Shift+Space for quick chat)
+    registerGlobalShortcuts({
+      onMiniChatToggle: toggleMiniChat,
+    });
+
+    // Pre-create mini chat window (hidden) for instant response
+    createMiniChatWindow();
   } catch (error) {
     console.error('Fatal error during app initialization:', error);
     // Show error dialog and quit
@@ -95,5 +127,23 @@ app.whenReady().then(async () => {
       `Failed to start the application:\n\n${error instanceof Error ? error.message : String(error)}`
     );
     app.quit();
+  }
+});
+
+// Cleanup on app quit
+app.on('will-quit', () => {
+  unregisterAllShortcuts();
+  destroySystemTray();
+  destroyMiniChatWindow();
+});
+
+// On macOS, keep app running when all windows are closed (tray mode)
+app.on('window-all-closed', () => {
+  // Don't quit on macOS - allow tray mode
+  if (process.platform !== 'darwin') {
+    // On Windows/Linux, we could also keep running with tray
+    // but for now follow platform conventions
+    // Comment out app.quit() to enable tray mode on all platforms
+    // app.quit();
   }
 });

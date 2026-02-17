@@ -69,6 +69,7 @@ const ChatPage = () => {
   const persistMessage = useChatStore((state) => state.persistMessage);
   const editMessage = useChatStore((state) => state.editMessage); // ← NEW
   const createSession = useChatStore((state) => state.createSession);
+  const loadSession = useChatStore((state) => state.loadSession);
   const loadHistoricalMessages = useChatStore((state) => state.loadHistoricalMessages);
   const updateSessionModel = useChatStore((state) => state.updateSessionModel);
   const pendingPrompt = useChatStore((state) => state.pendingPrompt);
@@ -454,6 +455,20 @@ const ChatPage = () => {
     },
     [editMessage, currentSession, setMessages, sendMessageAI]
   );
+
+  // Listen for session load events from mini-chat
+  useEffect(() => {
+    const unsubscribe = window.levante.onSessionLoad?.((data: { sessionId: string }) => {
+      logger.core.info('Loading session from mini-chat', { sessionId: data.sessionId });
+
+      // Load the session transferred from mini-chat
+      loadSession(data.sessionId);
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [loadSession]);
 
   // Load messages when session changes
   useEffect(() => {
