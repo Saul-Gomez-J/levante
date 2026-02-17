@@ -24,11 +24,11 @@ import { setupLogViewerHandlers } from "./ipc/logViewerHandlers";
 // Mini Chat modules
 import { createSystemTray, destroySystemTray } from "./tray/systemTray";
 import { registerGlobalShortcuts, unregisterAllShortcuts } from "./shortcuts/globalShortcuts";
-import { 
-  createMiniChatWindow, 
-  toggleMiniChat, 
+import {
+  createMiniChatWindow,
+  toggleMiniChat,
   destroyMiniChatWindow,
-  registerMiniChatIPC 
+  registerMiniChatIPC
 } from "./windows";
 
 // Load environment variables
