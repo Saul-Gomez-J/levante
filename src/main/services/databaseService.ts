@@ -67,7 +67,7 @@ export class DatabaseService {
         duration: duration.toFixed(2) + 'ms',
         rowsAffected: result.rowsAffected,
         rowsReturned: result.rows.length,
-        lastInsertRowid: result.lastInsertRowid
+        lastInsertRowid: result.lastInsertRowid !== undefined ? String(result.lastInsertRowid) : undefined
       });
       
       return result;

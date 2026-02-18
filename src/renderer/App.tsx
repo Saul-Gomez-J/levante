@@ -4,6 +4,7 @@ import ChatPage from '@/pages/ChatPage'
 import SettingsPage from '@/pages/SettingsPage'
 import ModelPage from '@/pages/ModelPage'
 import StorePage from '@/pages/StorePage'
+import LogViewerPage from '@/pages/LogViewerPage'
 import { OnboardingWizard } from '@/pages/OnboardingWizard'
 import { MCPDeepLinkModal } from '@/components/mcp/deep-link/MCPDeepLinkModal'
 import { AnnouncementModal } from '@/components/announcements/AnnouncementModal'
@@ -11,6 +12,7 @@ import { useChatStore, initializeChatStore } from '@/stores/chatStore'
 import { logger } from '@/services/logger'
 import { modelService } from '@/services/modelService'
 import { setupMermaidValidationHandler } from '@/services/mermaidValidationService'
+import { useMCPEvents } from '@/hooks/useMCPEvents'
 
 import { useTranslation } from 'react-i18next'
 import { toast, Toaster } from 'sonner'
@@ -23,7 +25,11 @@ function App() {
   const [currentPage, setCurrentPage] = useState('chat')
   const [wizardCompleted, setWizardCompleted] = useState<boolean | null>(null)
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
+  const [developerMode, setDeveloperMode] = useState(false)
   const { i18n } = useTranslation()
+
+  // Listen for MCP events (tools/list_changed, etc.)
+  useMCPEvents()
 
   // MCP Deep Link Modal state
   const [mcpModalOpen, setMcpModalOpen] = useState(false)
@@ -45,6 +51,11 @@ function App() {
         const themeResult = await window.levante.preferences.get('theme');
         if (themeResult?.data) {
           setTheme(themeResult.data);
+        }
+
+        const devModeResult = await window.levante.preferences.get('developerMode');
+        if (devModeResult?.data !== undefined) {
+          setDeveloperMode(devModeResult.data);
         }
 
         // Only apply language preference once the wizard is completed to avoid
@@ -77,6 +88,21 @@ function App() {
 
     return () => {
       window.removeEventListener('theme-changed', handleThemeChange as EventListener);
+    };
+  }, []);
+
+  // Listen for developer mode changes from settings
+  useEffect(() => {
+    const handlePreferenceChange = (event: CustomEvent) => {
+      if (event.detail?.key === 'developerMode') {
+        setDeveloperMode(event.detail.value);
+      }
+    };
+
+    window.addEventListener('preference-changed', handlePreferenceChange as EventListener);
+
+    return () => {
+      window.removeEventListener('preference-changed', handlePreferenceChange as EventListener);
     };
   }, []);
 
@@ -272,6 +298,7 @@ function App() {
 
           if (result.success && result.data) {
             const entry = result.data;
+            const displayName = entry.displayName || entry.name;
 
             logger.core.info('Found registry entry for MCP configure', {
               serverId: entry.id,
@@ -282,7 +309,7 @@ function App() {
             // Build the config from registry entry template
             const config: Partial<MCPServerConfig> = {
               id: entry.id,
-              name: entry.name,
+              name: entry.name, // Use technical name for config, not displayName
               transport: entry.transport.type,
               ...(entry.configuration.template || {})
             };
@@ -304,7 +331,7 @@ function App() {
             // Open the modal
             setMcpModalConfig({
               config,
-              name: entry.name,
+              name: displayName,
               sourceUrl: entry.metadata?.homepage || entry.metadata?.repository,
               inputs: Object.keys(inputs).length > 0 ? inputs : undefined
             });
@@ -407,6 +434,8 @@ function App() {
         return 'Model'
       case 'store':
         return 'Store'
+      case 'logs':
+        return 'Developer Logs'
       default:
         return ''
     }
@@ -418,6 +447,9 @@ function App() {
       case 'settings': return <SettingsPage />
       case 'model': return <ModelPage />
       case 'store': return <StorePage />
+      case 'logs':
+        // Only show logs if developer mode is active
+        return developerMode ? <LogViewerPage /> : <ChatPage />
       default: return <ChatPage />
     }
   }
@@ -505,6 +537,7 @@ function App() {
         onPageChange={setCurrentPage}
         sidebarContent={getSidebarContent()}
         onNewChat={handleNewChat}
+        developerMode={developerMode}
       >
         {renderPage()}
       </MainLayout>

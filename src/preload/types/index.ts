@@ -6,6 +6,7 @@ import type { ValidationResult, ProviderValidationConfig } from '../../types/wiz
 export interface ChatRequest {
   messages: UIMessage[];
   model: string;
+  webSearch?: boolean;
   enableMCP?: boolean;
 }
 
@@ -13,6 +14,7 @@ export interface ChatStreamChunk {
   delta?: string;
   done?: boolean;
   error?: string;
+  parts?: Array<any>; // Rich content parts for rendering
   sources?: Array<{ url: string; title?: string }>;
   reasoningText?: string;
   reasoningId?: string; // Stable ID for reasoning block reconciliation
@@ -28,13 +30,6 @@ export interface ChatStreamChunk {
     result: any;
     status: 'success' | 'error';
     timestamp: number;
-  };
-  // Información de aprobación de herramienta (para needsApproval: true)
-  toolApproval?: {
-    approvalId: string;
-    toolCallId: string;
-    toolName: string;
-    input: Record<string, any>;
   };
   generatedAttachment?: {
     type: 'image' | 'audio' | 'video';

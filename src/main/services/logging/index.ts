@@ -1,6 +1,6 @@
 export { Logger, createLogger, getLogger, initializeLogger } from './logger';
 export { LoggerConfigService } from './config';
-export { ConsoleTransport, FileTransport, setLogTimezone, getLogTimezone } from './transports';
+export { setLogTimezone, getLogTimezone } from './timezoneFormat';  // ← CAMBIO: desde timezoneFormat
 export type {
   LogLevel,
   LogCategory,

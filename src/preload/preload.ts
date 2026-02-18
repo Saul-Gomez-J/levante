@@ -36,6 +36,7 @@ import type {
   ValidationResult,
   ProviderValidationConfig,
 } from "./types";
+import type { Tool, ToolsCache, DisabledTools } from "../main/types/mcp";
 import type { RuntimeInfo, RuntimeType } from "../types/runtime";
 
 // Import API modules
@@ -56,6 +57,8 @@ import { analyticsApi } from "./api/analytics";
 import { mermaidApi } from "./api/mermaid";
 import { widgetApi } from "./api/widget";
 import { announcementsApi } from "./api/announcements";
+import { miniChatApi, onMiniChatShown, onMiniChatHidden, onSessionLoad } from "./api/miniChat";
+import { logViewerApi } from "./api/logViewer";
 
 // Re-export types for backwards compatibility
 export type {
@@ -257,6 +260,9 @@ export interface LevanteAPI {
       modelId: string,
       inferenceProvider: string
     ) => Promise<{ success: boolean; data?: any; error?: string }>;
+    // Levante Platform uses OAuth tokens instead of API keys
+    // baseUrl is optional - defaults to https://platform.levante.ai
+    fetchLevantePlatform: (baseUrl?: string) => Promise<{ success: boolean; data?: any[]; error?: string }>;
   };
 
   // Inference functionality
@@ -566,6 +572,31 @@ export interface LevanteAPI {
       name: string,
       args?: Record<string, any>
     ) => Promise<{ success: boolean; data?: MCPPromptResult; error?: string }>;
+
+    // Tools management
+    getToolsCache: () => Promise<{ success: boolean; data?: ToolsCache; error?: string }>;
+    getDisabledTools: () => Promise<{ success: boolean; data?: DisabledTools; error?: string }>;
+    setDisabledTools: (
+      serverId: string,
+      toolNames: string[]
+    ) => Promise<{ success: boolean; error?: string }>;
+    toggleTool: (
+      serverId: string,
+      toolName: string,
+      enabled: boolean
+    ) => Promise<{ success: boolean; data?: string[]; error?: string }>;
+    toggleAllTools: (
+      serverId: string,
+      enabled: boolean
+    ) => Promise<{ success: boolean; data?: string[]; error?: string }>;
+    clearServerTools: (
+      serverId: string
+    ) => Promise<{ success: boolean; error?: string }>;
+
+    // Event listeners
+    onToolsUpdated: (
+      callback: (data: { serverId: string; tools: Tool[] }) => void
+    ) => () => void;
   };
 
   // Logger functionality
@@ -724,6 +755,37 @@ export interface LevanteAPI {
     enablePrivacy: (id: string) => Promise<{ success: boolean; error?: string }>;
   };
 
+  // Log viewer functionality
+  logViewer: {
+    startWatching: () => Promise<{ success: boolean; error?: string }>;
+    stopWatching: () => Promise<{ success: boolean; error?: string }>;
+    isWatching: () => Promise<{ success: boolean; data?: boolean; error?: string }>;
+    getRecent: (limit: number) => Promise<{
+      success: boolean;
+      data?: Array<{
+        id: string;
+        timestamp: Date;
+        category: LogCategory;
+        level: LogLevel;
+        message: string;
+        context?: Record<string, any>;
+        raw?: string;
+      }>;
+      error?: string;
+    }>;
+    getCurrentFile: () => Promise<{ success: boolean; data?: string; error?: string }>;
+    getDirectory: () => Promise<{ success: boolean; data?: string; error?: string }>;
+    onNewEntry: (callback: (entry: {
+      id: string;
+      timestamp: Date;
+      category: LogCategory;
+      level: LogLevel;
+      message: string;
+      context?: Record<string, any>;
+      raw?: string;
+    }) => void) => () => void;
+  };
+
   // Widget proxy functionality
   widget: {
     store: (html: string, options?: {
@@ -754,6 +816,18 @@ export interface LevanteAPI {
       error?: string;
     }>;
   };
+
+  // Mini Chat API
+  miniChat: {
+    hide: () => Promise<{ success: boolean }>;
+    resize: (height: number) => Promise<{ success: boolean }>;
+    toggle: () => Promise<{ success: boolean }>;
+    getHeight: () => Promise<{ success: boolean; height: number }>;
+    openInMainWindow: (data: { messages: any[]; model: string; sessionId?: string }) => Promise<{ success: boolean; sessionId?: string; error?: string }>;
+  };
+  onMiniChatShown: (callback: () => void) => () => void;
+  onMiniChatHidden: (callback: () => void) => () => void;
+  onSessionLoad: (callback: (data: { sessionId: string }) => void) => () => void;
 }
 
 // Assemble the complete API from modules
@@ -807,6 +881,15 @@ const api: LevanteAPI = {
 
   // Announcements API
   announcements: announcementsApi,
+
+  // Mini Chat API
+  miniChat: miniChatApi,
+  onMiniChatShown,
+  onMiniChatHidden,
+  onSessionLoad,
+
+  // Log viewer API
+  logViewer: logViewerApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

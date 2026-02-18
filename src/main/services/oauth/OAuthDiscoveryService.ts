@@ -174,7 +174,7 @@ export class OAuthDiscoveryService {
 
     /**
      * Obtiene metadata completo de un authorization server
-     * Implementa RFC 8414
+     * Implementa RFC 8414 con fallback para paths
      */
     async fetchServerMetadata(
         authServerUrl: string
@@ -193,52 +193,97 @@ export class OAuthDiscoveryService {
                 return cached;
             }
 
-            // Construir metadata URL
-            const metadataUrl = this.buildMetadataUrl(
+            // Construir URLs candidatas (RFC 8414 con fallback)
+            const metadataUrls = this.buildAuthServerMetadataUrls(authServerUrl);
+
+            this.logger.oauth.debug('Fetching authorization server metadata (candidates)', {
                 authServerUrl,
-                this.AUTH_SERVER_PATH
-            );
-
-            this.logger.oauth.debug('Fetching metadata from URL', {
-                metadataUrl,
+                metadataUrls,
             });
 
-            // Fetch metadata
-            const response = await fetch(metadataUrl, {
-                method: 'GET',
-                headers: {
-                    Accept: 'application/json',
-                },
-            });
+            let lastError: OAuthDiscoveryError | null = null;
 
-            if (!response.ok) {
-                throw new OAuthDiscoveryError(
-                    `Failed to fetch authorization server metadata: ${response.status} ${response.statusText}`,
-                    'METADATA_FETCH_FAILED',
-                    {
-                        status: response.status,
-                        statusText: response.statusText,
-                        url: metadataUrl,
+            for (const metadataUrl of metadataUrls) {
+                try {
+                    this.logger.oauth.debug('Attempting authorization server metadata fetch', {
+                        metadataUrl,
+                    });
+
+                    const response = await fetch(metadataUrl, {
+                        method: 'GET',
+                        headers: {
+                            Accept: 'application/json',
+                        },
+                    });
+
+                    if (!response.ok) {
+                        const errorCode =
+                            response.status === 404 || response.status === 410
+                                ? 'METADATA_NOT_SUPPORTED'
+                                : 'METADATA_FETCH_FAILED';
+
+                        lastError = new OAuthDiscoveryError(
+                            `Failed to fetch authorization server metadata: ${response.status} ${response.statusText}`,
+                            errorCode,
+                            {
+                                status: response.status,
+                                statusText: response.statusText,
+                                url: metadataUrl,
+                            }
+                        );
+
+                        this.logger.oauth.debug('Authorization server metadata fetch failed, trying next', {
+                            metadataUrl,
+                            status: response.status,
+                        });
+                        continue;
                     }
-                );
+
+                    const metadata = (await response.json()) as AuthorizationServerMetadata;
+
+                    // Validar metadata
+                    this.validateAuthServerMetadata(metadata, authServerUrl);
+
+                    // Cache metadata
+                    this.saveToCache(this.metadataCache, authServerUrl, metadata);
+
+                    this.logger.oauth.info('Authorization server metadata fetched', {
+                        authServerUrl,
+                        metadataUrl,
+                        authorizationEndpoint: metadata.authorization_endpoint,
+                        tokenEndpoint: metadata.token_endpoint,
+                        hasRegistrationEndpoint: !!metadata.registration_endpoint,
+                    });
+
+                    return metadata;
+                } catch (error) {
+                    if (error instanceof OAuthDiscoveryError) {
+                        lastError = error;
+                    } else {
+                        lastError = new OAuthDiscoveryError(
+                            'Failed to fetch authorization server metadata',
+                            'NETWORK_ERROR',
+                            { error, url: metadataUrl }
+                        );
+                    }
+
+                    this.logger.oauth.debug('Authorization server metadata fetch attempt failed', {
+                        metadataUrl,
+                        error: error instanceof Error ? error.message : error,
+                    });
+                }
             }
 
-            const metadata = (await response.json()) as AuthorizationServerMetadata;
+            // Si llegamos aquí, ninguna URL funcionó
+            if (lastError) {
+                throw lastError;
+            }
 
-            // Validar metadata
-            this.validateAuthServerMetadata(metadata, authServerUrl);
-
-            // Cache metadata
-            this.saveToCache(this.metadataCache, authServerUrl, metadata);
-
-            this.logger.oauth.info('Authorization server metadata fetched', {
-                authServerUrl,
-                authorizationEndpoint: metadata.authorization_endpoint,
-                tokenEndpoint: metadata.token_endpoint,
-                hasRegistrationEndpoint: !!metadata.registration_endpoint,
-            });
-
-            return metadata;
+            throw new OAuthDiscoveryError(
+                'Failed to fetch authorization server metadata from all candidates',
+                'METADATA_FETCH_FAILED',
+                { authServerUrl, metadataUrls }
+            );
         } catch (error) {
             if (error instanceof OAuthDiscoveryError) {
                 throw error;
@@ -544,15 +589,6 @@ export class OAuthDiscoveryService {
     // ========== Private Methods ==========
 
     /**
-     * Construye URL de metadata
-     */
-    private buildMetadataUrl(baseUrl: string, path: string): string {
-        const url = new URL(baseUrl);
-        url.pathname = path;
-        return url.toString();
-    }
-
-    /**
      * Construye las URLs posibles para metadata de protected resource,
      * probando primero la variante path-aware y luego la raíz.
      */
@@ -567,6 +603,31 @@ export class OAuthDiscoveryService {
         }
 
         urls.push(`${origin}${this.PROTECTED_RESOURCE_PATH}`);
+        return urls;
+    }
+
+    /**
+     * Construye las URLs posibles para metadata de authorization server.
+     * Según RFC 8414, debe preservar el path del authorization server.
+     *
+     * Orden de prioridad:
+     * 1. Path preservado + /.well-known/oauth-authorization-server (RFC 8414 correcto)
+     * 2. Origin + /.well-known/oauth-authorization-server (fallback)
+     */
+    private buildAuthServerMetadataUrls(authServerUrl: string): string[] {
+        const parsed = new URL(authServerUrl);
+        const origin = parsed.origin;
+        const normalizedPath = parsed.pathname.replace(/\/$/, '');
+        const urls: string[] = [];
+
+        // 1. RFC 8414: Preservar path + well-known
+        if (normalizedPath && normalizedPath !== '/') {
+            urls.push(`${origin}${normalizedPath}${this.AUTH_SERVER_PATH}`);
+        }
+
+        // 2. Fallback: Origin + well-known (comportamiento actual)
+        urls.push(`${origin}${this.AUTH_SERVER_PATH}`);
+
         return urls;
     }
 

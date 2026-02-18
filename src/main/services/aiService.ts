@@ -42,6 +42,7 @@ export interface ChatStreamChunk {
   delta?: string;
   done?: boolean;
   error?: string;
+  parts?: Array<any>; // Rich content parts for rendering
   sources?: Array<{ url: string; title?: string }>;
   reasoningText?: string;
   reasoningId?: string; // Stable ID for reasoning block reconciliation
@@ -57,13 +58,6 @@ export interface ChatStreamChunk {
     result: any;
     status: "success" | "error";
     timestamp: number;
-  };
-  // Información de aprobación de herramienta (para needsApproval: true)
-  toolApproval?: {
-    approvalId: string;
-    toolCallId: string;
-    toolName: string;
-    input: Record<string, any>;
   };
   generatedAttachment?: {
     type: "image" | "audio" | "video";
@@ -100,74 +94,12 @@ function sanitizeMessagesForModel(messages: UIMessage[]): UIMessage[] {
   // This also cleans circular references and converts to plain objects
   const clonedMessages = JSON.parse(JSON.stringify(messages));
 
-  // DIAGNOSTIC: Log de los mensajes que se van a sanitizar
-  console.log('🧹 [FLOW-11] sanitizeMessagesForModel called', {
-    messageCount: clonedMessages.length,
-    messageRoles: clonedMessages.map((m: any) => m.role),
-  });
-
-  return clonedMessages.map((message: any, msgIndex: number) => {
+  return clonedMessages.map((message: any) => {
     const parts = message.parts;
     if (!Array.isArray(parts)) return message;
 
-    const sanitizedParts = parts.map((part: any, partIndex: number) => {
+    const sanitizedParts = parts.map((part: any) => {
       if (!part) return part;
-
-      // CRITICAL FIX: Asegurar que todas las tool parts tienen input definido
-      // Anthropic requiere que tool_use tenga campo input, aunque esté vacío
-      // Sin esto, obtenemos error 400: "messages.X.content.X.tool_use.input: Field required"
-      if (part.type?.startsWith('tool-') || part.type === 'tool-invocation') {
-        // DIAGNOSTIC: Log detallado de cada tool part
-        console.log(`🧹 [FLOW-12] Sanitizing tool part [msg:${msgIndex}, part:${partIndex}]`, {
-          type: part.type,
-          toolCallId: part.toolCallId,
-          state: part.state,
-          inputBefore: part.input,
-          inputType: typeof part.input,
-          inputKeys: part.input ? Object.keys(part.input) : [],
-          inputWasUndefined: part.input === undefined,
-          inputWasNull: part.input === null,
-        });
-
-        if (part.input === undefined || part.input === null) {
-          console.log(`🧹 [FLOW-12b] Converting undefined/null input to {} for tool part`, {
-            type: part.type,
-            toolCallId: part.toolCallId,
-          });
-          part = { ...part, input: {} };
-        }
-
-        // FIX: Handle denied tool approvals
-        // When a tool is denied by the user, we need to convert it to output-available
-        // with a denial message so that convertToModelMessages generates a proper tool_result
-        // Without this, Anthropic/OpenRouter returns 500 because tool_use lacks tool_result
-        if (part.state === 'approval-responded') {
-          const wasDenied = part.approval?.approved === false;
-
-          console.log(`🧹 [FLOW-12c] Processing approval-responded part`, {
-            type: part.type,
-            toolCallId: part.toolCallId,
-            approved: part.approval?.approved,
-            wasDenied,
-          });
-
-          if (wasDenied) {
-            // Convert to output-available with denial message
-            // This ensures convertToModelMessages generates a tool_result
-            part = {
-              ...part,
-              state: 'output-available',
-              output: 'Tool execution was denied by the user.',
-            };
-
-            console.log(`🧹 [FLOW-12d] Converted denied tool to output-available`, {
-              type: part.type,
-              toolCallId: part.toolCallId,
-              newState: part.state,
-            });
-          }
-        }
-      }
 
       // Remove providerExecuted if null (GitHub Issue #8061)
       // Databases like MongoDB convert undefined to null, causing validation errors
@@ -1066,9 +998,7 @@ export class AIService {
       const builtInTools = await getBuiltInTools(builtInToolsConfig);
 
       if (enableMCP) {
-        // ═══════════════════════════════════════════════════════════════════════════
         // Verificar si el proveedor soporta aprobación de tools
-        // ═══════════════════════════════════════════════════════════════════════════
         const shouldSkipApproval = await this.shouldSkipToolApproval(providerType);
 
         if (shouldSkipApproval) {
@@ -1078,7 +1008,16 @@ export class AIService {
           });
         }
 
-        const mcpTools = await getMCPTools({ skipApproval: shouldSkipApproval });
+        // Get disabled tools from preferences for filtering
+        const { preferencesService } = await import("./preferencesService");
+        await preferencesService.initialize();
+        const prefs = await preferencesService.getAll();
+        const disabledTools = prefs.mcp?.disabledTools;
+
+        const mcpTools = await getMCPTools({
+          skipApproval: shouldSkipApproval,
+          disabledTools
+        });
         tools = { ...builtInTools, ...mcpTools };
         this.logger.aiSdk.debug("Passing tools to streamText", {
           toolCount: Object.keys(tools).length,
@@ -1161,57 +1100,9 @@ export class AIService {
       let firstChunkTime: number | null = null;
       let chunkCount = 0;
 
-      // DIAGNOSTIC: Log full message structure BEFORE conversion to understand tool_use/tool_result ordering
-      const sanitizedMessages = sanitizeMessagesForModel(messagesWithFileParts);
-      console.log('🔍 [FLOW-10] Messages BEFORE convertToModelMessages:', {
-        messageCount: sanitizedMessages.length,
-        messages: sanitizedMessages.map((m: any, idx: number) => ({
-          index: idx,
-          id: m.id,
-          role: m.role,
-          partsCount: m.parts?.length,
-          parts: m.parts?.map((p: any, pIdx: number) => ({
-            partIndex: pIdx,
-            type: p.type,
-            state: p.state,
-            toolCallId: p.toolCallId,
-            toolName: p.toolName,
-            hasInput: !!p.input,
-            inputKeys: p.input ? Object.keys(p.input) : [],
-            hasOutput: !!p.output,
-            outputPreview: p.output ? JSON.stringify(p.output).substring(0, 100) : null,
-            hasApproval: !!p.approval,
-            approvalId: p.approval?.id,
-            approvalApproved: p.approval?.approved,
-          })),
-        })),
-      });
-
-      // Also log the converted messages to compare
-      const convertedMessages = await convertToModelMessages(sanitizedMessages);
-      console.log('🔍 [FLOW-10b] Messages AFTER convertToModelMessages:', {
-        messageCount: convertedMessages.length,
-        messages: convertedMessages.map((m: any, idx: number) => ({
-          index: idx,
-          role: m.role,
-          contentType: Array.isArray(m.content) ? 'array' : typeof m.content,
-          contentLength: Array.isArray(m.content) ? m.content.length : (typeof m.content === 'string' ? m.content.length : null),
-          content: Array.isArray(m.content) ? m.content.map((c: any, cIdx: number) => ({
-            contentIndex: cIdx,
-            type: c.type,
-            toolCallId: c.toolCallId,
-            toolName: c.toolName,
-            hasInput: !!c.input,
-            inputKeys: c.input ? Object.keys(c.input) : [],
-            hasResult: !!c.result,
-            resultPreview: c.result ? JSON.stringify(c.result).substring(0, 100) : null,
-          })) : null,
-        })),
-      });
-
       const result = streamText({
         model: modelProvider,
-        messages: convertedMessages,
+        messages: await convertToModelMessages(sanitizeMessagesForModel(messagesWithFileParts)),
         tools,
         system: await buildSystemPrompt(
           webSearch,
@@ -1278,15 +1169,11 @@ export class AIService {
 
       // Use full stream to handle tool calls
       for await (const chunk of result.fullStream) {
-        // LOG DIAGNÓSTICO: Ver TODOS los tipos de chunk del AI SDK
+        // Log ALL chunks for debugging (except frequent text-delta)
         if (chunk.type !== "text-delta" && chunk.type !== "reasoning-delta") {
-          this.logger.aiSdk.info("📡 AI SDK Stream Chunk", {
-            chunkType: chunk.type,
+          this.logger.aiSdk.debug("🔄 Stream chunk", {
+            type: chunk.type,
             chunkKeys: Object.keys(chunk),
-            // Si es tool-related, incluir más detalles
-            ...(chunk.type.startsWith('tool') && {
-              toolInfo: JSON.stringify(chunk).substring(0, 500),
-            }),
           });
         }
 
@@ -1364,70 +1251,14 @@ export class AIService {
             reasoningBlocks.delete(endId);
             break;
 
-          case "tool-approval-request":
-            // Herramienta con needsApproval: true requiere aprobación del usuario
-            // Type the chunk for better extraction
-            const approvalChunk = chunk as {
-              type: string;
-              approvalId: string;
-              toolCall?: {
-                toolCallId: string;
-                toolName: string;
-                input?: Record<string, unknown>;
-              };
-            };
-
-            // DIAGNOSTIC: Log raw chunk structure to debug input flow
-            this.logger.aiSdk.info("🛡️ [FLOW-3] RAW tool-approval-request chunk from AI SDK", {
-              chunkKeys: Object.keys(chunk),
-              fullChunk: JSON.stringify(chunk, null, 2),
-              hasToolCall: !!approvalChunk.toolCall,
-              toolCallKeys: approvalChunk.toolCall ? Object.keys(approvalChunk.toolCall) : [],
-              inputValue: approvalChunk.toolCall?.input,
-              inputType: typeof approvalChunk.toolCall?.input,
-              inputKeys: approvalChunk.toolCall?.input ? Object.keys(approvalChunk.toolCall.input) : [],
-            });
-
-            // Garantizar que input NUNCA sea undefined - Anthropic requiere este campo
-            const toolInput = approvalChunk.toolCall?.input ?? {};
-
-            this.logger.aiSdk.info("🛡️ [FLOW-4] Yielding toolApproval to frontend", {
-              approvalId: approvalChunk.approvalId,
-              toolCallId: approvalChunk.toolCall?.toolCallId,
-              toolName: approvalChunk.toolCall?.toolName,
-              input: toolInput,
-              inputKeys: Object.keys(toolInput),
-              inputWasUndefined: approvalChunk.toolCall?.input === undefined,
-            });
-
-            yield {
-              toolApproval: {
-                approvalId: approvalChunk.approvalId,
-                toolCallId: approvalChunk.toolCall?.toolCallId ?? '',
-                toolName: approvalChunk.toolCall?.toolName ?? '',
-                input: toolInput,  // Garantizado objeto, nunca undefined
-              },
-            };
-            break;
-
           case "tool-call":
-            // DIAGNOSTIC: Log completo del tool-call chunk para rastrear argumentos
-            this.logger.aiSdk.info("🔧 [FLOW-1] tool-call chunk received", {
+            this.logger.aiSdk.debug("Tool call chunk received", {
               type: chunk.type,
               toolCallId: chunk.toolCallId,
               toolName: chunk.toolName,
               toolNameType: typeof chunk.toolName,
               toolNameLength: chunk.toolName?.length,
-              // Check both 'input' (AI SDK v5) and 'arguments' (legacy)
-              hasInput: !!(chunk as any).input,
-              inputValue: (chunk as any).input,
-              inputType: typeof (chunk as any).input,
-              inputKeys: (chunk as any).input ? Object.keys((chunk as any).input) : [],
               hasArguments: !!(chunk as any).arguments,
-              argumentsValue: (chunk as any).arguments,
-              argumentsType: typeof (chunk as any).arguments,
-              argumentsKeys: (chunk as any).arguments ? Object.keys((chunk as any).arguments) : [],
-              fullChunkKeys: Object.keys(chunk),
             });
 
             // Debug: Check if tool name is empty
@@ -1448,22 +1279,11 @@ export class AIService {
               continue;
             }
 
-            // AI SDK v5 uses 'input', but check 'arguments' for backwards compatibility
-            const toolCallArguments = (chunk as any).input || (chunk as any).arguments || {};
-            this.logger.aiSdk.info("🔧 [FLOW-2] Yielding toolCall to frontend", {
-              toolCallId: chunk.toolCallId,
-              toolName: chunk.toolName,
-              arguments: toolCallArguments,
-              argumentsKeys: Object.keys(toolCallArguments),
-              // Debug: Show which source was used
-              sourceUsed: (chunk as any).input ? 'input' : ((chunk as any).arguments ? 'arguments' : 'empty'),
-            });
-
             yield {
               toolCall: {
                 id: chunk.toolCallId,
                 name: chunk.toolName,
-                arguments: toolCallArguments,
+                arguments: (chunk as any).arguments || {},
                 status: "running" as const,
                 timestamp: Date.now(),
               },
@@ -1602,6 +1422,16 @@ export class AIService {
         };
       } else {
         this.logger.aiSdk.debug("No reasoning found in finishData");
+      }
+
+      // Extract response parts for rich rendering (mini-chat, etc.)
+      const responseParts = (result as any).response?.messages?.[0]?.content;
+      if (responseParts && Array.isArray(responseParts)) {
+        this.logger.aiSdk.debug("📦 Sending response parts", {
+          partsCount: responseParts.length,
+          partTypes: responseParts.map((p: any) => p.type),
+        });
+        yield { parts: responseParts };
       }
 
       yield { done: true };
@@ -2012,7 +1842,13 @@ export class AIService {
       // Get MCP tools if enabled
       let tools = {};
       if (enableMCP) {
-        tools = await getMCPTools();
+        // Get disabled tools from preferences for filtering
+        const { preferencesService } = await import("./preferencesService");
+        await preferencesService.initialize();
+        const prefs = await preferencesService.getAll();
+        const disabledTools = prefs.mcp?.disabledTools;
+
+        tools = await getMCPTools(disabledTools);
       }
 
       // Get built-in tools config for system prompt

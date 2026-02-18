@@ -8,7 +8,10 @@ export default defineConfig({
   build: {
     outDir: path.resolve(__dirname, '.vite/renderer/main_window'),
     rollupOptions: {
-      input: path.resolve(__dirname, 'src/renderer/index.html')
+      input: {
+        main: path.resolve(__dirname, 'src/renderer/index.html'),
+        'mini-chat': path.resolve(__dirname, 'src/renderer/mini-chat.html')
+      }
     }
   },
   resolve: {

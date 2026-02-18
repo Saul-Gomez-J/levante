@@ -21,6 +21,12 @@ vi.mock('../../logging', () => ({
             warn: vi.fn(),
             error: vi.fn(),
         },
+        oauth: {
+            info: vi.fn(),
+            debug: vi.fn(),
+            warn: vi.fn(),
+            error: vi.fn(),
+        },
     }),
 }));
 
@@ -424,11 +430,6 @@ describe('OAuthDiscoveryService', () => {
         it('should use as_uri from WWW-Authenticate header', async () => {
             const wwwAuth = 'Bearer as_uri="https://custom-auth.example.com"';
 
-            const resourceMetadata: ProtectedResourceMetadata = {
-                resource: 'https://mcp.example.com',
-                authorization_servers: ['https://auth.example.com'],
-            };
-
             const serverMetadata: AuthorizationServerMetadata = {
                 issuer: 'https://custom-auth.example.com',
                 authorization_endpoint: 'https://custom-auth.example.com/authorize',
@@ -437,16 +438,12 @@ describe('OAuthDiscoveryService', () => {
                 code_challenge_methods_supported: ['S256'],
             };
 
-            global.fetch = vi
-                .fn()
-                .mockResolvedValueOnce({
-                    ok: true,
-                    json: async () => resourceMetadata,
-                })
-                .mockResolvedValueOnce({
-                    ok: true,
-                    json: async () => serverMetadata,
-                });
+            // Cuando hay as_uri, NO se hace discovery de protected resource,
+            // se va directo a fetchServerMetadata
+            global.fetch = vi.fn().mockResolvedValue({
+                ok: true,
+                json: async () => serverMetadata,
+            });
 
             const result = await discoveryService.discoverFromUnauthorized(
                 'https://mcp.example.com',
@@ -459,20 +456,18 @@ describe('OAuthDiscoveryService', () => {
             );
         });
 
-        it('should throw error if no authorization server found', async () => {
-            const resourceMetadata: ProtectedResourceMetadata = {
-                resource: 'https://mcp.example.com',
-                authorization_servers: [], // Array vacío
-            };
-
+        it('should fallback to origin and fail if no metadata available anywhere', async () => {
+            // Simular que tanto el protected resource como el fallback al origin fallan
             global.fetch = vi.fn().mockResolvedValue({
-                ok: true,
-                json: async () => resourceMetadata,
+                ok: false,
+                status: 404,
+                statusText: 'Not Found',
             });
 
+            // Cuando todos los intentos de discovery fallan, debe lanzar error
             await expect(
                 discoveryService.discoverFromUnauthorized('https://mcp.example.com')
-            ).rejects.toThrow('missing or invalid "authorization_servers"');
+            ).rejects.toThrow('Failed to fetch authorization server metadata');
         });
     });
 
@@ -604,10 +599,11 @@ describe('OAuthDiscoveryService', () => {
         });
 
         it('should throw error if registration fails', async () => {
+            // El código usa response.text() primero, luego JSON.parse
             global.fetch = vi.fn().mockResolvedValue({
                 ok: false,
                 status: 400,
-                json: async () => ({
+                text: async () => JSON.stringify({
                     error: 'invalid_redirect_uri',
                     error_description: 'Invalid redirect URI',
                 }),

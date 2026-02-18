@@ -1,0 +1,653 @@
+/**
+ * Mini Chat Styles
+ * 
+ * Styles for the floating mini-chat window.
+ * Designed for a clean, Spotlight-like appearance.
+ */
+
+/* Root body styles for mini-chat window */
+.mini-chat-body {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  overflow: hidden;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+}
+
+/* Page wrapper */
+.mini-chat-page {
+  width: 100%;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Main container */
+.mini-chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  box-shadow: 
+    0 25px 50px -12px rgba(0, 0, 0, 0.25),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+  .mini-chat-container {
+    background: rgba(30, 30, 30, 0.95);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Header */
+.mini-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  -webkit-app-region: drag;
+  user-select: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mini-chat-header {
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.mini-chat-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  -webkit-app-region: no-drag;
+}
+
+.mini-chat-header-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  -webkit-app-region: no-drag;
+}
+
+.mini-chat-model-select {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.03);
+  font-size: 13px;
+  color: inherit;
+  cursor: pointer;
+  outline: none;
+  max-width: 200px;
+}
+
+.mini-chat-model-select:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.mini-chat-model-select:focus {
+  border-color: #007AFF;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mini-chat-model-select {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.05);
+    color: #ffffff;
+  }
+  
+  .mini-chat-model-select:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .mini-chat-model-select option {
+    background: #1e1e1e;
+    color: #ffffff;
+  }
+}
+
+.mini-chat-header-btn {
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.mini-chat-header-btn:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mini-chat-header-btn {
+    color: #ffffff;
+  }
+
+  .mini-chat-header-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Error message */
+.mini-chat-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: rgba(255, 59, 48, 0.1);
+  color: #FF3B30;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255, 59, 48, 0.2);
+}
+
+/* Messages area */
+.mini-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  -webkit-app-region: no-drag;
+}
+
+/* Message bubble */
+.mini-chat-message {
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.mini-chat-message.user {
+  align-self: flex-end;
+  background: #007AFF;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.mini-chat-message.assistant {
+  align-self: flex-start;
+  background: rgba(0, 0, 0, 0.05);
+  color: inherit;
+  border-bottom-left-radius: 4px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mini-chat-message.assistant {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+}
+
+.mini-chat-message.streaming {
+  opacity: 0.9;
+}
+
+.mini-chat-cursor {
+  animation: blink 1s step-end infinite;
+  margin-left: 2px;
+  opacity: 0.7;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
+
+/* Rich Content Rendering */
+.mini-chat-response {
+  font-size: 14px;
+  line-height: 1.5;
+  padding: 0;
+  margin: 0;
+}
+
+/* Constrain code blocks within bubbles */
+.mini-chat-message pre {
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 12px;
+  margin: 8px 0;
+  border-radius: 8px;
+}
+
+/* Scale down mermaid diagrams */
+.mini-chat-message .mermaid-container {
+  max-height: 300px;
+  overflow: auto;
+  margin: 8px 0;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.02);
+  border-radius: 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mini-chat-message .mermaid-container {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
+/* Tool call compact display */
+.mini-chat-tool-call {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  margin: 6px 0;
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 8px;
+  font-size: 13px;
+  transition: background 0.15s, transform 0.1s, border-color 0.15s;
+  user-select: none;
+}
+
+/* Clickeable tool calls */
+.mini-chat-tool-call[role="button"] {
+  cursor: pointer;
+}
+
+.mini-chat-tool-call[role="button"]:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+.mini-chat-tool-call[role="button"]:active {
+  transform: scale(0.98);
+  background: rgba(0, 0, 0, 0.1);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mini-chat-tool-call {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .mini-chat-tool-call[role="button"]:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+
+  .mini-chat-tool-call[role="button"]:active {
+    background: rgba(255, 255, 255, 0.15);
+  }
+}
+
+/* Markdown elements in bubbles */
+.mini-chat-message h1,
+.mini-chat-message h2,
+.mini-chat-message h3 {
+  font-size: 1em;
+  font-weight: 600;
+  margin: 0.5em 0;
+}
+
+.mini-chat-message ul,
+.mini-chat-message ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.mini-chat-message blockquote {
+  border-left: 3px solid rgba(0, 0, 0, 0.1);
+  padding-left: 12px;
+  margin: 8px 0;
+  opacity: 0.8;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mini-chat-message blockquote {
+    border-left-color: rgba(255, 255, 255, 0.2);
+  }
+}
+
+.mini-chat-message code:not(pre code) {
+  background: rgba(0, 0, 0, 0.08);
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-size: 0.9em;
+  font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mini-chat-message code:not(pre code) {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.mini-chat-message table {
+  font-size: 12px;
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0;
+}
+
+.mini-chat-message table th,
+.mini-chat-message table td {
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 4px 8px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mini-chat-message table th,
+  .mini-chat-message table td {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.mini-chat-message a {
+  color: #007AFF;
+  text-decoration: none;
+}
+
+.mini-chat-message a:hover {
+  text-decoration: underline;
+}
+
+/* Input area */
+.mini-chat-input-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 12px 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+  -webkit-app-region: no-drag;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mini-chat-input-container {
+    border-top-color: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.mini-chat-input {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 20px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  background: rgba(0, 0, 0, 0.03);
+  color: inherit;
+  resize: none;
+  max-height: 100px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.mini-chat-input::placeholder {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.mini-chat-input:focus {
+  border-color: #007AFF;
+  background: white;
+}
+
+@media (prefers-color-scheme: dark) {
+  .mini-chat-input {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+  
+  .mini-chat-input::placeholder {
+    color: rgba(255, 255, 255, 0.4);
+  }
+  
+  .mini-chat-input:focus {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+  }
+}
+
+.mini-chat-send-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 50%;
+  background: #007AFF;
+  color: white;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s, transform 0.15s;
+  flex-shrink: 0;
+}
+
+.mini-chat-send-btn:hover:not(:disabled) {
+  transform: scale(1.05);
+}
+
+.mini-chat-send-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.mini-chat-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Spinner for loading state */
+.mini-chat-spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Streaming indicator */
+.streaming-indicator {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px 0;
+}
+
+.streaming-indicator .dot {
+  width: 6px;
+  height: 6px;
+  background: #007AFF;
+  border-radius: 50%;
+  animation: pulse 1.4s infinite ease-in-out;
+}
+
+.streaming-indicator .dot:nth-child(1) { animation-delay: 0s; }
+.streaming-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
+.streaming-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes pulse {
+  0%, 80%, 100% { 
+    transform: scale(0.6); 
+    opacity: 0.5; 
+  }
+  40% { 
+    transform: scale(1); 
+    opacity: 1; 
+  }
+}
+
+/* Scrollbar styling */
+.mini-chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.mini-chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mini-chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 3px;
+}
+
+.mini-chat-messages::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+@media (prefers-color-scheme: dark) {
+  .mini-chat-messages::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  .mini-chat-messages::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+}
+
+/* ModelSearchableSelect in mini-chat context */
+.mini-chat-header-left .mini-chat-model-select-wrapper {
+  max-width: 200px;
+}
+
+.mini-chat-header-left .mini-chat-model-select-wrapper button {
+  padding: 6px 10px;
+  font-size: 13px;
+  border-radius: 6px;
+  height: auto;
+  min-height: 32px;
+}
+
+/* Ensure popover doesn't get clipped by mini-chat window */
+.mini-chat-container [data-radix-popper-content-wrapper] {
+  z-index: 9999 !important;
+}
+
+/* Adjust colors for dark mode */
+@media (prefers-color-scheme: dark) {
+  .mini-chat-header-left .mini-chat-model-select-wrapper button {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #ffffff;
+  }
+
+  .mini-chat-header-left .mini-chat-model-select-wrapper button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #ffffff !important;
+  }
+}
+
+/* Portal custom para popover del mini-chat */
+#mini-chat-popover-portal {
+  position: fixed !important;
+  pointer-events: none;
+  z-index: 99999 !important;
+}
+
+/* Permitir clicks en el contenido del popover */
+#mini-chat-popover-portal > * {
+  pointer-events: auto;
+}
+
+/* Dark mode styles for the portal and all its content */
+#mini-chat-popover-portal.dark [role="dialog"],
+#mini-chat-popover-portal.dark [data-radix-popper-content-wrapper],
+.dark #mini-chat-popover-portal [role="dialog"],
+.dark #mini-chat-popover-portal [data-radix-popper-content-wrapper] {
+  color-scheme: dark;
+}
+
+/* Ensure Command component is dark in dark mode */
+#mini-chat-popover-portal.dark [cmdk-root],
+.dark #mini-chat-popover-portal [cmdk-root] {
+  background-color: hsl(0 0% 15.3%) !important;
+  color: hsl(0 0% 88%) !important;
+}
+
+/* Command input dark mode */
+#mini-chat-popover-portal.dark [cmdk-input],
+.dark #mini-chat-popover-portal [cmdk-input] {
+  background-color: transparent !important;
+  color: hsl(0 0% 88%) !important;
+  border-color: hsl(0 0% 30%) !important;
+}
+
+#mini-chat-popover-portal.dark [cmdk-input]::placeholder,
+.dark #mini-chat-popover-portal [cmdk-input]::placeholder {
+  color: hsl(0 0% 65%) !important;
+}
+
+/* Command items dark mode */
+#mini-chat-popover-portal.dark [cmdk-item],
+.dark #mini-chat-popover-portal [cmdk-item] {
+  color: hsl(0 0% 88%) !important;
+}
+
+#mini-chat-popover-portal.dark [cmdk-item][aria-selected="true"],
+.dark #mini-chat-popover-portal [cmdk-item][aria-selected="true"] {
+  background-color: hsl(0 0% 18.4%) !important;
+  color: hsl(0 0% 88%) !important;
+}
+
+/* Command group labels dark mode */
+#mini-chat-popover-portal.dark [cmdk-group-heading],
+.dark #mini-chat-popover-portal [cmdk-group-heading] {
+  color: hsl(0 0% 88%) !important;
+}
+
+/* Command empty state dark mode */
+#mini-chat-popover-portal.dark [cmdk-empty],
+.dark #mini-chat-popover-portal [cmdk-empty] {
+  color: hsl(0 0% 65%) !important;
+}
+
+/* Dropdown menu dark mode */
+#mini-chat-popover-portal.dark [role="menu"],
+.dark #mini-chat-popover-portal [role="menu"] {
+  background-color: hsl(0 0% 15.3%) !important;
+  color: hsl(0 0% 88%) !important;
+  border-color: hsl(0 0% 30%) !important;
+}
+
+#mini-chat-popover-portal.dark [role="menuitem"],
+.dark #mini-chat-popover-portal [role="menuitem"] {
+  color: hsl(0 0% 88%) !important;
+}
+
+#mini-chat-popover-portal.dark [role="menuitem"]:hover,
+.dark #mini-chat-popover-portal [role="menuitem"]:hover {
+  background-color: hsl(0 0% 18.4%) !important;
+}
+
+/* Muted text in dark mode */
+#mini-chat-popover-portal.dark .text-muted-foreground,
+.dark #mini-chat-popover-portal .text-muted-foreground {
+  color: hsl(0 0% 65%) !important;
+}
+
+/* Buttons in popover dark mode */
+#mini-chat-popover-portal.dark button,
+.dark #mini-chat-popover-portal button {
+  color: hsl(0 0% 88%) !important;
+}
+
+/* Borders in dark mode */
+#mini-chat-popover-portal.dark [class*="border"],
+.dark #mini-chat-popover-portal [class*="border"] {
+  border-color: hsl(0 0% 30%) !important;
+}

@@ -21,4 +21,8 @@ export const modelsApi = {
     ipcRenderer.invoke('levante/models/huggingface', apiKey),
   validateHuggingFaceModel: (modelId: string, inferenceProvider: string) =>
     ipcRenderer.invoke('levante/models/huggingface/validate', modelId, inferenceProvider),
+  // Levante Platform uses OAuth tokens instead of API keys
+  // baseUrl is optional - defaults to https://platform.levante.ai
+  fetchLevantePlatform: (baseUrl?: string) =>
+    ipcRenderer.invoke('levante/models/levante-platform', baseUrl),
 };

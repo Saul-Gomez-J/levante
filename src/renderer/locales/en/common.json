@@ -34,7 +34,8 @@
     "settings": "Settings",
     "mcp": "MCP Store",
     "active_mcps": "Active MCPs",
-    "inference": "Inference"
+    "inference": "Inference",
+    "logs": "Logs"
   },
   "status": {
     "loading": "Loading...",

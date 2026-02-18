@@ -132,5 +132,7 @@ export async function registerIPCHandlers(getMainWindow: () => BrowserWindow | n
   setupWidgetHandlers();
   setupAnnouncementHandlers();
 
+  // Note: Log viewer handlers are registered separately in main.ts after window creation
+
   logger.core.info("All IPC handlers registered successfully");
 }

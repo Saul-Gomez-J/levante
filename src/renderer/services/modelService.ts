@@ -11,6 +11,7 @@ import { fetchAnthropicModels } from './model/providers/anthropicProvider';
 import { fetchGroqModels } from './model/providers/groqProvider';
 import { fetchXAIModels } from './model/providers/xAIProvider';
 import { fetchHuggingFaceModels } from './model/providers/huggingfaceProvider';
+import { fetchLevantePlatformModels } from './model/providers/levanteProvider';
 import { classifyModel, getCompatibleCategories, type ModelClassification } from '../../utils/modelClassification';
 
 const logger = getRendererLogger();
@@ -64,6 +65,9 @@ class ModelServiceImpl {
       // Set default providers if none exist
       if (this.providers.length === 0) {
         await this.initializeDefaultProviders();
+      } else {
+        // Add any new providers that don't exist yet (for existing users)
+        await this.addMissingProviders();
       }
 
       this.isInitialized = true;
@@ -86,6 +90,16 @@ class ModelServiceImpl {
         isActive: false,
         settings: {},
         modelSource: 'dynamic'
+      },
+      {
+        id: 'levante-platform',
+        name: 'Levante Platform',
+        type: 'levante-platform',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'dynamic',
+        baseUrl: 'http://localhost:3000'
       },
       {
         id: 'vercel-gateway',
@@ -170,6 +184,128 @@ class ModelServiceImpl {
     await this.saveProviders();
   }
 
+  // Get default providers list (used for initialization and migration)
+  private getDefaultProviders(): ProviderConfig[] {
+    return [
+      {
+        id: 'openrouter',
+        name: 'OpenRouter',
+        type: 'openrouter',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'dynamic'
+      },
+      {
+        id: 'levante-platform',
+        name: 'Levante Platform',
+        type: 'levante-platform',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'dynamic',
+        baseUrl: 'https://platform.levante.ai'
+      },
+      {
+        id: 'vercel-gateway',
+        name: 'Vercel AI Gateway',
+        type: 'vercel-gateway',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'dynamic',
+        baseUrl: 'https://ai-gateway.vercel.sh/v1'
+      },
+      {
+        id: 'local',
+        name: 'Local Provider',
+        type: 'local',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'user-defined'
+      },
+      {
+        id: 'openai',
+        name: 'OpenAI',
+        type: 'openai',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'dynamic'
+      },
+      {
+        id: 'anthropic',
+        name: 'Anthropic',
+        type: 'anthropic',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'dynamic'
+      },
+      {
+        id: 'google',
+        name: 'Google AI',
+        type: 'google',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'dynamic'
+      },
+      {
+        id: 'groq',
+        name: 'Groq',
+        type: 'groq',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'dynamic',
+        baseUrl: 'https://api.groq.com/openai/v1'
+      },
+      {
+        id: 'xai',
+        name: 'xAI',
+        type: 'xai',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'dynamic',
+        baseUrl: 'https://api.x.ai/v1'
+      },
+      {
+        id: 'huggingface',
+        name: 'Hugging Face',
+        type: 'huggingface',
+        models: [],
+        isActive: false,
+        settings: {},
+        modelSource: 'dynamic',
+        baseUrl: 'https://router.huggingface.co/v1'
+      }
+    ];
+  }
+
+  // Add any new providers that exist in defaults but not in user's saved providers
+  private async addMissingProviders(): Promise<void> {
+    const defaultProviders = this.getDefaultProviders();
+    const existingIds = new Set(this.providers.map(p => p.id));
+
+    const missingProviders = defaultProviders.filter(p => !existingIds.has(p.id));
+
+    if (missingProviders.length > 0) {
+      logger.models.info('Adding missing providers', {
+        providers: missingProviders.map(p => p.id)
+      });
+
+      // Add missing providers after OpenRouter (position 1)
+      const openrouterIndex = this.providers.findIndex(p => p.id === 'openrouter');
+      const insertIndex = openrouterIndex >= 0 ? openrouterIndex + 1 : 0;
+
+      this.providers.splice(insertIndex, 0, ...missingProviders);
+      await this.saveProviders();
+    }
+  }
+
   // Get active provider
   async getActiveProvider(): Promise<ProviderConfig | null> {
     if (!this.activeProviderId) return null;
@@ -228,8 +364,8 @@ class ModelServiceImpl {
     // Only sync providers that have API keys configured to avoid empty results
     const now = Date.now();
     this.providers.forEach(provider => {
-      // Skip providers without API key (except openrouter which works without key)
-      const hasCredentials = provider.apiKey || provider.type === 'openrouter';
+      // Skip providers without API key (except openrouter which works without key, and levante-platform which uses OAuth)
+      const hasCredentials = provider.apiKey || provider.type === 'openrouter' || provider.type === 'levante-platform';
 
       if (provider.modelSource === 'dynamic' &&
         hasCredentials &&
@@ -413,6 +549,12 @@ class ModelServiceImpl {
       switch (provider.type) {
         case 'openrouter':
           models = await fetchOpenRouterModels(provider.apiKey);
+          break;
+        case 'levante-platform':
+          // Levante Platform uses OAuth tokens, not API keys
+          // The fetch function will get the token from the OAuth store
+          // Pass baseUrl for local development override
+          models = await fetchLevantePlatformModels(provider.baseUrl);
           break;
         case 'vercel-gateway':
           if (provider.apiKey && provider.baseUrl) {

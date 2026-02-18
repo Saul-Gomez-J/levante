@@ -116,6 +116,15 @@ export function useFileAttachments(options: UseFileAttachmentsOptions = {}): Use
   // Always enabled - hybrid PDF support and validation happens at processing time
   const supportsFileAttachment = true;
 
+  // Debug logging
+  logger.core.debug('File attachment support check', {
+    supportsFileAttachment,
+    modelTaskType,
+    hasModelCapabilities: !!modelCapabilities,
+    supportsVision: modelCapabilities?.supportsVision,
+    isStreaming,
+  });
+
   // Get allowed MIME types based on current model task type
   const getAllowedMimeTypes = useCallback((): string[] => {
     switch (modelTaskType) {

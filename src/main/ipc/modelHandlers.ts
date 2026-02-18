@@ -167,6 +167,24 @@ export function setupModelHandlers() {
     }
   });
 
+  // Fetch Levante Platform models (uses OAuth tokens)
+  ipcMain.removeHandler('levante/models/levante-platform');
+  ipcMain.handle('levante/models/levante-platform', async (_, baseUrl?: string) => {
+    try {
+      const models = await ModelFetchService.fetchLevantePlatformModels(baseUrl);
+      return {
+        success: true,
+        data: models
+      };
+    } catch (error) {
+      logger.ipc.error('Failed to fetch Levante Platform models', { error: error instanceof Error ? error.message : error });
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  });
+
   // Validate Hugging Face model (fetch model info from HF API)
   ipcMain.removeHandler('levante/models/huggingface/validate');
   ipcMain.handle('levante/models/huggingface/validate', async (_, modelId: string, inferenceProvider?: string) => {

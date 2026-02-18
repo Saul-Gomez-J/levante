@@ -1,0 +1,18 @@
+{
+  "controls": {
+    "start_watching": "Start Watching",
+    "stop_watching": "Stop Watching"
+  },
+  "filters": {
+    "categories": "Categories",
+    "levels": "Levels",
+    "search": "Search logs...",
+    "clear": "Clear Logs",
+    "auto_scroll": "Auto Scroll"
+  },
+  "status": {
+    "watching": "Watching logs",
+    "stopped": "Stopped",
+    "loading": "Loading logs..."
+  }
+}

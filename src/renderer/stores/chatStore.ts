@@ -153,12 +153,12 @@ export const useChatStore = create<ChatStore>()(
             console.error('[ChatStore] Failed to create session:', {
               error: result.error,
               success: result.success,
-              hasData: !!result.data,
-              fullResult: result
+              hasData: !!result.data
             });
             logger.database.error('Failed to create session', {
               error: result.error,
-              result
+              success: result.success,
+              hasData: !!result.data
             });
             set({
               error: result.error || 'Failed to create session',
@@ -472,19 +472,34 @@ export const useChatStore = create<ChatStore>()(
                   : 0;
 
               if (userMessageCount === 1) {
-                logger.database.debug('Generating title for first message');
+                logger.database.debug('Generating title for first message (non-blocking)');
 
                 // Track conversation creation (fire and forget)
                 window.levante.analytics?.trackConversation?.().catch(() => { });
 
-                const titleResult = await window.levante.db.generateTitle(content);
+                // Generate title in background (non-blocking)
+                // This prevents the title generation from delaying the message persistence
+                (async () => {
+                  try {
+                    const titleResult = await window.levante.db.generateTitle(content);
 
-                if (titleResult.success && titleResult.data) {
-                  await get().updateSessionTitle(
-                    currentSession.id,
-                    titleResult.data
-                  );
-                }
+                    if (titleResult.success && titleResult.data) {
+                      await get().updateSessionTitle(
+                        currentSession.id,
+                        titleResult.data
+                      );
+                      logger.database.info('Title generated and updated in background', {
+                        sessionId: currentSession.id,
+                        title: titleResult.data,
+                      });
+                    }
+                  } catch (error) {
+                    logger.database.error('Failed to generate title in background', {
+                      sessionId: currentSession.id,
+                      error: error instanceof Error ? error.message : error,
+                    });
+                  }
+                })();
               }
             }
           } else {

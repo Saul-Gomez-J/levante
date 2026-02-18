@@ -13,7 +13,7 @@ import {
   SidebarTrigger,
   useSidebar
 } from '@/components/ui/sidebar'
-import { MessageSquare, Settings, User, Bot, Store, Plus, PanelLeftClose, PanelLeft } from 'lucide-react'
+import { MessageSquare, Settings, User, Bot, Store, Plus, PanelLeftClose, PanelLeft, FileText } from 'lucide-react'
 import { getRendererLogger } from '@/services/logger'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
@@ -29,10 +29,11 @@ interface MainLayoutProps {
   onPageChange?: (page: string) => void
   sidebarContent?: React.ReactNode // Custom sidebar content for specific pages
   onNewChat?: () => void // Callback for New Chat button
+  developerMode?: boolean // Show developer-only features
 }
 
 // Inner component that has access to useSidebar
-function MainLayoutContent({ children, title, currentPage, onPageChange, sidebarContent, onNewChat, version, platform }: MainLayoutProps & { version: string; platform: string }) {
+function MainLayoutContent({ children, title, currentPage, onPageChange, sidebarContent, onNewChat, developerMode, version, platform }: MainLayoutProps & { version: string; platform: string }) {
   const { open } = useSidebar()
   const { t } = useTranslation('common')
 
@@ -113,6 +114,17 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
               {t('navigation.settings')}
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {developerMode && (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={() => onPageChange?.('logs')}
+                isActive={currentPage === 'logs'}
+              >
+                <FileText className="w-4 h-4" />
+                {t('navigation.logs')}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
           <div className="border-t pt-2 px-2">
             <Button
@@ -171,7 +183,7 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
   )
 }
 
-export function MainLayout({ children, title = 'Chat', currentPage = 'chat', onPageChange, sidebarContent, onNewChat }: MainLayoutProps) {
+export function MainLayout({ children, title = 'Chat', currentPage = 'chat', onPageChange, sidebarContent, onNewChat, developerMode }: MainLayoutProps) {
   const [version, setVersion] = useState<string>('')
   const [platform, setPlatform] = useState<string>('')
 
@@ -199,6 +211,7 @@ export function MainLayout({ children, title = 'Chat', currentPage = 'chat', onP
         onPageChange={onPageChange}
         sidebarContent={sidebarContent}
         onNewChat={onNewChat}
+        developerMode={developerMode}
         version={version}
         platform={platform}
       />

@@ -8,7 +8,7 @@
 import { tool, jsonSchema } from "ai";
 import { mcpService, configManager } from "../../ipc/mcpHandlers";
 import { mcpHealthService } from "../mcpHealthService";
-import type { Tool } from "../../types/mcp";
+import type { Tool, DisabledTools } from "../../types/mcp";
 import { getLogger } from "../logging";
 
 // Import from modules
@@ -32,6 +32,11 @@ export interface GetMCPToolsOptions {
    * Default: false (las herramientas requieren aprobación)
    */
   skipApproval?: boolean;
+  /**
+   * Object mapping serverId to array of disabled tool names.
+   * Tools in this list will be filtered out.
+   */
+  disabledTools?: DisabledTools;
 }
 
 /**
@@ -50,9 +55,10 @@ interface CreateAISDKToolOptions {
  *
  * @param options - Configuration options
  * @param options.skipApproval - If true, tools won't require user approval
+ * @param options.disabledTools - Optional object mapping serverId to array of disabled tool names
  */
 export async function getMCPTools(options: GetMCPToolsOptions = {}): Promise<Record<string, any>> {
-  const { skipApproval = false } = options;
+  const { skipApproval = false, disabledTools } = options;
   const startTime = Date.now();
 
   try {
@@ -132,16 +138,29 @@ export async function getMCPTools(options: GetMCPToolsOptions = {}): Promise<Rec
     });
 
     // PHASE 3: Convert tools to AI SDK format
+    let skippedDisabledCount = 0;
+
     for (const result of toolsResults) {
       if (result.status !== "fulfilled" || !result.value.success) continue;
 
       const { serverId, tools: serverTools } = result.value;
+      const serverDisabledTools = disabledTools?.[serverId] || [];
 
       for (const mcpTool of serverTools) {
         if (!mcpTool.name || mcpTool.name.trim() === "") {
           logger.aiSdk.error("Invalid tool name from server", {
             serverId,
             tool: mcpTool,
+          });
+          continue;
+        }
+
+        // Skip disabled tools
+        if (serverDisabledTools.includes(mcpTool.name)) {
+          skippedDisabledCount++;
+          logger.aiSdk.debug("Skipping disabled tool", {
+            serverId,
+            toolName: mcpTool.name,
           });
           continue;
         }
@@ -178,13 +197,14 @@ export async function getMCPTools(options: GetMCPToolsOptions = {}): Promise<Rec
     }
 
     // Log summary
-    const disabledCount = Object.keys(config.disabled || {}).length;
+    const disabledServersCount = Object.keys(config.disabled || {}).length;
     const totalDuration = Date.now() - startTime;
 
     logger.aiSdk.info("MCP tools loading complete", {
       totalCount: Object.keys(allTools).length,
       activeServers: serverEntries.length,
-      disabledServers: disabledCount,
+      disabledServers: disabledServersCount,
+      disabledTools: skippedDisabledCount,
       durationMs: totalDuration,
       toolNames: Object.keys(allTools),
       needsApproval: !skipApproval,
@@ -266,37 +286,22 @@ function createAISDKTool(
     description: mcpTool.description || `Tool from MCP server ${serverId}`,
     inputSchema: inputSchema,
 
-    // ═══════════════════════════════════════════════════════
     // Aprobación de herramientas: configurable por proveedor
     // Si skipApproval=true, needsApproval=false (sin aprobación)
     // Si skipApproval=false, needsApproval=true (requiere aprobación)
-    // ═══════════════════════════════════════════════════════
     needsApproval: !skipApproval,
 
     execute: async (args: any) => {
       try {
-        // DIAGNOSTIC: Log detallado de los args que recibe execute
-        // Este es el punto crítico donde los argumentos deben llegar correctamente
-        logger.aiSdk.info("🔧 [FLOW-9] MCP Tool execute() called", {
+        logger.aiSdk.debug("Executing MCP tool", {
           serverId,
           toolName: mcpTool.name,
           args,
-          argsType: typeof args,
-          argsKeys: args ? Object.keys(args) : [],
-          argsStringified: JSON.stringify(args),
-          argsIsEmpty: args && Object.keys(args).length === 0,
         });
 
         const result = await mcpService.callTool(serverId, {
           name: mcpTool.name,
           arguments: args,
-        });
-
-        logger.aiSdk.info("🔧 [FLOW-10] MCP Tool callTool completed", {
-          serverId,
-          toolName: mcpTool.name,
-          hasResult: !!result,
-          isError: result?.isError,
         });
 
         logger.aiSdk.debug("[AI-SDK] Raw MCP tool result", {
@@ -435,13 +440,10 @@ function createAISDKTool(
     },
   });
 
-  // LOG DIAGNÓSTICO: Confirmar configuración de aprobación
-  logger.aiSdk.info("🔧 Created AI SDK tool", {
+  logger.aiSdk.debug("Successfully created AI SDK tool", {
     serverId,
     toolName: mcpTool.name,
     needsApproval: !skipApproval,
-    skipApproval: skipApproval,
-    toolKeys: Object.keys(aiTool),
   });
 
   return aiTool;
