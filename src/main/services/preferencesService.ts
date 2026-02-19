@@ -218,6 +218,10 @@ export class PreferencesService {
           coworkMode: {
             type: 'boolean',
             default: false
+          },
+          coworkModeCwd: {
+            type: ['string', 'null'],
+            default: null
           }
         }
       });

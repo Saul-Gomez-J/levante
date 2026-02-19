@@ -70,7 +70,22 @@
     "mcp_tools": {
       "label": "Tools (MCP)",
       "keywords": ["tools", "herramientas", "mcp"]
-    }
+    },
+    "cowork": {
+      "label": "Cowork",
+      "active": "active",
+      "tooltip": "Cowork mode enabled - AI can execute code tools",
+      "no_directory": "Click to select working directory",
+      "select_directory_title": "Select Working Directory",
+      "select_button": "Select",
+      "click_to_select": "Click to select directory",
+      "select_directory_hint": "Select a directory for coding tools",
+      "missing_directory_warning": "Cowork is enabled but no working directory is selected. Coding tools are disabled."
+    },
+    "enabled": "Enabled",
+    "no_enabled_servers": "No enabled servers",
+    "disabled_servers_info": "Toggle to enable",
+    "no_disabled_servers": "No disabled servers"
   },
   "paid_model_chat_warning": {
     "title": "Paid Model Notice",

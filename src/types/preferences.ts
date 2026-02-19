@@ -91,6 +91,8 @@ export interface UIPreferences {
   enableMCP: boolean;
   /** Enable Cowork mode (coding tools) in chat */
   coworkMode: boolean;
+  /** Working directory for Cowork mode (coding tools) */
+  coworkModeCwd: string | null;
 }
 
 export type PreferenceKey = keyof UIPreferences;
@@ -159,5 +161,6 @@ export const DEFAULT_PREFERENCES: UIPreferences = {
   },
   mcp: DEFAULT_MCP_PREFERENCES,
   enableMCP: true,
-  coworkMode: false
+  coworkMode: false,
+  coworkModeCwd: null
 };

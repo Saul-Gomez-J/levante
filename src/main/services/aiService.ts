@@ -908,6 +908,25 @@ export class AIService {
     }
   }
 
+  /**
+   * Validate cowork CWD path.
+   * Returns the path if valid, null otherwise.
+   * Does NOT fallback to process.cwd() - must be explicitly provided.
+   */
+  private async resolveValidCoworkCwd(cwd?: string): Promise<string | null> {
+    if (!cwd) {
+      return null;
+    }
+
+    try {
+      const fs = await import('fs/promises');
+      const stats = await fs.stat(cwd);
+      return stats.isDirectory() ? cwd : null;
+    } catch {
+      return null;
+    }
+  }
+
   async *streamChat(
     request: ChatRequest
   ): AsyncGenerator<ChatStreamChunk, void, unknown> {
@@ -1109,20 +1128,28 @@ export class AIService {
       // Cargar Coding Tools (si está habilitado code mode)
       // ──────────────────────────────────────────────────
       if (request.codeMode?.enabled) {
-        const codingTools = getCodingTools({
-          cwd: request.codeMode.cwd ?? process.cwd(),
-          enabled: request.codeMode.tools, // { bash: true, read: true, ... }
-        });
+        const validCwd = await this.resolveValidCoworkCwd(request.codeMode.cwd);
 
-        tools = {
-          ...tools,
-          ...codingTools,
-        };
+        if (!validCwd) {
+          this.logger.aiSdk.warn('Cowork code mode requested without valid cwd; skipping coding tools', {
+            requestedCwd: request.codeMode.cwd,
+          });
+        } else {
+          const codingTools = getCodingTools({
+            cwd: validCwd,
+            enabled: request.codeMode.tools, // { bash: true, read: true, ... }
+          });
 
-        this.logger.aiSdk.debug("Loaded coding tools", {
-          tools: Object.keys(codingTools),
-          cwd: request.codeMode.cwd,
-        });
+          tools = {
+            ...tools,
+            ...codingTools,
+          };
+
+          this.logger.aiSdk.debug("Loaded coding tools", {
+            tools: Object.keys(codingTools),
+            cwd: validCwd,
+          });
+        }
       }
 
       const messagesWithFileParts = await this.includeAttachmentsInMessageParts(
