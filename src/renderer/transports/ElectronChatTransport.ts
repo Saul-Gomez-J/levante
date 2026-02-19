@@ -32,6 +32,7 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       model?: string;
       enableMCP?: boolean;
       coworkMode?: boolean;
+      coworkModeCwd?: string | null;
     } = {}
   ) {}
 
@@ -59,6 +60,8 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       (bodyObj.enableMCP as boolean) ?? this.defaultOptions.enableMCP ?? true;
     const coworkMode =
       (bodyObj.coworkMode as boolean) ?? this.defaultOptions.coworkMode ?? false;
+    const coworkModeCwd =
+      (bodyObj.coworkModeCwd as string | null) ?? this.defaultOptions.coworkModeCwd ?? null;
     const attachments = bodyObj.attachments; // Extract attachments directly from body
 
     logger.aiSdk.debug("Transport body received", {
@@ -108,18 +111,24 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
     }
 
     // Create Electron IPC request
+    // Only send codeMode when both coworkMode is enabled AND a valid CWD is selected
     const request: ChatRequest = {
       messages: messagesWithAttachments,
       model,
       enableMCP,
-      // Pass codeMode when coworkMode is enabled
-      ...(coworkMode && {
+      ...(coworkMode && coworkModeCwd && {
         codeMode: {
           enabled: true,
-          // cwd will be set by the main process
+          cwd: coworkModeCwd,
         },
       }),
     };
+
+    logger.aiSdk.debug("Transport request codeMode", {
+      coworkMode,
+      coworkModeCwd,
+      hasCodeMode: !!(coworkMode && coworkModeCwd),
+    });
 
     // Reset text part tracking for new stream
     this.hasStartedTextPart = false;
@@ -401,6 +410,7 @@ export function createElectronChatTransport(options?: {
   model?: string;
   enableMCP?: boolean;
   coworkMode?: boolean;
+  coworkModeCwd?: string | null;
 }): ElectronChatTransport {
   return new ElectronChatTransport(options);
 }

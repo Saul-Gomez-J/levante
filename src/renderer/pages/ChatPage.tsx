@@ -46,6 +46,7 @@ const ChatPage = () => {
   const [input, setInput] = useState('');
   const [enableMCP, setEnableMCP] = usePreference('enableMCP');
   const [coworkMode, setCoworkMode] = usePreference('coworkMode');
+  const [coworkModeCwd, setCoworkModeCwd] = usePreference('coworkModeCwd');
   const [userName, setUserName] = useState<string>(t('welcome.default_user_name'));
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [pendingFirstMessage, setPendingFirstMessage] = useState<string | null>(null);
@@ -183,6 +184,7 @@ const ChatPage = () => {
         model: model || 'openai/gpt-4o',
         enableMCP: enableMCP ?? true,
         coworkMode: coworkMode ?? false,
+        coworkModeCwd: coworkModeCwd ?? null,
       }),
     [] // Keep same transport instance
   );
@@ -193,8 +195,9 @@ const ChatPage = () => {
       model: model || 'openai/gpt-4o',
       enableMCP: enableMCP ?? true,
       coworkMode: coworkMode ?? false,
+      coworkModeCwd: coworkModeCwd ?? null,
     });
-  }, [model, enableMCP, coworkMode, transport]);
+  }, [model, enableMCP, coworkMode, coworkModeCwd, transport]);
 
   // Use AI SDK native useChat hook
   const {
@@ -924,6 +927,8 @@ const ChatPage = () => {
                 onMCPChange={setEnableMCP}
                 coworkMode={coworkMode ?? false}
                 onCoworkModeChange={setCoworkMode}
+                coworkModeCwd={coworkModeCwd ?? null}
+                onCoworkModeCwdChange={setCoworkModeCwd}
                 model={model}
                 onModelChange={handleModelChange}
                 availableModels={filteredAvailableModels}
@@ -986,6 +991,8 @@ const ChatPage = () => {
               onMCPChange={setEnableMCP}
               coworkMode={coworkMode ?? false}
               onCoworkModeChange={setCoworkMode}
+              coworkModeCwd={coworkModeCwd ?? null}
+              onCoworkModeCwdChange={setCoworkModeCwd}
               model={model}
               onModelChange={handleModelChange}
               availableModels={filteredAvailableModels}

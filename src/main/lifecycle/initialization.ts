@@ -30,6 +30,7 @@ import { setupAttachmentHandlers } from "../ipc/attachmentHandlers";
 import { registerAnalyticsHandlers } from "../ipc/analyticsHandlers";
 import { setupWidgetHandlers } from "../ipc/widgetHandlers";
 import { setupAnnouncementHandlers } from "../ipc/announcementHandlers";
+import { setupCoworkHandlers } from "../ipc/coworkHandlers";
 
 const logger = getLogger();
 
@@ -131,6 +132,7 @@ export async function registerIPCHandlers(getMainWindow: () => BrowserWindow | n
   setupOAuthHandlers();
   setupWidgetHandlers();
   setupAnnouncementHandlers();
+  setupCoworkHandlers();
 
   // Note: Log viewer handlers are registered separately in main.ts after window creation
 

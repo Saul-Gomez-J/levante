@@ -70,7 +70,22 @@
     "mcp_tools": {
       "label": "Herramientas (MCP)",
       "keywords": ["tools", "herramientas", "mcp"]
-    }
+    },
+    "cowork": {
+      "label": "Cowork",
+      "active": "activo",
+      "tooltip": "Modo Cowork activado - la IA puede ejecutar herramientas de código",
+      "no_directory": "Haz clic para seleccionar carpeta de trabajo",
+      "select_directory_title": "Seleccionar Carpeta de Trabajo",
+      "select_button": "Seleccionar",
+      "click_to_select": "Haz clic para seleccionar carpeta",
+      "select_directory_hint": "Selecciona una carpeta para las herramientas de código",
+      "missing_directory_warning": "Cowork está activado pero no hay carpeta de trabajo seleccionada. Las herramientas de código están desactivadas."
+    },
+    "enabled": "Habilitados",
+    "no_enabled_servers": "No hay servidores habilitados",
+    "disabled_servers_info": "Activa para habilitar",
+    "no_disabled_servers": "No hay servidores deshabilitados"
   },
   "paid_model_chat_warning": {
     "title": "Aviso sobre Modelo de Pago",

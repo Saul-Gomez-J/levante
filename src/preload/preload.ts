@@ -59,6 +59,7 @@ import { widgetApi } from "./api/widget";
 import { announcementsApi } from "./api/announcements";
 import { miniChatApi, onMiniChatShown, onMiniChatHidden, onSessionLoad } from "./api/miniChat";
 import { logViewerApi } from "./api/logViewer";
+import { coworkApi } from "./api/cowork";
 
 // Re-export types for backwards compatibility
 export type {
@@ -828,6 +829,19 @@ export interface LevanteAPI {
   onMiniChatShown: (callback: () => void) => () => void;
   onMiniChatHidden: (callback: () => void) => () => void;
   onSessionLoad: (callback: (data: { sessionId: string }) => void) => () => void;
+
+  // Cowork API
+  cowork: {
+    selectWorkingDirectory: (options?: {
+      title?: string;
+      defaultPath?: string;
+      buttonLabel?: string;
+    }) => Promise<{
+      success: boolean;
+      data?: { path: string; canceled: boolean };
+      error?: string;
+    }>;
+  };
 }
 
 // Assemble the complete API from modules
@@ -890,6 +904,9 @@ const api: LevanteAPI = {
 
   // Log viewer API
   logViewer: logViewerApi,
+
+  // Cowork API
+  cowork: coworkApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

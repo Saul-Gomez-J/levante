@@ -6,7 +6,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
-import { Wrench, Settings, ChevronDown, ChevronRight, RefreshCw, Code2 } from 'lucide-react';
+import { Wrench, Settings, ChevronDown, ChevronRight, RefreshCw, Code2, FolderOpen, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useMCPStore } from '@/stores/mcpStore';
@@ -26,6 +26,8 @@ interface ToolsMenuProps {
   onMCPChange: (enabled: boolean) => void;
   coworkMode: boolean;
   onCoworkModeChange: (enabled: boolean) => void;
+  coworkModeCwd: string | null;
+  onCoworkModeCwdChange: (cwd: string | null) => void;
   className?: string;
 }
 
@@ -34,6 +36,8 @@ export function ToolsMenu({
   onMCPChange,
   coworkMode,
   onCoworkModeChange,
+  coworkModeCwd,
+  onCoworkModeCwdChange,
   className
 }: ToolsMenuProps) {
   const { t } = useTranslation('chat');
@@ -64,6 +68,32 @@ export function ToolsMenu({
     loadToolsCache();
     loadDisabledTools();
   }, [loadToolsCache, loadDisabledTools]);
+
+  // Show warning when cowork is enabled but no CWD selected
+  const showCoworkMissingDirWarning = coworkMode && !coworkModeCwd;
+
+  // Get short folder name (cross-platform)
+  const getShortFolderName = (path: string): string => {
+    const parts = path.split(/[\\/]/).filter(Boolean);
+    return parts[parts.length - 1] || path;
+  };
+
+  // Handle directory selection
+  const handleSelectDirectory = async () => {
+    try {
+      const result = await window.levante.cowork.selectWorkingDirectory({
+        title: t('tools_menu.cowork.select_directory_title', 'Select Working Directory'),
+        buttonLabel: t('tools_menu.cowork.select_button', 'Select'),
+        defaultPath: coworkModeCwd || undefined,
+      });
+
+      if (result.success && result.data && !result.data.canceled) {
+        onCoworkModeCwdChange(result.data.path);
+      }
+    } catch (error) {
+      console.error('Failed to select directory:', error);
+    }
+  };
 
   // Separate servers into enabled and disabled
   const enabledServers = activeServers.filter(server => server.enabled !== false);
@@ -108,7 +138,7 @@ export function ToolsMenu({
               <Code2 size={16} className="text-muted-foreground" />
               <span className="text-sm">{t('tools_menu.cowork.label', 'Cowork')}</span>
               {coworkMode && (
-                <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
+                <Badge variant="secondary" className={cn("text-xs", coworkModeCwd ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700")}>
                   {t('tools_menu.cowork.active', 'active')}
                 </Badge>
               )}
@@ -119,6 +149,37 @@ export function ToolsMenu({
               onClick={(e) => e.stopPropagation()}
             />
           </div>
+          {/* Cowork Directory Selector - only show when cowork is enabled */}
+          {coworkMode && (
+            <div className="px-3 py-2 space-y-2">
+              <div
+                className="flex items-center gap-2 p-2 rounded-md border border-dashed cursor-pointer hover:bg-accent"
+                onClick={handleSelectDirectory}
+              >
+                <FolderOpen size={16} className={coworkModeCwd ? "text-blue-600" : "text-amber-500"} />
+                <div className="flex-1 min-w-0">
+                  {coworkModeCwd ? (
+                    <span className="text-sm truncate block" title={coworkModeCwd}>
+                      {getShortFolderName(coworkModeCwd)}
+                    </span>
+                  ) : (
+                    <span className="text-sm text-muted-foreground">
+                      {t('tools_menu.cowork.click_to_select', 'Click to select directory')}
+                    </span>
+                  )}
+                </div>
+              </div>
+              {/* Warning when no directory selected */}
+              {showCoworkMissingDirWarning && (
+                <div className="flex items-start gap-2 p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                  <AlertTriangle size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                  <span className="text-xs text-amber-700 dark:text-amber-300">
+                    {t('tools_menu.cowork.missing_directory_warning', 'Cowork is enabled but no working directory is selected. Coding tools are disabled.')}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
           {/* MCP Tools Toggle */}
           <div
             className="flex items-center justify-between rounded-sm px-3 py-2 hover:bg-accent cursor-pointer"
@@ -145,10 +206,31 @@ export function ToolsMenu({
       {/* 2. Cowork Mode Indicator - Only when Cowork is enabled */}
       {coworkMode && (
         <div
-          className="flex items-center justify-center h-8 w-8 rounded-lg ring-1 ring-blue-500/50 bg-blue-500/10 cursor-default"
-          title={t('tools_menu.cowork.tooltip', 'Cowork mode enabled - AI can execute code tools')}
+          className={cn(
+            "flex items-center justify-center h-8 rounded-lg ring-1 cursor-pointer gap-1 px-2",
+            coworkModeCwd
+              ? "ring-blue-500/50 bg-blue-500/10"
+              : "ring-amber-500/50 bg-amber-500/10"
+          )}
+          onClick={handleSelectDirectory}
+          title={coworkModeCwd
+            ? `${t('tools_menu.cowork.tooltip', 'Cowork mode enabled')}: ${coworkModeCwd}`
+            : t('tools_menu.cowork.no_directory', 'Click to select working directory')
+          }
         >
-          <Code2 size={16} className="text-blue-600" />
+          {coworkModeCwd ? (
+            <>
+              <Code2 size={16} className="text-blue-600" />
+              <span className="text-xs text-blue-600 max-w-20 truncate">
+                {getShortFolderName(coworkModeCwd)}
+              </span>
+            </>
+          ) : (
+            <>
+              <AlertTriangle size={16} className="text-amber-500" />
+              <Code2 size={16} className="text-amber-500" />
+            </>
+          )}
         </div>
       )}
 
