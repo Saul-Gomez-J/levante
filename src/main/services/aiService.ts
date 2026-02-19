@@ -19,6 +19,7 @@ import type { ProviderConfig } from "../../types/models";
 import type { ReasoningConfig } from "../../types/reasoning";
 import { getMCPTools } from "./ai/mcpToolsAdapter";
 import { buildSystemPrompt } from "./ai/systemPromptBuilder";
+import { getCodingTools } from "./ai/codingTools";
 import { isToolUseNotSupportedError } from "./ai/toolErrorDetector";
 import { calculateMaxSteps } from "./ai/stepsCalculator";
 import { InferenceDispatcher } from "./inference/InferenceDispatcher";
@@ -36,6 +37,20 @@ export interface ChatRequest {
   model: string;
   webSearch: boolean;
   enableMCP?: boolean;
+  // Modo de codificación
+  codeMode?: {
+    enabled: boolean;
+    cwd?: string; // Directorio de trabajo
+    tools?: {
+      bash?: boolean;
+      read?: boolean;
+      write?: boolean;
+      edit?: boolean;
+      grep?: boolean;
+      find?: boolean;
+      ls?: boolean;
+    };
+  };
 }
 
 export interface ChatStreamChunk {
@@ -1088,6 +1103,26 @@ export class AIService {
         );
       } else {
         tools = builtInTools;
+      }
+
+      // ──────────────────────────────────────────────────
+      // Cargar Coding Tools (si está habilitado code mode)
+      // ──────────────────────────────────────────────────
+      if (request.codeMode?.enabled) {
+        const codingTools = getCodingTools({
+          cwd: request.codeMode.cwd ?? process.cwd(),
+          enabled: request.codeMode.tools, // { bash: true, read: true, ... }
+        });
+
+        tools = {
+          ...tools,
+          ...codingTools,
+        };
+
+        this.logger.aiSdk.debug("Loaded coding tools", {
+          tools: Object.keys(codingTools),
+          cwd: request.codeMode.cwd,
+        });
       }
 
       const messagesWithFileParts = await this.includeAttachmentsInMessageParts(

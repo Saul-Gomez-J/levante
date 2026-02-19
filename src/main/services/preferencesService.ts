@@ -214,6 +214,10 @@ export class PreferencesService {
           enableMCP: {
             type: 'boolean',
             default: true
+          },
+          coworkMode: {
+            type: 'boolean',
+            default: false
           }
         }
       });

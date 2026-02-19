@@ -45,6 +45,7 @@ const ChatPage = () => {
   const { t } = useTranslation('chat');
   const [input, setInput] = useState('');
   const [enableMCP, setEnableMCP] = usePreference('enableMCP');
+  const [coworkMode, setCoworkMode] = usePreference('coworkMode');
   const [userName, setUserName] = useState<string>(t('welcome.default_user_name'));
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [pendingFirstMessage, setPendingFirstMessage] = useState<string | null>(null);
@@ -181,6 +182,7 @@ const ChatPage = () => {
       createElectronChatTransport({
         model: model || 'openai/gpt-4o',
         enableMCP: enableMCP ?? true,
+        coworkMode: coworkMode ?? false,
       }),
     [] // Keep same transport instance
   );
@@ -190,8 +192,9 @@ const ChatPage = () => {
     transport.updateOptions({
       model: model || 'openai/gpt-4o',
       enableMCP: enableMCP ?? true,
+      coworkMode: coworkMode ?? false,
     });
-  }, [model, enableMCP, transport]);
+  }, [model, enableMCP, coworkMode, transport]);
 
   // Use AI SDK native useChat hook
   const {
@@ -919,6 +922,8 @@ const ChatPage = () => {
                 onSubmit={handleSubmit}
                 enableMCP={enableMCP ?? true}
                 onMCPChange={setEnableMCP}
+                coworkMode={coworkMode ?? false}
+                onCoworkModeChange={setCoworkMode}
                 model={model}
                 onModelChange={handleModelChange}
                 availableModels={filteredAvailableModels}
@@ -979,6 +984,8 @@ const ChatPage = () => {
               onSubmit={handleSubmit}
               enableMCP={enableMCP ?? true}
               onMCPChange={setEnableMCP}
+              coworkMode={coworkMode ?? false}
+              onCoworkModeChange={setCoworkMode}
               model={model}
               onModelChange={handleModelChange}
               availableModels={filteredAvailableModels}

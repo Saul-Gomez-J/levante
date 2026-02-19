@@ -8,6 +8,20 @@ export interface ChatRequest {
   model: string;
   webSearch?: boolean;
   enableMCP?: boolean;
+  // Modo de codificación (Cowork mode)
+  codeMode?: {
+    enabled: boolean;
+    cwd?: string;
+    tools?: {
+      bash?: boolean;
+      read?: boolean;
+      write?: boolean;
+      edit?: boolean;
+      grep?: boolean;
+      find?: boolean;
+      ls?: boolean;
+    };
+  };
 }
 
 export interface ChatStreamChunk {

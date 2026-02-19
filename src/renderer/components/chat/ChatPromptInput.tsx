@@ -57,6 +57,8 @@ interface ChatPromptInputProps {
   onSubmit: (e: React.FormEvent) => void;
   enableMCP: boolean;
   onMCPChange: (enabled: boolean) => void;
+  coworkMode: boolean;
+  onCoworkModeChange: (enabled: boolean) => void;
   model: string;
   onModelChange: (modelId: string) => void;
   availableModels: Model[];
@@ -88,6 +90,8 @@ export function ChatPromptInput({
   onSubmit,
   enableMCP,
   onMCPChange,
+  coworkMode,
+  onCoworkModeChange,
   model,
   onModelChange,
   availableModels,
@@ -228,6 +232,8 @@ export function ChatPromptInput({
           <ToolsMenu
             enableMCP={enableMCP}
             onMCPChange={onMCPChange}
+            coworkMode={coworkMode}
+            onCoworkModeChange={onCoworkModeChange}
           />
           {/* Add Context Menu (MCP resources + prompts + file upload) */}
           {onFilesSelected && (

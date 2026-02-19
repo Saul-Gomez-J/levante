@@ -31,6 +31,7 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
     private defaultOptions: {
       model?: string;
       enableMCP?: boolean;
+      coworkMode?: boolean;
     } = {}
   ) {}
 
@@ -56,6 +57,8 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       (bodyObj.model as string) || this.defaultOptions.model || "openai/gpt-4o";
     const enableMCP =
       (bodyObj.enableMCP as boolean) ?? this.defaultOptions.enableMCP ?? true;
+    const coworkMode =
+      (bodyObj.coworkMode as boolean) ?? this.defaultOptions.coworkMode ?? false;
     const attachments = bodyObj.attachments; // Extract attachments directly from body
 
     logger.aiSdk.debug("Transport body received", {
@@ -109,6 +112,13 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       messages: messagesWithAttachments,
       model,
       enableMCP,
+      // Pass codeMode when coworkMode is enabled
+      ...(coworkMode && {
+        codeMode: {
+          enabled: true,
+          // cwd will be set by the main process
+        },
+      }),
     };
 
     // Reset text part tracking for new stream
@@ -380,7 +390,8 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
  * ```tsx
  * const transport = createElectronChatTransport({
  *   model: 'openai/gpt-4o',
- *   enableMCP: true
+ *   enableMCP: true,
+ *   coworkMode: false
  * });
  *
  * const { messages, sendMessage } = useChat({ transport });
@@ -389,6 +400,7 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
 export function createElectronChatTransport(options?: {
   model?: string;
   enableMCP?: boolean;
+  coworkMode?: boolean;
 }): ElectronChatTransport {
   return new ElectronChatTransport(options);
 }

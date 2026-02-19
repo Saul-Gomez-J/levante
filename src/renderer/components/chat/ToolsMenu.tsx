@@ -6,7 +6,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
-import { Wrench, Settings, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { Wrench, Settings, ChevronDown, ChevronRight, RefreshCw, Code2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useMCPStore } from '@/stores/mcpStore';
@@ -24,12 +24,16 @@ import type { Tool } from '@/types/mcp';
 interface ToolsMenuProps {
   enableMCP: boolean;
   onMCPChange: (enabled: boolean) => void;
+  coworkMode: boolean;
+  onCoworkModeChange: (enabled: boolean) => void;
   className?: string;
 }
 
 export function ToolsMenu({
   enableMCP,
   onMCPChange,
+  coworkMode,
+  onCoworkModeChange,
   className
 }: ToolsMenuProps) {
   const { t } = useTranslation('chat');
@@ -95,6 +99,27 @@ export function ToolsMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-72">
+          {/* Cowork Mode Toggle */}
+          <div
+            className="flex items-center justify-between rounded-sm px-3 py-2 hover:bg-accent cursor-pointer"
+            onClick={() => onCoworkModeChange(!coworkMode)}
+          >
+            <div className="flex items-center gap-2">
+              <Code2 size={16} className="text-muted-foreground" />
+              <span className="text-sm">{t('tools_menu.cowork.label', 'Cowork')}</span>
+              {coworkMode && (
+                <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-700">
+                  {t('tools_menu.cowork.active', 'active')}
+                </Badge>
+              )}
+            </div>
+            <Switch
+              checked={coworkMode}
+              onCheckedChange={onCoworkModeChange}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          {/* MCP Tools Toggle */}
           <div
             className="flex items-center justify-between rounded-sm px-3 py-2 hover:bg-accent cursor-pointer"
             onClick={() => onMCPChange(!enableMCP)}
@@ -117,7 +142,17 @@ export function ToolsMenu({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* 2. Tools Dropdown (Wrench icon) - Only when MCP is enabled */}
+      {/* 2. Cowork Mode Indicator - Only when Cowork is enabled */}
+      {coworkMode && (
+        <div
+          className="flex items-center justify-center h-8 w-8 rounded-lg ring-1 ring-blue-500/50 bg-blue-500/10 cursor-default"
+          title={t('tools_menu.cowork.tooltip', 'Cowork mode enabled - AI can execute code tools')}
+        >
+          <Code2 size={16} className="text-blue-600" />
+        </div>
+      )}
+
+      {/* 3. Tools Dropdown (Wrench icon) - Only when MCP is enabled */}
       {enableMCP && (
         <DropdownMenu open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger asChild>
