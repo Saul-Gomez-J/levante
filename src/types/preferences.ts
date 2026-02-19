@@ -93,6 +93,8 @@ export interface UIPreferences {
   coworkMode: boolean;
   /** Working directory for Cowork mode (coding tools) */
   coworkModeCwd: string | null;
+  /** URL allowlist patterns for Preview Window */
+  previewAllowedUrls: string[];
 }
 
 export type PreferenceKey = keyof UIPreferences;
@@ -162,5 +164,12 @@ export const DEFAULT_PREFERENCES: UIPreferences = {
   mcp: DEFAULT_MCP_PREFERENCES,
   enableMCP: true,
   coworkMode: false,
-  coworkModeCwd: null
+  coworkModeCwd: null,
+  previewAllowedUrls: [
+    'localhost:*',
+    '127.0.0.1:*',
+    '0.0.0.0:*',
+    '*.local:*',
+    '192.168.*.*:*',
+  ],
 };

@@ -10,7 +10,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, 'src/renderer/index.html'),
-        'mini-chat': path.resolve(__dirname, 'src/renderer/mini-chat.html')
+        'mini-chat': path.resolve(__dirname, 'src/renderer/mini-chat.html'),
+        'preview-nav': path.resolve(__dirname, 'src/renderer/preview/nav.html')
       }
     }
   },

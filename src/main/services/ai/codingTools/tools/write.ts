@@ -8,6 +8,7 @@ import { z } from "zod";
 import { mkdir, writeFile } from "fs/promises";
 import { dirname } from "path";
 import { resolveToCwd } from "../utils/path-utils";
+import { notifyFileChanged } from "../../../../preview/bridge";
 
 export interface WriteToolConfig {
   cwd: string;
@@ -33,6 +34,9 @@ IMPORTANT: This will overwrite existing files. Always read a file first before w
 
         // Escribir archivo
         await writeFile(resolvedPath, content, "utf8");
+
+        // Notify preview window for auto-refresh
+        notifyFileChanged(resolvedPath);
 
         const lines = content.split("\n").length;
         const bytes = Buffer.byteLength(content, "utf8");

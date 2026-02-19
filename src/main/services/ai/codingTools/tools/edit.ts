@@ -8,6 +8,7 @@ import { z } from "zod";
 import { readFile, writeFile } from "fs/promises";
 import { resolveToCwd } from "../utils/path-utils";
 import { fuzzyFindText, generateDiffString, countDiffChanges } from "./edit-diff";
+import { notifyFileChanged } from "../../../../preview/bridge";
 
 export interface EditToolConfig {
   cwd: string;
@@ -88,6 +89,9 @@ IMPORTANT: Always read the file first before editing to ensure old_string is exa
 
         // Escribir archivo
         await writeFile(resolvedPath, newContent, "utf8");
+
+        // Notify preview window for auto-refresh
+        notifyFileChanged(resolvedPath);
 
         return {
           success: true,

@@ -11,7 +11,7 @@ import { ContextPreview } from '@/components/chat/ContextPreview';
 import { AddContextMenu } from '@/components/chat/AddContextMenu';
 import { useTranslation } from 'react-i18next';
 import { getRendererLogger } from '@/services/logger';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, MonitorPlay } from 'lucide-react';
 import { useToolApprovalWarning } from '@/hooks/useToolApprovalWarning';
 import {
   Tooltip,
@@ -250,6 +250,25 @@ export function ChatPromptInput({
               disabled={status === 'streaming'}
               fileAccept={fileAccept}
             />
+          )}
+          {/* Preview Window Button */}
+          {coworkMode && coworkModeCwd && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => window.levante.preview.open()}
+                    className="flex items-center justify-center h-8 w-8 rounded-lg hover:bg-accent text-muted-foreground hover:text-foreground"
+                  >
+                    <MonitorPlay size={16} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  <p>{t('preview.open_tooltip', 'Open Preview Window')}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           )}
         </PromptInputTools>
         <div className="flex items-center gap-2">

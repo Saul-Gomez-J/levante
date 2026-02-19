@@ -127,5 +127,11 @@
   "tool_approval_warning": {
     "title": "Auto-execution enabled",
     "description": "Tools will run automatically without approval for this provider ({{provider}})"
+  },
+  "preview": {
+    "open_button": "Open Preview",
+    "open_tooltip": "Open Preview Window",
+    "error_toast_title": "Preview Error",
+    "error_toast_view_details": "View"
   }
 }

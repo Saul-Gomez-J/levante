@@ -281,6 +281,11 @@ module.exports = {
             entry: 'src/preload/preload.ts',
             config: 'vite.preload.config.ts',
             target: 'preload'
+          },
+          {
+            entry: 'src/preload/preview/navPreload.ts',
+            config: 'vite.preload.config.ts',
+            target: 'preload'
           }
         ],
         // Vite config for renderer process

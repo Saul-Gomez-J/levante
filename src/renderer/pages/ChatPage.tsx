@@ -34,6 +34,7 @@ import { useMCPResources } from '@/hooks/useMCPResources';
 import { useFileAttachments } from '@/hooks/useFileAttachments';
 import { useModelSelection, isInferenceModel } from '@/hooks/useModelSelection';
 import { usePreference } from '@/hooks/usePreferences';
+import { toast } from 'sonner';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
@@ -198,6 +199,21 @@ const ChatPage = () => {
       coworkModeCwd: coworkModeCwd ?? null,
     });
   }, [model, enableMCP, coworkMode, coworkModeCwd, transport]);
+
+  // Subscribe to preview window console errors
+  useEffect(() => {
+    const unsubscribe = window.levante.preview.onConsoleError((error) => {
+      toast.error(t('preview.error_toast_title', 'Preview Error'), {
+        description: error.message.substring(0, 200),
+        action: {
+          label: t('preview.error_toast_view_details', 'View'),
+          onClick: () => window.levante.preview.open(),
+        },
+      });
+    });
+
+    return () => unsubscribe();
+  }, [t]);
 
   // Use AI SDK native useChat hook
   const {

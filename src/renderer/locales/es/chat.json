@@ -127,5 +127,11 @@
   "tool_approval_warning": {
     "title": "Ejecución automática habilitada",
     "description": "Las herramientas se ejecutarán automáticamente sin aprobación para este proveedor ({{provider}})"
+  },
+  "preview": {
+    "open_button": "Abrir Preview",
+    "open_tooltip": "Abrir Ventana de Preview",
+    "error_toast_title": "Error de Preview",
+    "error_toast_view_details": "Ver"
   }
 }

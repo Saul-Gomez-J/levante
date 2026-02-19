@@ -60,6 +60,8 @@ import { announcementsApi } from "./api/announcements";
 import { miniChatApi, onMiniChatShown, onMiniChatHidden, onSessionLoad } from "./api/miniChat";
 import { logViewerApi } from "./api/logViewer";
 import { coworkApi } from "./api/cowork";
+import { previewApi } from "./preview/api";
+import type { ConsoleError, NavigationEvent, PreviewState } from "../types/preview";
 
 // Re-export types for backwards compatibility
 export type {
@@ -842,6 +844,21 @@ export interface LevanteAPI {
       error?: string;
     }>;
   };
+
+  // Preview API
+  preview: {
+    open: (url?: string) => Promise<{ success: boolean; error?: string }>;
+    loadUrl: (url: string) => Promise<{ success: boolean; error?: string }>;
+    reload: () => Promise<{ success: boolean }>;
+    navigate: (direction: 'back' | 'forward') => Promise<{ success: boolean }>;
+    toggleDevTools: () => Promise<{ success: boolean; isOpen: boolean }>;
+    getState: () => Promise<PreviewState>;
+    close: () => Promise<{ success: boolean }>;
+    onConsoleError: (callback: (error: ConsoleError) => void) => () => void;
+    onNavigationEvent: (callback: (event: NavigationEvent) => void) => () => void;
+    onFileChanged: (callback: (data: { filePath: string; timestamp: number }) => void) => () => void;
+    onClosed: (callback: () => void) => () => void;
+  };
 }
 
 // Assemble the complete API from modules
@@ -907,6 +924,9 @@ const api: LevanteAPI = {
 
   // Cowork API
   cowork: coworkApi,
+
+  // Preview API
+  preview: previewApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

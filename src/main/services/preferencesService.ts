@@ -222,6 +222,11 @@ export class PreferencesService {
           coworkModeCwd: {
             type: ['string', 'null'],
             default: null
+          },
+          previewAllowedUrls: {
+            type: 'array',
+            items: { type: 'string' },
+            default: ['localhost:*', '127.0.0.1:*', '0.0.0.0:*', '*.local:*', '192.168.*.*:*']
           }
         }
       });
@@ -448,6 +453,15 @@ export class PreferencesService {
   getStoreSize(): number {
     this.ensureInitialized();
     return this.store.size;
+  }
+
+  // Subscribe to preference changes
+  onPreferenceChanged<K extends PreferenceKey>(
+    key: K,
+    callback: (newValue: UIPreferences[K], oldValue: UIPreferences[K]) => void
+  ): () => void {
+    this.ensureInitialized();
+    return this.store.onDidChange(key, callback as any);
   }
 
   // Helper method to summarize model data for logging
