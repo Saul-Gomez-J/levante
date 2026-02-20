@@ -11,6 +11,7 @@ import { getLogger } from "../services/logging";
 import { databaseService } from "../services/databaseService";
 import { mcpService } from "../ipc/mcpHandlers";
 import { oauthCallbackServer } from "../services/oauthCallbackServer";
+import { taskManager } from "../services/tasks";
 
 const logger = getLogger();
 
@@ -23,6 +24,16 @@ const logger = getLogger();
  */
 export async function gracefulShutdown(): Promise<void> {
   logger.core.info("App is quitting, performing cleanup...");
+
+  // 0. Clear all background tasks
+  try {
+    taskManager.clearAll();
+    logger.core.info("Background tasks cleared");
+  } catch (error) {
+    logger.core.error("Error clearing background tasks", {
+      error: error instanceof Error ? error.message : error,
+    });
+  }
 
   // 1. Disconnect all MCP servers
   try {

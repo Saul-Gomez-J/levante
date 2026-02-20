@@ -127,5 +127,31 @@
   "tool_approval_warning": {
     "title": "Ejecución automática habilitada",
     "description": "Las herramientas se ejecutarán automáticamente sin aprobación para este proveedor ({{provider}})"
+  },
+  "background_tasks": {
+    "title": "Tareas en Background",
+    "running_count": "{{count}} ejecutándose",
+    "refresh": "Actualizar",
+    "cleanup": "Limpiar tareas completadas",
+    "no_tasks": "No hay tareas en background",
+    "no_tasks_hint": "Las tareas iniciadas con run_in_background aparecerán aquí",
+    "task_id": "ID",
+    "pid": "PID",
+    "started": "Inicio",
+    "exit_code": "Salida",
+    "output": "Output",
+    "hide_output": "Ocultar",
+    "kill": "Matar",
+    "total": "Total",
+    "completed": "Completadas",
+    "failed": "Fallidas",
+    "killed": "Terminadas",
+    "error_prefix": "Error de tarea",
+    "status": {
+      "running": "ejecutando",
+      "completed": "completada",
+      "failed": "fallida",
+      "killed": "terminada"
+    }
   }
 }

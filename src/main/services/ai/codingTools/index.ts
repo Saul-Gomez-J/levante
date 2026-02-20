@@ -1,6 +1,7 @@
 /**
  * Coding Tools para Levante.
  * Herramientas de desarrollo: bash, read, write, edit, grep, find, ls.
+ * Incluye gestión de tareas en background para Cowork mode.
  */
 
 import { createBashTool, BashToolConfig } from "./tools/bash";
@@ -10,6 +11,12 @@ import { createEditTool, EditToolConfig } from "./tools/edit";
 import { createGrepTool, GrepToolConfig } from "./tools/grep";
 import { createFindTool, FindToolConfig } from "./tools/find";
 import { createLsTool, LsToolConfig } from "./tools/ls";
+import {
+  createTaskOutputTool,
+  TaskOutputToolConfig,
+} from "./tools/task-output";
+import { createKillTaskTool, KillTaskToolConfig } from "./tools/kill-task";
+import { createListTasksTool, ListTasksToolConfig } from "./tools/list-tasks";
 
 export interface CodingToolsConfig {
   cwd: string;
@@ -21,6 +28,9 @@ export interface CodingToolsConfig {
     grep?: boolean;
     find?: boolean;
     ls?: boolean;
+    taskOutput?: boolean;
+    killTask?: boolean;
+    listTasks?: boolean;
   };
   // Config específica por herramienta
   bash?: Partial<BashToolConfig>;
@@ -43,6 +53,9 @@ export function getCodingTools(config: CodingToolsConfig) {
     grep: true,
     find: true,
     ls: true,
+    taskOutput: true,
+    killTask: true,
+    listTasks: true,
     ...config.enabled,
   };
 
@@ -52,47 +65,66 @@ export function getCodingTools(config: CodingToolsConfig) {
   if (enabled.bash) {
     tools.bash = createBashTool({
       cwd: config.cwd,
-      ...config.bash
+      ...config.bash,
     });
   }
 
   if (enabled.read) {
     tools.read = createReadTool({
       cwd: config.cwd,
-      ...config.read
+      ...config.read,
     });
   }
 
   if (enabled.write) {
     tools.write = createWriteTool({
-      cwd: config.cwd
+      cwd: config.cwd,
     });
   }
 
   if (enabled.edit) {
     tools.edit = createEditTool({
-      cwd: config.cwd
+      cwd: config.cwd,
     });
   }
 
   if (enabled.grep) {
     tools.grep = createGrepTool({
       cwd: config.cwd,
-      ...config.grep
+      ...config.grep,
     });
   }
 
   if (enabled.find) {
     tools.find = createFindTool({
       cwd: config.cwd,
-      ...config.find
+      ...config.find,
     });
   }
 
   if (enabled.ls) {
     tools.ls = createLsTool({
       cwd: config.cwd,
-      ...config.ls
+      ...config.ls,
+    });
+  }
+
+  // Background task tools
+  if (enabled.taskOutput) {
+    tools.getTaskOutput = createTaskOutputTool({
+      cwd: config.cwd,
+    });
+  }
+
+  if (enabled.killTask) {
+    tools.killTask = createKillTaskTool({
+      cwd: config.cwd,
+    });
+  }
+
+  if (enabled.listTasks) {
+    tools.listTasks = createListTasksTool({
+      cwd: config.cwd,
     });
   }
 
@@ -107,6 +139,9 @@ export type { EditToolConfig } from "./tools/edit";
 export type { GrepToolConfig } from "./tools/grep";
 export type { FindToolConfig } from "./tools/find";
 export type { LsToolConfig } from "./tools/ls";
+export type { TaskOutputToolConfig } from "./tools/task-output";
+export type { KillTaskToolConfig } from "./tools/kill-task";
+export type { ListTasksToolConfig } from "./tools/list-tasks";
 
 // Re-exportar utilidades por si se necesitan
 export { executeCommand } from "./utils/shell";

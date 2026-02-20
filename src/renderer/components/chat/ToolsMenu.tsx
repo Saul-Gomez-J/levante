@@ -7,6 +7,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
 import { Wrench, Settings, ChevronDown, ChevronRight, RefreshCw, Code2, FolderOpen, AlertTriangle } from 'lucide-react';
+import { BackgroundTasksDropdown } from '@/components/chat/BackgroundTasksDropdown';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useMCPStore } from '@/stores/mcpStore';
@@ -234,7 +235,12 @@ export function ToolsMenu({
         </div>
       )}
 
-      {/* 3. Tools Dropdown (Wrench icon) - Only when MCP is enabled */}
+      {/* 3. Background Tasks Dropdown - Only when Cowork is enabled */}
+      {coworkMode && (
+        <BackgroundTasksDropdown />
+      )}
+
+      {/* 4. Tools Dropdown (Wrench icon) - Only when MCP is enabled */}
       {enableMCP && (
         <DropdownMenu open={open} onOpenChange={setOpen}>
           <DropdownMenuTrigger asChild>

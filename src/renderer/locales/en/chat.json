@@ -127,5 +127,31 @@
   "tool_approval_warning": {
     "title": "Auto-execution enabled",
     "description": "Tools will run automatically without approval for this provider ({{provider}})"
+  },
+  "background_tasks": {
+    "title": "Background Tasks",
+    "running_count": "{{count}} running",
+    "refresh": "Refresh",
+    "cleanup": "Cleanup completed tasks",
+    "no_tasks": "No background tasks",
+    "no_tasks_hint": "Tasks started with run_in_background will appear here",
+    "task_id": "ID",
+    "pid": "PID",
+    "started": "Started",
+    "exit_code": "Exit",
+    "output": "Output",
+    "hide_output": "Hide",
+    "kill": "Kill",
+    "total": "Total",
+    "completed": "Completed",
+    "failed": "Failed",
+    "killed": "Killed",
+    "error_prefix": "Task error",
+    "status": {
+      "running": "running",
+      "completed": "completed",
+      "failed": "failed",
+      "killed": "killed"
+    }
   }
 }

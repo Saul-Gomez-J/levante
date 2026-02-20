@@ -60,6 +60,7 @@ import { announcementsApi } from "./api/announcements";
 import { miniChatApi, onMiniChatShown, onMiniChatHidden, onSessionLoad } from "./api/miniChat";
 import { logViewerApi } from "./api/logViewer";
 import { coworkApi } from "./api/cowork";
+import { tasksApi } from "./api/tasks";
 
 // Re-export types for backwards compatibility
 export type {
@@ -842,6 +843,17 @@ export interface LevanteAPI {
       error?: string;
     }>;
   };
+
+  // Tasks API
+  tasks: {
+    list: (filter?: { status?: 'running' | 'completed' | 'failed' | 'killed' }) => Promise<{ success: boolean; data?: any; error?: string }>;
+    get: (taskId: string) => Promise<{ success: boolean; data?: any; error?: string }>;
+    getOutput: (taskId: string, options?: { includeTimestamps?: boolean; tail?: number }) => Promise<{ success: boolean; data?: string; error?: string }>;
+    wait: (taskId: string, options?: { timeoutMs?: number }) => Promise<{ success: boolean; data?: any; error?: string }>;
+    kill: (taskId: string) => Promise<{ success: boolean; data?: boolean; error?: string }>;
+    stats: () => Promise<{ success: boolean; data?: any; error?: string }>;
+    cleanup: (maxAgeMs?: number) => Promise<{ success: boolean; data?: number; error?: string }>;
+  };
 }
 
 // Assemble the complete API from modules
@@ -907,6 +919,9 @@ const api: LevanteAPI = {
 
   // Cowork API
   cowork: coworkApi,
+
+  // Tasks API
+  tasks: tasksApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

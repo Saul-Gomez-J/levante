@@ -7,6 +7,10 @@ import { tool } from "ai";
 import { z } from "zod";
 import { executeCommand } from "../utils/shell";
 import { truncateTail, formatSize } from "../utils/truncate";
+import { taskManager } from "../../../tasks";
+import { getLogger } from "../../../logging";
+
+const logger = getLogger();
 
 export interface BashToolConfig {
   cwd: string;
@@ -35,10 +39,45 @@ IMPORTANT:
         .describe("Brief description of what this command does (for logging)"),
       timeout: z.number().optional()
         .describe(`Timeout in ms (max ${timeout})`),
+      run_in_background: z.boolean()
+        .describe("REQUIRED. Set to true for long-running commands (dev servers, watch modes, builds >30s). Set to false for quick commands (git status, ls, cat). Background tasks return a taskId immediately."),
     }),
 
-    execute: async ({ command, description, timeout: cmdTimeout }: { command: string; description?: string; timeout?: number }) => {
+    execute: async ({ command, description, timeout: cmdTimeout, run_in_background }: { command: string; description?: string; timeout?: number; run_in_background: boolean }) => {
+      // Debug log directo a consola
+      console.log('[BASH_TOOL] Called with:', {
+        command: command.substring(0, 100),
+        description,
+        timeout: cmdTimeout,
+        run_in_background,
+      });
+
+      logger.aiSdk.info('Bash tool called', {
+        command: command.substring(0, 100),
+        description,
+        timeout: cmdTimeout,
+        run_in_background,
+      });
+
       const effectiveTimeout = Math.min(cmdTimeout ?? timeout, timeout);
+
+      // Handle background execution
+      if (run_in_background) {
+        const { taskId, pid } = taskManager.spawn(command, {
+          cwd: config.cwd,
+          timeout: effectiveTimeout,
+          description,
+        });
+
+        return {
+          status: 'background',
+          taskId,
+          pid,
+          exitCode: null,
+          output: `Command started in background (taskId: ${taskId})`,
+          truncated: false,
+        };
+      }
 
       try {
         const result = await executeCommand(command, {

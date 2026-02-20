@@ -20,6 +20,9 @@ export interface ChatRequest {
       grep?: boolean;
       find?: boolean;
       ls?: boolean;
+      taskOutput?: boolean;
+      killTask?: boolean;
+      listTasks?: boolean;
     };
   };
 }
