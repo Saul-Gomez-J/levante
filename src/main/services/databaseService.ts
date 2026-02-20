@@ -345,6 +345,27 @@ export class DatabaseService {
           `CREATE INDEX IF NOT EXISTS idx_messages_reasoning ON messages(session_id, reasoning)
            WHERE reasoning IS NOT NULL`
         ]
+      },
+      {
+        version: 6,
+        name: 'Add projects support',
+        queries: [
+          // Projects table
+          `CREATE TABLE IF NOT EXISTS projects (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            cwd TEXT,
+            description TEXT,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          )`,
+
+          // Add project relation to chat sessions
+          `ALTER TABLE chat_sessions ADD COLUMN project_id TEXT REFERENCES projects(id) ON DELETE CASCADE`,
+
+          // Create index for project lookup
+          `CREATE INDEX IF NOT EXISTS idx_chat_sessions_project_id ON chat_sessions(project_id)`
+        ]
       }
     ];
   }

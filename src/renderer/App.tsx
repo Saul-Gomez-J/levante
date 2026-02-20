@@ -9,6 +9,8 @@ import { OnboardingWizard } from '@/pages/OnboardingWizard'
 import { MCPDeepLinkModal } from '@/components/mcp/deep-link/MCPDeepLinkModal'
 import { AnnouncementModal } from '@/components/announcements/AnnouncementModal'
 import { useChatStore, initializeChatStore } from '@/stores/chatStore'
+import { useProjectStore } from '@/stores/projectStore'
+import { ProjectModal } from '@/components/projects/ProjectModal'
 import { logger } from '@/services/logger'
 import { modelService } from '@/services/modelService'
 import { setupMermaidValidationHandler } from '@/services/mermaidValidationService'
@@ -20,6 +22,17 @@ import '@/i18n/config' // Initialize i18n
 import type { DeepLinkAction } from '@preload/preload'
 import type { MCPServerConfig } from '@/types/mcp'
 import type { Announcement } from '@preload/types'
+import type { Project, CreateProjectInput, UpdateProjectInput } from '../types/database'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 function App() {
   const [currentPage, setCurrentPage] = useState('chat')
@@ -249,6 +262,44 @@ function App() {
   const deleteSession = useChatStore((state) => state.deleteSession)
   const updateSessionTitle = useChatStore((state) => state.updateSessionTitle)
   const setPendingPrompt = useChatStore((state) => state.setPendingPrompt)
+  const createSession = useChatStore((state) => state.createSession)
+
+  // Project management
+  const projects = useProjectStore((state) => state.projects)
+  const loadProjects = useProjectStore((state) => state.loadProjects)
+  const createProject = useProjectStore((state) => state.createProject)
+  const updateProject = useProjectStore((state) => state.updateProject)
+  const deleteProject = useProjectStore((state) => state.deleteProject)
+
+  const [projectModalOpen, setProjectModalOpen] = useState(false)
+  const [editingProject, setEditingProject] = useState<Project | undefined>(undefined)
+  const [deleteConfirmProject, setDeleteConfirmProject] = useState<{
+    id: string;
+    name: string;
+    count: number;
+  } | null>(null)
+
+  // Load projects on mount
+  useEffect(() => {
+    loadProjects()
+  }, [loadProjects])
+
+  const handleProjectSave = async (input: CreateProjectInput | UpdateProjectInput) => {
+    if ('id' in input) {
+      await updateProject(input as UpdateProjectInput)
+    } else {
+      await createProject(input as CreateProjectInput)
+    }
+  }
+
+  const handleNewSessionInProject = (projectId: string) => {
+    // Navigate to chat and create a session in the project
+    setCurrentPage('chat')
+    // We need a slight delay for the page to render before creating session
+    setTimeout(async () => {
+      await createSession('New Chat', undefined, 'chat', projectId)
+    }, 50)
+  }
 
   // Handle deep links
   useEffect(() => {
@@ -477,7 +528,14 @@ function App() {
         handleNewChat, // Navigate to chat when starting new chat
         deleteSession,
         updateSessionTitle, // Rename chat session
-        false // loading state
+        false, // loading state
+        projects,
+        () => { setEditingProject(undefined); setProjectModalOpen(true); },
+        (project: Project) => { setEditingProject(project); setProjectModalOpen(true); },
+        (projectId: string, projectName: string, sessionCount: number) => {
+          setDeleteConfirmProject({ id: projectId, name: projectName, count: sessionCount });
+        },
+        handleNewSessionInProject
       );
     }
     return null;
@@ -530,6 +588,44 @@ function App() {
         announcement={currentAnnouncement}
         onNavigate={setCurrentPage}
       />
+
+      {/* Project Modal */}
+      <ProjectModal
+        open={projectModalOpen}
+        onOpenChange={setProjectModalOpen}
+        project={editingProject}
+        onSave={handleProjectSave}
+      />
+
+      {/* Delete Project Confirmation */}
+      <AlertDialog
+        open={!!deleteConfirmProject}
+        onOpenChange={(open) => { if (!open) setDeleteConfirmProject(null); }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete project</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deleting &ldquo;{deleteConfirmProject?.name}&rdquo; will permanently delete its{' '}
+              {deleteConfirmProject?.count} conversations and all their history. This action
+              cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (deleteConfirmProject) {
+                  deleteProject(deleteConfirmProject.id);
+                  setDeleteConfirmProject(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <MainLayout
         title={getPageTitle(currentPage)}

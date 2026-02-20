@@ -11,6 +11,9 @@ import {
   ChatSession,
   Message,
   MessageAttachment,
+  Project,
+  CreateProjectInput,
+  UpdateProjectInput,
 } from "../types/database";
 import { UIPreferences, PreferenceKey } from "../types/preferences";
 import type {
@@ -61,6 +64,7 @@ import { miniChatApi, onMiniChatShown, onMiniChatHidden, onSessionLoad } from ".
 import { logViewerApi } from "./api/logViewer";
 import { coworkApi } from "./api/cowork";
 import { tasksApi } from "./api/tasks";
+import { projectsApi } from "./api/projects";
 
 // Re-export types for backwards compatibility
 export type {
@@ -854,6 +858,16 @@ export interface LevanteAPI {
     stats: () => Promise<{ success: boolean; data?: any; error?: string }>;
     cleanup: (maxAgeMs?: number) => Promise<{ success: boolean; data?: number; error?: string }>;
   };
+
+  // Projects API
+  projects: {
+    create: (input: CreateProjectInput) => Promise<DatabaseResult<Project>>;
+    get: (id: string) => Promise<DatabaseResult<Project | null>>;
+    list: () => Promise<DatabaseResult<Project[]>>;
+    update: (input: UpdateProjectInput) => Promise<DatabaseResult<Project>>;
+    delete: (id: string) => Promise<DatabaseResult<boolean>>;
+    getSessions: (projectId: string) => Promise<DatabaseResult<ChatSession[]>>;
+  };
 }
 
 // Assemble the complete API from modules
@@ -922,6 +936,9 @@ const api: LevanteAPI = {
 
   // Tasks API
   tasks: tasksApi,
+
+  // Projects API
+  projects: projectsApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

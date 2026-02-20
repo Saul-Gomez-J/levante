@@ -33,12 +33,13 @@ export class ChatService {
         session_type: input.session_type || 'chat', // Default to 'chat' if not specified
         folder_id: input.folder_id ?? null, // Convert undefined to null for SQLite
         created_at: now,
-        updated_at: now
+        updated_at: now,
+        project_id: input.project_id ?? null,
       };
 
       await databaseService.execute(
-        `INSERT INTO chat_sessions (id, title, model, session_type, folder_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO chat_sessions (id, title, model, session_type, folder_id, created_at, updated_at, project_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           session.id as InValue,
           session.title as InValue,
@@ -46,7 +47,8 @@ export class ChatService {
           session.session_type as InValue, // Add session_type
           (session.folder_id ?? null) as InValue, // Ensure null instead of undefined
           session.created_at as InValue,
-          session.updated_at as InValue
+          session.updated_at as InValue,
+          (session.project_id ?? null) as InValue,
         ]
       );
 
@@ -71,7 +73,8 @@ export class ChatService {
   async getSession(id: string): Promise<DatabaseResult<ChatSession | null>> {
     try {
       const result = await databaseService.execute(
-        'SELECT * FROM chat_sessions WHERE id = ?',
+        `SELECT id, title, model, session_type, folder_id, created_at, updated_at, project_id
+         FROM chat_sessions WHERE id = ?`,
         [id as InValue]
       );
 
@@ -88,7 +91,8 @@ export class ChatService {
         session_type: (sessionType === 'chat' || sessionType === 'inference') ? sessionType : 'chat',
         folder_id: row[4] as string,
         created_at: row[5] as number,
-        updated_at: row[6] as number
+        updated_at: row[6] as number,
+        project_id: row[7] as string | null,
       };
 
       return { data: session, success: true };
@@ -108,23 +112,33 @@ export class ChatService {
     this.logger.database.debug('Getting chat sessions', { query });
 
     try {
-      const { folder_id, limit = 50, offset = 0 } = query;
+      const { folder_id, project_id, limit = 50, offset = 0 } = query;
 
-      let sql = 'SELECT * FROM chat_sessions';
+      let sql = 'SELECT id, title, model, session_type, folder_id, created_at, updated_at, project_id FROM chat_sessions';
       let countSql = 'SELECT COUNT(*) as total FROM chat_sessions';
       const params: InValue[] = [];
+      const countParams: InValue[] = [];
 
       if (folder_id) {
         sql += ' WHERE folder_id = ?';
         countSql += ' WHERE folder_id = ?';
         params.push(folder_id as InValue);
+        countParams.push(folder_id as InValue);
+      } else if (project_id === null) {
+        sql += ' WHERE project_id IS NULL';
+        countSql += ' WHERE project_id IS NULL';
+      } else if (project_id !== undefined) {
+        sql += ' WHERE project_id = ?';
+        countSql += ' WHERE project_id = ?';
+        params.push(project_id as InValue);
+        countParams.push(project_id as InValue);
       }
 
       sql += ' ORDER BY updated_at DESC LIMIT ? OFFSET ?';
       params.push(limit as InValue, offset as InValue);
 
       // Get total count
-      const countResult = await databaseService.execute(countSql, folder_id ? [folder_id as InValue] : []);
+      const countResult = await databaseService.execute(countSql, countParams);
       const total = countResult.rows[0][0] as number;
 
       // Get sessions
@@ -139,7 +153,8 @@ export class ChatService {
           session_type: (sessionType === 'chat' || sessionType === 'inference') ? sessionType : 'chat',
           folder_id: row[4] as string,
           created_at: row[5] as number,
-          updated_at: row[6] as number
+          updated_at: row[6] as number,
+          project_id: row[7] as string | null,
         };
       });
 

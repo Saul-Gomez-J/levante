@@ -33,6 +33,7 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       enableMCP?: boolean;
       coworkMode?: boolean;
       coworkModeCwd?: string | null;
+      projectDescription?: string | null;
     } = {}
   ) {}
 
@@ -62,6 +63,8 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       (bodyObj.coworkMode as boolean) ?? this.defaultOptions.coworkMode ?? false;
     const coworkModeCwd =
       (bodyObj.coworkModeCwd as string | null) ?? this.defaultOptions.coworkModeCwd ?? null;
+    const projectDescription =
+      (bodyObj.projectDescription as string | null) ?? this.defaultOptions.projectDescription ?? undefined;
     const attachments = bodyObj.attachments; // Extract attachments directly from body
 
     logger.aiSdk.debug("Transport body received", {
@@ -122,6 +125,7 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
           cwd: coworkModeCwd,
         },
       }),
+      ...(projectDescription && { projectDescription }),
     };
 
     logger.aiSdk.debug("Transport request codeMode", {
@@ -411,6 +415,7 @@ export function createElectronChatTransport(options?: {
   enableMCP?: boolean;
   coworkMode?: boolean;
   coworkModeCwd?: string | null;
+  projectDescription?: string | null;
 }): ElectronChatTransport {
   return new ElectronChatTransport(options);
 }

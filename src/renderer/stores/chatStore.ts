@@ -32,7 +32,12 @@ interface ChatStore {
 
   // Session actions
   refreshSessions: () => Promise<void>;
-  createSession: (title?: string, model?: string, sessionType?: SessionType) => Promise<ChatSession | null>;
+  createSession: (
+    title?: string,
+    model?: string,
+    sessionType?: SessionType,
+    projectId?: string | null
+  ) => Promise<ChatSession | null>;
   loadSession: (sessionId: string) => Promise<void>;
   deleteSession: (sessionId: string) => Promise<boolean>;
   updateSessionTitle: (sessionId: string, title: string) => Promise<boolean>;
@@ -102,7 +107,12 @@ export const useChatStore = create<ChatStore>()(
         }
       },
 
-      createSession: async (title = 'New Chat', model = 'openai/gpt-4o', sessionType: SessionType = 'chat') => {
+      createSession: async (
+        title = 'New Chat',
+        model = 'openai/gpt-4o',
+        sessionType: SessionType = 'chat',
+        projectId?: string | null
+      ) => {
         // Validate model is not empty
         if (!model || model.trim() === '') {
           logger.database.error('Cannot create session: model is required', { title, model });
@@ -113,7 +123,7 @@ export const useChatStore = create<ChatStore>()(
           return null;
         }
 
-        logger.database.debug('Creating new session', { title, model, sessionType });
+        logger.database.debug('Creating new session', { title, model, sessionType, projectId });
         set({ loading: true, error: null });
 
         try {
@@ -121,6 +131,8 @@ export const useChatStore = create<ChatStore>()(
             title: title || 'New Chat',
             model: model,
             session_type: sessionType, // Pass session type
+            folder_id: null,
+            project_id: projectId ?? null,
           };
 
           logger.database.debug('Calling IPC to create session', { input });

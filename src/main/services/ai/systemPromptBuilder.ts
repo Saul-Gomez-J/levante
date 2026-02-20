@@ -11,7 +11,8 @@ export async function buildSystemPrompt(
   enableMCP: boolean,
   toolCount: number,
   mermaidValidation: boolean = true,
-  mcpDiscoveryEnabled: boolean = true
+  mcpDiscoveryEnabled: boolean = true,
+  projectDescription?: string
 ): Promise<string> {
   // Add current date information
   const currentDate = new Date();
@@ -71,6 +72,11 @@ export async function buildSystemPrompt(
   // Add custom instructions if provided
   if (personalization?.enabled && personalization.customInstructions) {
     systemPrompt += `\n\nCUSTOM INSTRUCTIONS:\n${personalization.customInstructions}`;
+  }
+
+  // Add project context if provided
+  if (projectDescription) {
+    systemPrompt += `\n\nPROJECT CONTEXT:\n${projectDescription}`;
   }
 
   if (webSearch) {
