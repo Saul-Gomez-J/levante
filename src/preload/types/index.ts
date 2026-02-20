@@ -181,7 +181,7 @@ export interface InputDefinition {
 }
 
 export interface DeepLinkAction {
-  type: 'mcp-add' | 'mcp-configure' | 'chat-new';
+  type: 'mcp-add' | 'mcp-configure' | 'chat-new' | 'skill-install';
   data: Record<string, unknown>;
 }
 

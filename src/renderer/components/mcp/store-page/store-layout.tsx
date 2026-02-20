@@ -4,7 +4,8 @@ import { useOAuthStore } from '@/stores/oauthStore';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Plus, Loader2, AlertCircle, Store, Wrench, Search } from 'lucide-react';
+import { Plus, Loader2, AlertCircle, Store, Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { IntegrationCard } from './integration-card';
 import { SourceFilter, CategoryFilter } from './provider-filter';
@@ -19,7 +20,6 @@ import { getRendererLogger } from '@/services/logger';
 import { toast } from 'sonner';
 import { MCPServerConfig, MCPConfigField } from '@/types/mcp';
 import { useTranslation } from 'react-i18next';
-import { cn } from '@/lib/utils';
 
 const logger = getRendererLogger();
 
@@ -27,12 +27,6 @@ interface StoreLayoutProps {
   mode: 'active' | 'store';
   onModeChange: (mode: 'active' | 'store') => void;
 }
-
-// Helper to get button style based on mode - avoids TypeScript narrowing issues
-const getModeButtonStyle = (currentMode: 'active' | 'store', buttonMode: 'active' | 'store') =>
-  currentMode === buttonMode
-    ? "bg-background text-foreground shadow-sm"
-    : "text-muted-foreground hover:text-foreground";
 
 export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
   const { t } = useTranslation('mcp');
@@ -561,28 +555,15 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <h2 className="text-2xl font-bold">{t('active.connected_servers')}</h2>
-                  <div className="inline-flex items-center rounded-full bg-muted p-1">
-                    <button
-                      onClick={() => onModeChange('active')}
-                      className={cn(
-                        "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
-                        getModeButtonStyle(mode, 'active')
-                      )}
-                      title={t('active.title')}
-                    >
-                      <Wrench className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => onModeChange('store')}
-                      className={cn(
-                        "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
-                        getModeButtonStyle(mode, 'store')
-                      )}
-                      title={t('store.title')}
-                    >
-                      <Store className="w-4 h-4" />
-                    </button>
-                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onModeChange('store')}
+                    className="gap-2"
+                  >
+                    <Store className="w-4 h-4" />
+                    View Store
+                  </Button>
                 </div>
                 <Badge variant="secondary">
                   {t('active.active_count', { count: activeServers.filter(s => s.enabled !== false).length })}
@@ -627,28 +608,15 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
             <div className="space-y-6">
               <div className="flex items-center gap-3 mb-4">
                 <h2 className="text-2xl font-bold">{t('active.connected_servers')}</h2>
-                <div className="inline-flex items-center rounded-full bg-muted p-1">
-                  <button
-                    onClick={() => onModeChange('active')}
-                    className={cn(
-                      "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
-                      getModeButtonStyle(mode, 'active')
-                    )}
-                    title={t('active.title')}
-                  >
-                    <Wrench className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => onModeChange('store')}
-                    className={cn(
-                      "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
-                      getModeButtonStyle(mode, 'store')
-                    )}
-                    title={t('store.title')}
-                  >
-                    <Store className="w-4 h-4" />
-                  </button>
-                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onModeChange('store')}
+                  className="gap-2"
+                >
+                  <Store className="w-4 h-4" />
+                  View Store
+                </Button>
               </div>
 
               <div className="text-center py-8">
@@ -684,28 +652,6 @@ export function StoreLayout({ mode, onModeChange }: StoreLayoutProps) {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <h2 className="text-2xl font-bold">{t('store.available_integrations')}</h2>
-              <div className="inline-flex items-center rounded-full bg-muted p-1">
-                <button
-                  onClick={() => onModeChange('active')}
-                  className={cn(
-                    "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
-                    getModeButtonStyle(mode, 'active')
-                  )}
-                  title={t('active.title')}
-                >
-                  <Wrench className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => onModeChange('store')}
-                  className={cn(
-                    "inline-flex items-center justify-center rounded-full px-3 py-1.5 text-sm font-medium transition-all",
-                    getModeButtonStyle(mode, 'store')
-                  )}
-                  title={t('store.title')}
-                >
-                  <Store className="w-4 h-4" />
-                </button>
-              </div>
             </div>
             <div className="flex items-center gap-2">
               <SourceFilter

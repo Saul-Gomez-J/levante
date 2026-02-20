@@ -65,6 +65,7 @@ import { logViewerApi } from "./api/logViewer";
 import { coworkApi } from "./api/cowork";
 import { tasksApi } from "./api/tasks";
 import { projectsApi } from "./api/projects";
+import { skillsApi } from "./api/skills";
 
 // Re-export types for backwards compatibility
 export type {
@@ -868,6 +869,16 @@ export interface LevanteAPI {
     delete: (id: string) => Promise<DatabaseResult<boolean>>;
     getSessions: (projectId: string) => Promise<DatabaseResult<ChatSession[]>>;
   };
+
+  // Skills API
+  skills: {
+    getCatalog: () => Promise<import('../types/skills').IPCResult<import('../types/skills').SkillsCatalogResponse>>;
+    getCategories: () => Promise<import('../types/skills').IPCResult<{ categories: import('../types/skills').SkillCategory[] }>>;
+    install: (skill: import('../types/skills').SkillDescriptor) => Promise<import('../types/skills').IPCResult<import('../types/skills').InstalledSkill>>;
+    uninstall: (skillId: string) => Promise<import('../types/skills').IPCResult<boolean>>;
+    listInstalled: () => Promise<import('../types/skills').IPCResult<import('../types/skills').InstalledSkill[]>>;
+    isInstalled: (skillId: string) => Promise<import('../types/skills').IPCResult<boolean>>;
+  };
 }
 
 // Assemble the complete API from modules
@@ -939,6 +950,9 @@ const api: LevanteAPI = {
 
   // Projects API
   projects: projectsApi,
+
+  // Skills API
+  skills: skillsApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

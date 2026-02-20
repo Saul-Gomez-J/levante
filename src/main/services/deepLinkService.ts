@@ -14,7 +14,7 @@ export interface InputDefinition {
 }
 
 export interface DeepLinkAction {
-  type: 'mcp-add' | 'mcp-configure' | 'chat-new';
+  type: 'mcp-add' | 'mcp-configure' | 'chat-new' | 'skill-install';
   data: Record<string, unknown>;
 }
 
@@ -66,6 +66,8 @@ export class DeepLinkService {
         return this.parseMCPConfigureLink(remainingPath, params);
       } else if (category === 'chat' && action === 'new') {
         return this.parseChatNewLink(params);
+      } else if (category === 'skill' && action === 'install') {
+        return this.parseSkillInstallLink(params);
       }
 
       logger.core.warn('Unknown deep link action', { category, action });
@@ -333,6 +335,38 @@ export class DeepLinkService {
       data: {
         serverId: decodedServerId
       }
+    };
+  }
+
+  /**
+   * Parse skill install deep link
+   * Format: levante://skill/install?id=category%2Fname
+   */
+  private parseSkillInstallLink(params: Record<string, string>): DeepLinkAction | null {
+    const idRaw = (params['id'] ?? '').trim();
+    const id = decodeURIComponent(idRaw);
+
+    if (!id) {
+      logger.core.warn('Invalid skill deep link: missing id', { params });
+      return null;
+    }
+
+    const match = id.match(/^([^/]+)\/([^/]+)$/);
+    if (!match) {
+      logger.core.warn('Invalid skill deep link: id must be category/name', { id });
+      return null;
+    }
+
+    const category = match[1];
+    const name = match[2];
+
+    return {
+      type: 'skill-install',
+      data: {
+        skillId: `${category}/${name}`,
+        category,
+        name,
+      },
     };
   }
 

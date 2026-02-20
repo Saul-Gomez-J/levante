@@ -15,7 +15,7 @@ import { mcpCacheService } from './MCPCacheService';
 const logger = getLogger();
 
 // Default production host for Levante services
-const DEFAULT_SERVICES_HOST = 'https://services.levanteapp.com';
+const DEFAULT_SERVICES_HOST = 'http://localhost:5180';
 
 export class MCPProviderService {
   /**

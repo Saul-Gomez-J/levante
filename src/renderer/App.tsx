@@ -8,9 +8,11 @@ import LogViewerPage from '@/pages/LogViewerPage'
 import { OnboardingWizard } from '@/pages/OnboardingWizard'
 import { MCPDeepLinkModal } from '@/components/mcp/deep-link/MCPDeepLinkModal'
 import { AnnouncementModal } from '@/components/announcements/AnnouncementModal'
+import { SkillInstallDeepLinkModal } from '@/components/skills/SkillInstallDeepLinkModal'
 import { useChatStore, initializeChatStore } from '@/stores/chatStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { ProjectModal } from '@/components/projects/ProjectModal'
+import { useSkillsStore } from '@/stores/skillsStore'
 import { logger } from '@/services/logger'
 import { modelService } from '@/services/modelService'
 import { setupMermaidValidationHandler } from '@/services/mermaidValidationService'
@@ -23,6 +25,7 @@ import type { DeepLinkAction } from '@preload/preload'
 import type { MCPServerConfig } from '@/types/mcp'
 import type { Announcement } from '@preload/types'
 import type { Project, CreateProjectInput, UpdateProjectInput } from '../types/database'
+import type { SkillDescriptor } from '../types/skills'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,6 +59,10 @@ function App() {
   // Announcement Modal state
   const [announcementModalOpen, setAnnouncementModalOpen] = useState(false)
   const [currentAnnouncement, setCurrentAnnouncement] = useState<Announcement | null>(null)
+
+  // Skill Deep Link Modal state
+  const [skillDeepLinkData, setSkillDeepLinkData] = useState<SkillDescriptor | null>(null)
+  const [skillDeepLinkOpen, setSkillDeepLinkOpen] = useState(false)
 
   // Load theme and language from ui-preferences.json
   useEffect(() => {
@@ -459,6 +466,26 @@ function App() {
               }
             }, 500);
           }
+        } else if (action.type === 'skill-install') {
+          setCurrentPage('store')
+
+          const { skillId } = action.data as { skillId: string }
+
+          const store = useSkillsStore.getState()
+          await Promise.all([store.loadCatalog(), store.loadInstalled()])
+
+          const skill = useSkillsStore.getState().catalog.find((s) => s.id === skillId)
+
+          if (!skill) {
+            toast.error('Skill not found', {
+              description: `The skill ${skillId} does not exist in the current catalog`,
+              duration: 5000,
+            })
+            return
+          }
+
+          setSkillDeepLinkData(skill)
+          setSkillDeepLinkOpen(true)
         }
       } catch (error) {
         logger.core.error('Error handling deep link action', {
@@ -626,6 +653,14 @@ function App() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Skill Deep Link Install Modal */}
+      <SkillInstallDeepLinkModal
+        skill={skillDeepLinkData}
+        open={skillDeepLinkOpen}
+        onOpenChange={setSkillDeepLinkOpen}
+      />
+
 
       <MainLayout
         title={getPageTitle(currentPage)}
