@@ -37,6 +37,7 @@ export interface ChatRequest {
   model: string;
   webSearch: boolean;
   enableMCP?: boolean;
+  projectDescription?: string; // Descripción del proyecto (inyectada en system prompt)
   // Modo de codificación
   codeMode?: {
     enabled: boolean;
@@ -933,7 +934,7 @@ export class AIService {
   async *streamChat(
     request: ChatRequest
   ): AsyncGenerator<ChatStreamChunk, void, unknown> {
-    const { messages, model, webSearch, enableMCP = false } = request;
+    const { messages, model, webSearch, enableMCP = false, projectDescription } = request;
 
     try {
       // Get model classification (Phase 3: Model Classification)
@@ -1174,7 +1175,8 @@ export class AIService {
           enableMCP,
           Object.keys(tools).length,
           builtInToolsConfig.mermaidValidation,
-          builtInToolsConfig.mcpDiscovery
+          builtInToolsConfig.mcpDiscovery,
+          projectDescription
         ),
         // Use stopWhen as recommended in AI SDK v5 (not maxSteps)
         // This allows the model to continue generating after tool results
@@ -1861,7 +1863,7 @@ export class AIService {
   async sendSingleMessage(
     request: ChatRequest
   ): Promise<{ response: string; sources?: any[]; reasoningText?: string }> {
-    const { messages, model, webSearch, enableMCP = false } = request;
+    const { messages, model, webSearch, enableMCP = false, projectDescription } = request;
 
     try {
       // Get model classification (Phase 3: Model Classification)
@@ -1933,7 +1935,8 @@ export class AIService {
           enableMCP,
           Object.keys(tools).length,
           builtInToolsConfig.mermaidValidation,
-          builtInToolsConfig.mcpDiscovery
+          builtInToolsConfig.mcpDiscovery,
+          projectDescription
         ),
         stopWhen: stepCountIs(await calculateMaxSteps(Object.keys(tools).length)),
         providerOptions: await getReasoningProviderOptions(model, undefined, Object.keys(tools).length > 0),

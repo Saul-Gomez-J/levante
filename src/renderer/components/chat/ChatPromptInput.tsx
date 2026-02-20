@@ -60,7 +60,9 @@ interface ChatPromptInputProps {
   coworkMode: boolean;
   onCoworkModeChange: (enabled: boolean) => void;
   coworkModeCwd: string | null;
-  onCoworkModeCwdChange: (cwd: string | null) => void;
+  onCoworkModeCwdChange: (cwd: string | null) => void | Promise<void>;
+  coworkModeCwdSource?: 'none' | 'global' | 'project' | 'session';
+  onResetCoworkModeCwdOverride?: () => void | Promise<void>;
   model: string;
   onModelChange: (modelId: string) => void;
   availableModels: Model[];
@@ -96,6 +98,8 @@ export function ChatPromptInput({
   onCoworkModeChange,
   coworkModeCwd,
   onCoworkModeCwdChange,
+  coworkModeCwdSource = 'none',
+  onResetCoworkModeCwdOverride,
   model,
   onModelChange,
   availableModels,
@@ -240,6 +244,8 @@ export function ChatPromptInput({
             onCoworkModeChange={onCoworkModeChange}
             coworkModeCwd={coworkModeCwd}
             onCoworkModeCwdChange={onCoworkModeCwdChange}
+            coworkModeCwdSource={coworkModeCwdSource}
+            onResetCoworkModeCwdOverride={onResetCoworkModeCwdOverride}
           />
           {/* Add Context Menu (MCP resources + prompts + file upload) */}
           {onFilesSelected && (

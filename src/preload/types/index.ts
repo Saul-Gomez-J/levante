@@ -8,6 +8,7 @@ export interface ChatRequest {
   model: string;
   webSearch?: boolean;
   enableMCP?: boolean;
+  projectDescription?: string; // Descripción del proyecto (inyectada en system prompt)
   // Modo de codificación (Cowork mode)
   codeMode?: {
     enabled: boolean;

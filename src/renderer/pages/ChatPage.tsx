@@ -21,6 +21,7 @@ import {
 } from '@/components/ai-elements/conversation';
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useChatStore } from '@/stores/chatStore';
+import { useProjectStore } from '@/stores/projectStore';
 import { StreamingProvider, useStreamingContext } from '@/contexts/StreamingContext';
 import { ChatList } from '@/components/chat/ChatList';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
@@ -54,6 +55,10 @@ const ChatPage = () => {
   const [pendingMessageAfterStop, setPendingMessageAfterStop] = useState<string | null>(null);
   const [pendingWidgetMessage, setPendingWidgetMessage] = useState<string | null>(null);
 
+  // Project store (read-only for effectiveCwd / projectDescription)
+  const projects = useProjectStore((state) => state.projects);
+  const loadProjects = useProjectStore((state) => state.loadProjects);
+
   // MCP Resources hook
   const {
     selectedResources,
@@ -82,6 +87,7 @@ const ChatPage = () => {
 
   // Track if we just created a new session (to avoid loading empty history)
   const justCreatedSessionRef = useRef(false);
+  const [sessionCwdOverrides, setSessionCwdOverrides] = useState<Record<string, string>>({});
 
   const promptInputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -177,6 +183,71 @@ const ChatPage = () => {
     });
   };
 
+  // Load projects on mount
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
+
+  const currentSessionCwdOverride = useMemo(() => {
+    if (!currentSession?.id) return null;
+    return sessionCwdOverrides[currentSession.id] ?? null;
+  }, [currentSession?.id, sessionCwdOverrides]);
+
+  const currentProject = useMemo(() => {
+    if (!currentSession?.project_id) return undefined;
+    return projects.find((p) => p.id === currentSession.project_id);
+  }, [currentSession?.project_id, projects]);
+
+  const resolvedCoworkCwd = useMemo(() => {
+    if (currentSessionCwdOverride) {
+      return { cwd: currentSessionCwdOverride, source: 'session' as const };
+    }
+
+    if (currentProject?.cwd) {
+      return { cwd: currentProject.cwd, source: 'project' as const };
+    }
+
+    if (coworkModeCwd) {
+      return { cwd: coworkModeCwd, source: 'global' as const };
+    }
+
+    return { cwd: null, source: 'none' as const };
+  }, [currentSessionCwdOverride, currentProject?.cwd, coworkModeCwd]);
+
+  const effectiveCwd = resolvedCoworkCwd.cwd;
+
+  // Compute project description for system prompt injection
+  const projectDescription = useMemo(
+    () => currentProject?.description ?? undefined,
+    [currentProject?.description]
+  );
+
+  const handleCoworkModeCwdChange = useCallback(async (cwd: string | null) => {
+    if (currentSession?.id) {
+      setSessionCwdOverrides((prev) => {
+        const next = { ...prev };
+        if (cwd) {
+          next[currentSession.id] = cwd;
+        } else {
+          delete next[currentSession.id];
+        }
+        return next;
+      });
+      return;
+    }
+
+    await setCoworkModeCwd(cwd);
+  }, [currentSession?.id, setCoworkModeCwd]);
+
+  const handleResetCoworkModeCwdOverride = useCallback(async () => {
+    if (!currentSession?.id) return;
+    setSessionCwdOverrides((prev) => {
+      const next = { ...prev };
+      delete next[currentSession.id];
+      return next;
+    });
+  }, [currentSession?.id]);
+
   // Create transport with current configuration
   const transport = useMemo(
     () =>
@@ -184,7 +255,8 @@ const ChatPage = () => {
         model: model || 'openai/gpt-4o',
         enableMCP: enableMCP ?? true,
         coworkMode: coworkMode ?? false,
-        coworkModeCwd: coworkModeCwd ?? null,
+        coworkModeCwd: effectiveCwd,
+        projectDescription,
       }),
     [] // Keep same transport instance
   );
@@ -195,9 +267,10 @@ const ChatPage = () => {
       model: model || 'openai/gpt-4o',
       enableMCP: enableMCP ?? true,
       coworkMode: coworkMode ?? false,
-      coworkModeCwd: coworkModeCwd ?? null,
+      coworkModeCwd: effectiveCwd,
+      projectDescription,
     });
-  }, [model, enableMCP, coworkMode, coworkModeCwd, transport]);
+  }, [model, enableMCP, coworkMode, effectiveCwd, projectDescription, transport]);
 
   // Use AI SDK native useChat hook
   const {
@@ -927,8 +1000,10 @@ const ChatPage = () => {
                 onMCPChange={setEnableMCP}
                 coworkMode={coworkMode ?? false}
                 onCoworkModeChange={setCoworkMode}
-                coworkModeCwd={coworkModeCwd ?? null}
-                onCoworkModeCwdChange={setCoworkModeCwd}
+                coworkModeCwd={effectiveCwd}
+                onCoworkModeCwdChange={handleCoworkModeCwdChange}
+                coworkModeCwdSource={resolvedCoworkCwd.source}
+                onResetCoworkModeCwdOverride={currentSession ? handleResetCoworkModeCwdOverride : undefined}
                 model={model}
                 onModelChange={handleModelChange}
                 availableModels={filteredAvailableModels}
@@ -991,8 +1066,10 @@ const ChatPage = () => {
               onMCPChange={setEnableMCP}
               coworkMode={coworkMode ?? false}
               onCoworkModeChange={setCoworkMode}
-              coworkModeCwd={coworkModeCwd ?? null}
-              onCoworkModeCwdChange={setCoworkModeCwd}
+              coworkModeCwd={effectiveCwd}
+              onCoworkModeCwdChange={handleCoworkModeCwdChange}
+              coworkModeCwdSource={resolvedCoworkCwd.source}
+              onResetCoworkModeCwdOverride={currentSession ? handleResetCoworkModeCwdOverride : undefined}
               model={model}
               onModelChange={handleModelChange}
               availableModels={filteredAvailableModels}
@@ -1038,7 +1115,12 @@ ChatPageWithProvider.getSidebarContent = (
   onNewChat: () => void,
   onDeleteChat: (sessionId: string) => void,
   onRenameChat: (sessionId: string, newTitle: string) => void,
-  loading: boolean = false
+  loading: boolean = false,
+  projects?: any[],
+  onCreateProject?: () => void,
+  onEditProject?: (project: any) => void,
+  onDeleteProject?: (projectId: string, projectName: string, sessionCount: number) => void,
+  onNewSessionInProject?: (projectId: string) => void
 ) => {
   return (
     <ChatList
@@ -1049,6 +1131,11 @@ ChatPageWithProvider.getSidebarContent = (
       onDeleteChat={onDeleteChat}
       onRenameChat={onRenameChat}
       loading={loading}
+      projects={projects}
+      onCreateProject={onCreateProject}
+      onEditProject={onEditProject}
+      onDeleteProject={onDeleteProject}
+      onNewSessionInProject={onNewSessionInProject}
     />
   );
 };

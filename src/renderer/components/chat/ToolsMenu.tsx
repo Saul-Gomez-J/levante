@@ -28,7 +28,9 @@ interface ToolsMenuProps {
   coworkMode: boolean;
   onCoworkModeChange: (enabled: boolean) => void;
   coworkModeCwd: string | null;
-  onCoworkModeCwdChange: (cwd: string | null) => void;
+  onCoworkModeCwdChange: (cwd: string | null) => void | Promise<void>;
+  coworkModeCwdSource?: 'none' | 'global' | 'project' | 'session';
+  onResetCoworkModeCwdOverride?: () => void | Promise<void>;
   className?: string;
 }
 
@@ -39,6 +41,8 @@ export function ToolsMenu({
   onCoworkModeChange,
   coworkModeCwd,
   onCoworkModeCwdChange,
+  coworkModeCwdSource = 'none',
+  onResetCoworkModeCwdOverride,
   className
 }: ToolsMenuProps) {
   const { t } = useTranslation('chat');
@@ -79,6 +83,19 @@ export function ToolsMenu({
     return parts[parts.length - 1] || path;
   };
 
+  const getCwdSourceLabel = (source: 'none' | 'global' | 'project' | 'session'): string => {
+    switch (source) {
+      case 'session':
+        return t('tools_menu.cowork.source_session', 'session');
+      case 'project':
+        return t('tools_menu.cowork.source_project', 'project');
+      case 'global':
+        return t('tools_menu.cowork.source_global', 'global');
+      default:
+        return t('tools_menu.cowork.source_none', 'none');
+    }
+  };
+
   // Handle directory selection
   const handleSelectDirectory = async () => {
     try {
@@ -89,7 +106,7 @@ export function ToolsMenu({
       });
 
       if (result.success && result.data && !result.data.canceled) {
-        onCoworkModeCwdChange(result.data.path);
+        await onCoworkModeCwdChange(result.data.path);
       }
     } catch (error) {
       console.error('Failed to select directory:', error);
@@ -169,7 +186,23 @@ export function ToolsMenu({
                     </span>
                   )}
                 </div>
+                {coworkModeCwd && (
+                  <Badge variant="secondary" className="text-[10px]">
+                    {getCwdSourceLabel(coworkModeCwdSource)}
+                  </Badge>
+                )}
               </div>
+
+              {coworkModeCwd && onResetCoworkModeCwdOverride && coworkModeCwdSource === 'session' && (
+                <button
+                  type="button"
+                  className="w-full rounded-md border px-2 py-1.5 text-xs text-left hover:bg-accent"
+                  onClick={() => onResetCoworkModeCwdOverride()}
+                >
+                  {t('tools_menu.cowork.use_inherited', 'Use inherited CWD')}
+                </button>
+              )}
+
               {/* Warning when no directory selected */}
               {showCoworkMissingDirWarning && (
                 <div className="flex items-start gap-2 p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
@@ -224,6 +257,9 @@ export function ToolsMenu({
               <Code2 size={16} className="text-blue-600" />
               <span className="text-xs text-blue-600 max-w-20 truncate">
                 {getShortFolderName(coworkModeCwd)}
+              </span>
+              <span className="text-[10px] uppercase tracking-wide text-blue-600/80">
+                {getCwdSourceLabel(coworkModeCwdSource)}
               </span>
             </>
           ) : (

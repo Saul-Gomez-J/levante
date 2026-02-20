@@ -7,6 +7,28 @@
  */
 export type SessionType = "chat" | "inference";
 
+export interface Project {
+  id: string;
+  name: string;
+  cwd?: string | null;
+  description?: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface CreateProjectInput {
+  name: string;
+  cwd?: string;
+  description?: string;
+}
+
+export interface UpdateProjectInput {
+  id: string;
+  name?: string;
+  cwd?: string | null;
+  description?: string | null;
+}
+
 /**
  * Message attachment metadata
  * Stored attachments include id, path, size along with type and mime info
@@ -29,6 +51,7 @@ export interface ChatSession {
   folder_id?: string | null;
   created_at: number;
   updated_at: number;
+  project_id?: string | null;
 }
 
 export interface Message {
@@ -95,6 +118,7 @@ export interface CreateChatSessionInput {
   model: string;
   session_type?: SessionType; // Optional, defaults to 'chat'
   folder_id?: string | null;
+  project_id?: string | null;
 }
 
 export interface CreateMessageInput {
@@ -148,6 +172,7 @@ export interface UpdateChatSessionInput {
   model?: string;
   folder_id?: string | null;
   session_type?: SessionType;
+  project_id?: string | null;
 }
 
 export interface UpdateMessageInput {
@@ -177,6 +202,7 @@ export interface DeleteMessagesAfterQuery {
 
 export interface GetChatSessionsQuery {
   folder_id?: string;
+  project_id?: string | null;
   limit?: number;
   offset?: number;
 }
