@@ -25,6 +25,7 @@ export interface TaskInfo {
   exitCode: number | null;
   timedOut: boolean;
   interrupted: boolean;
+  detectedPort: number | null;
 }
 
 export interface TaskInfoDTO {
@@ -39,6 +40,7 @@ export interface TaskInfoDTO {
   exitCode: number | null;
   timedOut: boolean;
   interrupted: boolean;
+  detectedPort: number | null;
 }
 
 export interface SpawnTaskOptions {
@@ -73,6 +75,7 @@ export interface TaskEvents {
   'task:complete': (taskId: string, info: TaskInfo) => void;
   'task:killed': (taskId: string, info: TaskInfo) => void;
   'task:error': (taskId: string, error: Error) => void;
+  'task:port-detected': (taskId: string, port: number, info: TaskInfo) => void;
 }
 
 /**

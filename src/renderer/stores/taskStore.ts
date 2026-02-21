@@ -20,6 +20,7 @@ export interface TaskInfoDTO {
   exitCode: number | null;
   timedOut: boolean;
   interrupted: boolean;
+  detectedPort: number | null;
 }
 
 export interface TaskStatsDTO {

@@ -35,6 +35,9 @@ import { useMCPResources } from '@/hooks/useMCPResources';
 import { useFileAttachments } from '@/hooks/useFileAttachments';
 import { useModelSelection, isInferenceModel } from '@/hooks/useModelSelection';
 import { usePreference } from '@/hooks/usePreferences';
+import { WebPreviewPanel } from '@/components/chat/WebPreviewPanel';
+import { WebPreviewToast } from '@/components/chat/WebPreviewToast';
+import { useWebPreview } from '@/hooks/useWebPreview';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
@@ -247,6 +250,9 @@ const ChatPage = () => {
       return next;
     });
   }, [currentSession?.id]);
+
+  // Web preview hook — activa la suscripción a eventos de detección de puertos
+  useWebPreview();
 
   // Create transport with current configuration
   const transport = useMemo(
@@ -961,140 +967,149 @@ const ChatPage = () => {
   }
 
   return (
-    <div
-      className={cn(
-        "flex flex-col h-full relative",
-        isDragging && "ring-2 ring-primary ring-inset"
-      )}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDragOver={handleDragOver}
-      onDrop={handleDrop}
-    >
-      {/* Drag overlay */}
-      {isDragging && (
-        <div className="absolute inset-0 z-50 bg-primary/10 backdrop-blur-sm flex items-center justify-center pointer-events-none">
-          <div className="text-center">
-            <p className="text-lg font-semibold text-primary">Drop images or PDFs here</p>
-            <p className="text-sm text-muted-foreground mt-1">to attach them to your message</p>
-          </div>
-        </div>
-      )}
-      {/* Show error if any */}
-      {chatError && (
-        <div className="p-4 bg-red-100 border border-red-400 text-red-800">
-          <strong>Error:</strong> {chatError.message}
-        </div>
-      )}
-      {isChatEmpty ? (
-        // Empty state with welcome screen
-        (<div className="flex-1 flex flex-col items-center justify-center px-4">
-          <div className="w-full max-w-3xl flex flex-col items-center gap-8">
-            <WelcomeScreen userName={userName} />
-            <div className="w-full">
-              <ChatPromptInput
-                input={input}
-                onInputChange={setInput}
-                onSubmit={handleSubmit}
-                enableMCP={enableMCP ?? true}
-                onMCPChange={setEnableMCP}
-                coworkMode={coworkMode ?? false}
-                onCoworkModeChange={setCoworkMode}
-                coworkModeCwd={effectiveCwd}
-                onCoworkModeCwdChange={handleCoworkModeCwdChange}
-                coworkModeCwdSource={resolvedCoworkCwd.source}
-                onResetCoworkModeCwdOverride={currentSession ? handleResetCoworkModeCwdOverride : undefined}
-                model={model}
-                onModelChange={handleModelChange}
-                availableModels={filteredAvailableModels}
-                groupedModelsByProvider={groupedModelsByProvider || undefined}
-                modelsLoading={modelsLoading}
-                status={status}
-                modelTaskType={modelTaskType}
-                currentModelInfo={currentModelInfo}
-                attachedFiles={attachedFiles}
-                onFilesSelected={handleFilesSelected}
-                onFileRemove={handleFileRemove}
-                enableFileAttachment={enableFileAttachment}
-                fileAccept={getFileAccept()}
-                selectedResources={selectedResources}
-                onResourceSelected={selectResource}
-                onResourceRemove={removeResource}
-                selectedPrompts={selectedPrompts}
-                onPromptSelected={selectPrompt}
-                onPromptRemove={removePrompt}
-                inputRef={promptInputRef}
-              />
+    <>
+      <WebPreviewToast />
+      <div
+        className={cn(
+          "flex flex-row h-full relative",
+          isDragging && "ring-2 ring-primary ring-inset"
+        )}
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+      >
+        {/* Área de chat */}
+        <div className="flex flex-col flex-1 relative min-w-0">
+          {/* Drag overlay */}
+          {isDragging && (
+            <div className="absolute inset-0 z-50 bg-primary/10 backdrop-blur-sm flex items-center justify-center pointer-events-none">
+              <div className="text-center">
+                <p className="text-lg font-semibold text-primary">Drop images or PDFs here</p>
+                <p className="text-sm text-muted-foreground mt-1">to attach them to your message</p>
+              </div>
             </div>
-          </div>
-        </div>)
-      ) : (
-        // Chat conversation
-        (<>
-          <Conversation className="flex-1">
-            <ConversationContent className="max-w-3xl mx-auto p-0 pl-4 pr-2 py-4">
-              {messages.map((message, index) => (
-                <ChatMessageItem
-                  key={message.id}
-                  message={message}
-                  isStreaming={status === 'streaming' && index === messages.length - 1}
-                  onPrompt={setInput}
-                  onSendMessage={handleSendMessage}
-                  chatMessages={messages}
-                  onEditMessage={handleEditMessage}
-                />
-              ))}
+          )}
+          {/* Show error if any */}
+          {chatError && (
+            <div className="p-4 bg-red-100 border border-red-400 text-red-800">
+              <strong>Error:</strong> {chatError.message}
+            </div>
+          )}
+          {isChatEmpty ? (
+            // Empty state with welcome screen
+            (<div className="flex-1 flex flex-col items-center justify-center px-4">
+              <div className="w-full max-w-3xl flex flex-col items-center gap-8">
+                <WelcomeScreen userName={userName} />
+                <div className="w-full">
+                  <ChatPromptInput
+                    input={input}
+                    onInputChange={setInput}
+                    onSubmit={handleSubmit}
+                    enableMCP={enableMCP ?? true}
+                    onMCPChange={setEnableMCP}
+                    coworkMode={coworkMode ?? false}
+                    onCoworkModeChange={setCoworkMode}
+                    coworkModeCwd={effectiveCwd}
+                    onCoworkModeCwdChange={handleCoworkModeCwdChange}
+                    coworkModeCwdSource={resolvedCoworkCwd.source}
+                    onResetCoworkModeCwdOverride={currentSession ? handleResetCoworkModeCwdOverride : undefined}
+                    model={model}
+                    onModelChange={handleModelChange}
+                    availableModels={filteredAvailableModels}
+                    groupedModelsByProvider={groupedModelsByProvider || undefined}
+                    modelsLoading={modelsLoading}
+                    status={status}
+                    modelTaskType={modelTaskType}
+                    currentModelInfo={currentModelInfo}
+                    attachedFiles={attachedFiles}
+                    onFilesSelected={handleFilesSelected}
+                    onFileRemove={handleFileRemove}
+                    enableFileAttachment={enableFileAttachment}
+                    fileAccept={getFileAccept()}
+                    selectedResources={selectedResources}
+                    onResourceSelected={selectResource}
+                    onResourceRemove={removeResource}
+                    selectedPrompts={selectedPrompts}
+                    onPromptSelected={selectPrompt}
+                    onPromptRemove={removePrompt}
+                    inputRef={promptInputRef}
+                  />
+                </div>
+              </div>
+            </div>)
+          ) : (
+            // Chat conversation
+            (<>
+              <Conversation className="flex-1">
+                <ConversationContent className="max-w-3xl mx-auto p-0 pl-4 pr-2 py-4">
+                  {messages.map((message, index) => (
+                    <ChatMessageItem
+                      key={message.id}
+                      message={message}
+                      isStreaming={status === 'streaming' && index === messages.length - 1}
+                      onPrompt={setInput}
+                      onSendMessage={handleSendMessage}
+                      chatMessages={messages}
+                      onEditMessage={handleEditMessage}
+                    />
+                  ))}
 
-              {/* Streaming indicator */}
-              {(status === 'streaming' || status === 'submitted') && (
-                <Message from="assistant">
-                  <MessageContent>
-                    <BreathingLogo />
-                  </MessageContent>
-                </Message>
-              )}
-            </ConversationContent>
-            <ConversationScrollButton />
-          </Conversation>
-          {/* Input */}
-          <div className="bg-transparent px-2">
-            <ChatPromptInput
-              input={input}
-              onInputChange={setInput}
-              onSubmit={handleSubmit}
-              enableMCP={enableMCP ?? true}
-              onMCPChange={setEnableMCP}
-              coworkMode={coworkMode ?? false}
-              onCoworkModeChange={setCoworkMode}
-              coworkModeCwd={effectiveCwd}
-              onCoworkModeCwdChange={handleCoworkModeCwdChange}
-              coworkModeCwdSource={resolvedCoworkCwd.source}
-              onResetCoworkModeCwdOverride={currentSession ? handleResetCoworkModeCwdOverride : undefined}
-              model={model}
-              onModelChange={handleModelChange}
-              availableModels={filteredAvailableModels}
-              groupedModelsByProvider={groupedModelsByProvider || undefined}
-              modelsLoading={modelsLoading}
-              status={status}
-              modelTaskType={modelTaskType}
-              currentModelInfo={currentModelInfo}
-              attachedFiles={attachedFiles}
-              onFilesSelected={handleFilesSelected}
-              onFileRemove={handleFileRemove}
-              enableFileAttachment={enableFileAttachment}
-              fileAccept={getFileAccept()}
-              selectedResources={selectedResources}
-              onResourceSelected={selectResource}
-              onResourceRemove={removeResource}
-              selectedPrompts={selectedPrompts}
-              onPromptSelected={selectPrompt}
-              onPromptRemove={removePrompt}
-              inputRef={promptInputRef}
-            />
-          </div>
-        </>)
-      )}
-    </div>
+                  {/* Streaming indicator */}
+                  {(status === 'streaming' || status === 'submitted') && (
+                    <Message from="assistant">
+                      <MessageContent>
+                        <BreathingLogo />
+                      </MessageContent>
+                    </Message>
+                  )}
+                </ConversationContent>
+                <ConversationScrollButton />
+              </Conversation>
+              {/* Input */}
+              <div className="bg-transparent px-2">
+                <ChatPromptInput
+                  input={input}
+                  onInputChange={setInput}
+                  onSubmit={handleSubmit}
+                  enableMCP={enableMCP ?? true}
+                  onMCPChange={setEnableMCP}
+                  coworkMode={coworkMode ?? false}
+                  onCoworkModeChange={setCoworkMode}
+                  coworkModeCwd={effectiveCwd}
+                  onCoworkModeCwdChange={handleCoworkModeCwdChange}
+                  coworkModeCwdSource={resolvedCoworkCwd.source}
+                  onResetCoworkModeCwdOverride={currentSession ? handleResetCoworkModeCwdOverride : undefined}
+                  model={model}
+                  onModelChange={handleModelChange}
+                  availableModels={filteredAvailableModels}
+                  groupedModelsByProvider={groupedModelsByProvider || undefined}
+                  modelsLoading={modelsLoading}
+                  status={status}
+                  modelTaskType={modelTaskType}
+                  currentModelInfo={currentModelInfo}
+                  attachedFiles={attachedFiles}
+                  onFilesSelected={handleFilesSelected}
+                  onFileRemove={handleFileRemove}
+                  enableFileAttachment={enableFileAttachment}
+                  fileAccept={getFileAccept()}
+                  selectedResources={selectedResources}
+                  onResourceSelected={selectResource}
+                  onResourceRemove={removeResource}
+                  selectedPrompts={selectedPrompts}
+                  onPromptSelected={selectPrompt}
+                  onPromptRemove={removePrompt}
+                  inputRef={promptInputRef}
+                />
+              </div>
+            </>)
+          )}
+        </div>
+
+        {/* Panel lateral de preview */}
+        <WebPreviewPanel />
+      </div>
+    </>
   );
 };
 

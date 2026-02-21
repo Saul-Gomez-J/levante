@@ -8,6 +8,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Wrench, Settings, ChevronDown, ChevronRight, RefreshCw, Code2, FolderOpen, AlertTriangle } from 'lucide-react';
 import { BackgroundTasksDropdown } from '@/components/chat/BackgroundTasksDropdown';
+import { WebPreviewButton } from '@/components/chat/WebPreviewButton';
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { useMCPStore } from '@/stores/mcpStore';
@@ -275,6 +276,9 @@ export function ToolsMenu({
       {coworkMode && (
         <BackgroundTasksDropdown />
       )}
+
+      {/* Web Preview Button - visible when servers are detected */}
+      <WebPreviewButton />
 
       {/* 4. Tools Dropdown (Wrench icon) - Only when MCP is enabled */}
       {enableMCP && (
