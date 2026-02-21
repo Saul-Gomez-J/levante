@@ -1,82 +1,108 @@
-# Plan de implementación: Skills en el contexto del agente
+# Runbook de implementación: Skills en el contexto del agente
 
-**Objetivo:** Hacer que las skills instaladas por el usuario (`~/levante/skills/{category}/{name}.md`) sean visibles para el agente al inicio de cada conversación (system prompt) y ejecutables por él mediante una tool dedicada, tanto cuando el usuario las invoca explícitamente como cuando el agente decide usarlas de forma autónoma.
+## 1) Objetivo funcional
+Hacer que todas las skills instaladas en `~/levante/skills/{category}/{name}.md`:
+1. Sean visibles para el agente en el `system prompt` al inicio de cada conversación.
+2. Se puedan ejecutar mediante una tool dedicada (`skill_execute`).
+3. Se usen tanto por invocación explícita del usuario como por decisión autónoma del agente.
 
-**Estado actual:** Las skills ya se instalan y listan correctamente. No llegan al agente.
-
----
-
-## 1. Qué ya existe y se reutiliza
-
-Todo lo necesario para leer skills del disco ya está implementado. No hay que reescribirlo.
-
-| Componente existente | Archivo | Líneas |
-|---|---|---|
-| `parseFrontmatter()` | `src/main/services/skillsService.ts` | 98–119 |
-| `listInstalledSkills()` | `src/main/services/skillsService.ts` | 274–333 |
-| `skillsService` (singleton) | `src/main/services/skillsService.ts` | 336 |
-| `InstalledSkill` type | `src/types/skills.ts` | 34–37 |
-| `SkillDescriptor` type | `src/types/skills.ts` | 1–20 |
-| Directorio `~/levante/skills/` | `src/main/services/directoryService.ts` | `getSubdirPath('skills')` |
-
-`listInstalledSkills()` ya:
-- Escanea `~/levante/skills/{category}/{name}.md`
-- Parsea frontmatter YAML (`id`, `name`, `description`, `userInvocable`, `content`, etc.)
-- Retorna `InstalledSkill[]` ordenados por id
-- Maneja errores silenciosamente (carpeta vacía → array vacío)
+Estado actual: las skills se instalan/listan correctamente, pero no se inyectan en el contexto del agente.
 
 ---
 
-## 2. Arquitectura de la solución
+## 2) Decisiones cerradas para esta implementación
+Estas decisiones son obligatorias en esta versión:
 
-### Dos canales, igual que en el diseño de referencia
+1. **Mostrar todas las skills sin filtrar**.
+   No se filtra por `userInvocable`. Si la skill está instalada, se expone al agente.
 
-```
-SYSTEM PROMPT                         TOOL DESCRIPTION
-─────────────────                     ─────────────────
-# Available Skills                    "Execute a skill to complete the
-- coding/git-commit: Crea commits...  user's task. When users reference
-- writing/email-pro: Redacta...       a skill by name or ask to use one,
-                                      call this tool immediately."
+2. **`sendSingleMessage()` queda fuera de alcance**.
+   No se modifica. Solo se implementa en el flujo de `streamChat()`.
 
-          │                                    │
-          ▼                                    ▼
-Claude razona: "hay una skill         Claude decide: el usuario pidió
-relevante para esta tarea"            explícitamente una skill
-          │                                    │
-          └──────────────┬────────────────────┘
-                         ▼
-            Claude llama: skill_execute({ skill: "coding/git-commit" })
-                         │
-                         ▼
-            Tool lee el content del skill instalado
-            Lo retorna como tool result
-                         │
-                         ▼
-            Claude lee las instrucciones y las ejecuta
-```
+3. **Se asume riesgo de prompt injection en descripciones**.
+   No se añade saneamiento extra en esta versión.
 
-### Archivos a crear y modificar
+4. **Se asume riesgo de colisión de nombres**.
+   No se implementa desambiguación. Se mantiene estrategia “primera coincidencia”.
 
-```
-CREAR (nuevo):
-src/main/services/ai/skillsContextBuilder.ts
+5. **Cualquier skill instalada puede ejecutarse**.
+   No hay restricciones adicionales en `skill_execute`.
 
-MODIFICAR (cambios mínimos y quirúrgicos):
-src/main/services/ai/builtInTools.ts       — añadir skill tool
-src/main/services/ai/systemPromptBuilder.ts — añadir sección de skills
-src/main/services/aiService.ts             — cargar skills y pasarlas
+6. **Se acepta presupuesto fijo de tokens para skills**.
+   No se ajusta dinámicamente por modelo/context window en esta versión.
+
+7. **No se limita tamaño de `instructions` devuelto por la tool**.
+   La calidad/longitud de la skill es responsabilidad del creador de la skill.
+
+8. **El agente debe consultar skill primero cuando detecte que aplica**.
+   La descripción de tool debe reforzar ejecución inmediata.
+
+9. **No se toca robustez adicional de parser/listado existente**.
+   Se reutiliza tal cual la infraestructura actual.
+
+---
+
+## 3) Alcance exacto
+
+### Incluido
+- Crear módulo nuevo para:
+  - construir sección `# Available Skills` del system prompt,
+  - construir tool `skill_execute`.
+- Registrar `skill_execute` como built-in tool cuando existan skills.
+- Cargar skills instaladas en `streamChat()` y pasarlas:
+  - a `getBuiltInTools(...)`,
+  - a `buildSystemPrompt(...)`.
+
+### Excluido
+- Cambios en renderer/UI.
+- Cambios en `skillsService`/parser.
+- Cambios en `sendSingleMessage()`.
+- Soporte de skills por proyecto (`.levante/skills`).
+
+---
+
+## 4) Componentes existentes que se reutilizan
+- `src/main/services/skillsService.ts`
+  - `listInstalledSkills()`
+  - singleton `skillsService`
+- `src/types/skills.ts`
+  - `InstalledSkill`
+  - `SkillDescriptor`
+- `src/main/services/directoryService.ts`
+  - `getSubdirPath('skills')`
+
+No reimplementar lectura de disco de skills.
+
+---
+
+## 5) Arquitectura resultante
+
+```text
+streamChat()
+  -> skillsService.listInstalledSkills()
+  -> getBuiltInTools({ mermaidValidation, mcpDiscovery, skills })
+       -> registra skill_execute si skills.length > 0
+  -> buildSystemPrompt(..., skills)
+       -> añade sección # Available Skills
+  -> streamText({ tools, system, messages, ... })
+
+Durante la ejecución:
+  Modelo llama skill_execute({ skill, args? })
+  -> tool localiza la skill instalada
+  -> devuelve { skillId, skillName, instructions, args? }
+  -> modelo sigue instrucciones de la skill
 ```
 
 ---
 
-## 3. Paso 1 — Crear `skillsContextBuilder.ts`
+## 6) Cambios por archivo (implementación detallada)
 
-**Ruta:** `src/main/services/ai/skillsContextBuilder.ts`
+## 6.1 Crear `src/main/services/ai/skillsContextBuilder.ts`
+Responsabilidades:
+1. Construir sección de prompt con skills instaladas.
+2. Definir tool `skill_execute` para AI SDK.
 
-Este módulo es el núcleo de la implementación. Dos responsabilidades:
-1. Generar el fragmento del system prompt con la lista de skills
-2. Crear la tool `skill_execute` para el Vercel AI SDK
+Implementar exactamente este módulo:
 
 ```typescript
 import { tool } from 'ai';
@@ -86,29 +112,17 @@ import { getLogger } from '../logging';
 
 const logger = getLogger();
 
-// Presupuesto máximo de tokens para la sección de skills en el system prompt.
-// ~2% del contexto de 200k. Cada entrada: "- id: description\n" ≈ 4 chars/token.
+// Presupuesto fijo aceptado para esta versión.
 const SKILLS_TOKEN_BUDGET = 4000;
 
-/**
- * Genera la sección "# Available Skills" para el system prompt.
- * Incluye todas las skills instaladas (el usuario las instaló para usarlas).
- * Respeta el presupuesto de tokens para no saturar el contexto.
- */
 export function buildSkillsContext(skills: InstalledSkill[]): string {
-  // En Levante no filtramos por userInvocable:
-  // - Todas las skills instaladas deben llegar al agente (el usuario las instaló para usarlas)
-  // - El campo userInvocable viene de open-claude-code donde servía para ocultar sub-skills
-  //   del menú de slash commands visible al humano — concepto que no existe en Levante
-  // - Además, en Levante el default del campo es false (por parseo), lo que excluiría
-  //   la mayoría de skills sin motivo
+  // Decisión cerrada: no filtrar por userInvocable.
   if (skills.length === 0) return '';
 
   let usedTokens = 0;
   const entries: string[] = [];
 
   for (const skill of skills) {
-    // Usa description del frontmatter; si no existe, primeros 100 chars del content
     const desc = skill.description?.trim() || skill.content.slice(0, 100).replace(/\n/g, ' ');
     const entry = `- ${skill.id}: ${desc}`;
     const tokens = Math.ceil(entry.length / 4);
@@ -124,16 +138,6 @@ export function buildSkillsContext(skills: InstalledSkill[]): string {
   return `\n# Available Skills\nThe following skills are available. Use the skill_execute tool to load and follow a skill's instructions when relevant:\n${entries.join('\n')}\n`;
 }
 
-/**
- * Crea la tool `skill_execute` para el Vercel AI SDK.
- *
- * El agente la usa en dos situaciones:
- * 1. El usuario invoca una skill explícitamente (e.g., "usa la skill git-commit")
- * 2. El agente detecta que una skill disponible es relevante para la tarea
- *
- * La tool retorna el content completo del skill (el body del .md tras el frontmatter).
- * El agente lee esas instrucciones y las sigue en el siguiente turno.
- */
 export function createSkillTool(skills: InstalledSkill[]) {
   return tool({
     description: `Execute a skill to help complete the user's task.
@@ -156,29 +160,26 @@ Important:
       skill: z.string().describe(
         'The skill ID (e.g., "coding/git-commit") or name (e.g., "git-commit"). Use the exact ID from the Available Skills list when possible.'
       ),
-      args: z.string().optional().describe(
-        'Optional arguments or context to pass to the skill'
-      ),
+      args: z.string().optional().describe('Optional arguments or context to pass to the skill'),
     }),
 
     execute: async ({ skill, args }) => {
       logger.aiSdk.info('Skill tool invoked', { skill, hasArgs: !!args });
 
-      // Estrategia de búsqueda en cascada (igual que en la implementación de referencia)
       let found: InstalledSkill | undefined;
 
-      // 1. ID exacto (e.g., "coding/git-commit")
-      found = skills.find(s => s.id === skill);
+      // 1) ID exacto
+      found = skills.find((s) => s.id === skill);
 
-      // 2. Nombre exacto (case insensitive)
+      // 2) Nombre exacto (case insensitive)
       if (!found) {
-        found = skills.find(s => s.name.toLowerCase() === skill.toLowerCase());
+        found = skills.find((s) => s.name.toLowerCase() === skill.toLowerCase());
       }
 
-      // 3. Solo el segmento de nombre tras "/" (e.g., "git-commit")
+      // 3) Segmento final del ID (tras '/') o nombre
       if (!found) {
         const namePart = skill.includes('/') ? skill.split('/').pop()! : skill;
-        found = skills.find(s => {
+        found = skills.find((s) => {
           const idName = s.id.split('/').pop() ?? '';
           return (
             idName.toLowerCase() === namePart.toLowerCase() ||
@@ -188,7 +189,7 @@ Important:
       }
 
       if (!found) {
-        const available = skills.map(s => `${s.id} ("${s.name}")`).join(', ');
+        const available = skills.map((s) => `${s.id} ("${s.name}")`).join(', ');
         logger.aiSdk.warn('Skill not found', { requested: skill });
         return {
           error: `Skill "${skill}" not found.`,
@@ -196,7 +197,10 @@ Important:
         };
       }
 
-      logger.aiSdk.info('Skill loaded', { skillId: found.id, contentLength: found.content.length });
+      logger.aiSdk.info('Skill loaded', {
+        skillId: found.id,
+        contentLength: found.content.length,
+      });
 
       return {
         skillId: found.id,
@@ -211,178 +215,106 @@ Important:
 
 ---
 
-## 4. Paso 2 — Modificar `builtInTools.ts`
+## 6.2 Modificar `src/main/services/ai/builtInTools.ts`
 
-**Ruta:** `src/main/services/ai/builtInTools.ts`
-
-Añadir el campo `skills` al config y registrar la tool cuando hay skills instaladas.
-
-### Cambio en la interfaz `BuiltInToolsConfig` (línea 12)
-
+### A) Imports
+Agregar:
 ```typescript
-// ANTES:
-export interface BuiltInToolsConfig {
-    mermaidValidation: boolean;
-    mcpDiscovery: boolean;
-}
-
-// DESPUÉS:
 import type { InstalledSkill } from '../../../types/skills';
+import { createSkillTool } from './skillsContextBuilder';
+```
 
+### B) Extender configuración
+Actualizar interfaz:
+```typescript
 export interface BuiltInToolsConfig {
-    mermaidValidation: boolean;
-    mcpDiscovery: boolean;
-    skills?: InstalledSkill[];   // ← añadir
+  mermaidValidation: boolean;
+  mcpDiscovery: boolean;
+  skills?: InstalledSkill[];
 }
 ```
 
-### Cambio en `getBuiltInTools()` (línea 44)
-
+### C) Registrar tool
+Dentro de `getBuiltInTools(config?)`, después de las tools existentes:
 ```typescript
-// ANTES:
-export async function getBuiltInTools(config?: BuiltInToolsConfig): Promise<Record<string, any>> {
-    const tools: Record<string, any> = {};
-
-    if (config?.mermaidValidation !== false) { ... }
-    if (config?.mcpDiscovery !== false) { ... }
-
-    logger.aiSdk.debug('Built-in tools created', { ... });
-    return tools;
-}
-
-// DESPUÉS:
-import { createSkillTool } from './skillsContextBuilder';   // añadir import
-
-export async function getBuiltInTools(config?: BuiltInToolsConfig): Promise<Record<string, any>> {
-    const tools: Record<string, any> = {};
-
-    if (config?.mermaidValidation !== false) { ... }   // sin cambios
-    if (config?.mcpDiscovery !== false) { ... }        // sin cambios
-
-    // Añadir skill tool si hay skills instaladas
-    if (config?.skills && config.skills.length > 0) {
-        tools['skill_execute'] = createSkillTool(config.skills);
-        logger.aiSdk.debug('Skill tool registered', { skillCount: config.skills.length });
-    }
-
-    logger.aiSdk.debug('Built-in tools created', {
-        toolCount: Object.keys(tools).length,
-        toolNames: Object.keys(tools)
-    });
-
-    return tools;
+if (config?.skills && config.skills.length > 0) {
+  tools['skill_execute'] = createSkillTool(config.skills);
+  logger.aiSdk.debug('Skill tool registered', { skillCount: config.skills.length });
 }
 ```
+
+Mantener el log final `Built-in tools created`.
 
 ---
 
-## 5. Paso 3 — Modificar `systemPromptBuilder.ts`
+## 6.3 Modificar `src/main/services/ai/systemPromptBuilder.ts`
 
-**Ruta:** `src/main/services/ai/systemPromptBuilder.ts`
-
-Añadir el parámetro `skills` y la sección en el prompt.
-
-### Cambio en la firma de `buildSystemPrompt()` (línea 9)
-
+### A) Imports
+Agregar:
 ```typescript
-// ANTES:
-export async function buildSystemPrompt(
-  webSearch: boolean,
-  enableMCP: boolean,
-  toolCount: number,
-  mermaidValidation: boolean = true,
-  mcpDiscoveryEnabled: boolean = true,
-  projectDescription?: string
-): Promise<string> {
-
-// DESPUÉS:
-import type { InstalledSkill } from '../../../types/skills';   // añadir import
-import { buildSkillsContext } from './skillsContextBuilder';    // añadir import
-
-export async function buildSystemPrompt(
-  webSearch: boolean,
-  enableMCP: boolean,
-  toolCount: number,
-  mermaidValidation: boolean = true,
-  mcpDiscoveryEnabled: boolean = true,
-  projectDescription?: string,
-  skills?: InstalledSkill[]    // ← añadir al final (opcional para no romper llamadas existentes)
-): Promise<string> {
+import type { InstalledSkill } from '../../../types/skills';
+import { buildSkillsContext } from './skillsContextBuilder';
 ```
 
-### Añadir sección de skills antes del debug log (tras línea 211, antes del return)
-
+### B) Firma de `buildSystemPrompt(...)`
+Agregar parámetro opcional al final:
 ```typescript
-  // Añadir contexto de skills instaladas (si las hay)
-  const skillsSection = buildSkillsContext(skills ?? []);
-  if (skillsSection) {
-    systemPrompt += skillsSection;
-  }
-
-  // Debug log (ya existente, línea 213)
-  logger.aiSdk.debug('Final system prompt generated', { ... });
-
-  return systemPrompt;
+projectDescription?: string,
+skills?: InstalledSkill[]
 ```
+
+### C) Inyección de sección de skills
+Antes del log final y antes del `return`:
+```typescript
+const skillsSection = buildSkillsContext(skills ?? []);
+if (skillsSection) {
+  systemPrompt += skillsSection;
+}
+```
+
+No tocar el resto de secciones existentes (personalization, MCP discovery, Mermaid, etc.).
 
 ---
 
-## 6. Paso 4 — Modificar `aiService.ts`
+## 6.4 Modificar `src/main/services/aiService.ts` (solo `streamChat`)
 
-**Ruta:** `src/main/services/aiService.ts`
-
-Cargar las skills instaladas y pasarlas a `getBuiltInTools` y `buildSystemPrompt`.
-
-### Añadir import en la sección de imports (línea ~21)
-
+### A) Imports
+Agregar:
 ```typescript
+import type { InstalledSkill } from '../../types/skills';
 import { skillsService } from './skillsService';
 ```
 
-### Modificar `streamChat()` — cargar skills antes de tools (tras línea 1033)
+### B) Carga de skills instaladas en `streamChat()`
+Ubicar bloque donde se construyen built-in tools y añadir antes de `getBuiltInTools(...)`:
 
 ```typescript
-// ── Antes de getBuiltInTools (línea 1033):
-
-// AÑADIR: Cargar skills instaladas
 let installedSkills: InstalledSkill[] = [];
 try {
   installedSkills = await skillsService.listInstalledSkills();
   this.logger.aiSdk.debug('Loaded installed skills for agent context', {
     count: installedSkills.length,
-    ids: installedSkills.map(s => s.id),
+    ids: installedSkills.map((s) => s.id),
   });
 } catch (error) {
   this.logger.aiSdk.warn('Failed to load installed skills', {
     error: error instanceof Error ? error.message : String(error),
   });
 }
+```
 
-// YA EXISTE (sin cambios):
-const { getBuiltInTools } = await import('./ai/builtInTools');
-const builtInToolsConfig = await this.getBuiltInToolsConfig();
-
-// MODIFICAR: pasar skills al config
+### C) Pasar skills a built-in tools
+Cambiar la llamada:
+```typescript
 const builtInTools = await getBuiltInTools({
   ...builtInToolsConfig,
-  skills: installedSkills,    // ← añadir
+  skills: installedSkills,
 });
 ```
 
-### Modificar la llamada a `buildSystemPrompt()` (línea 1173)
-
+### D) Pasar skills al system prompt
+En `streamText({...})`, cambiar `buildSystemPrompt(...)` para incluir `installedSkills` al final:
 ```typescript
-// ANTES:
-system: await buildSystemPrompt(
-  webSearch,
-  enableMCP,
-  Object.keys(tools).length,
-  builtInToolsConfig.mermaidValidation,
-  builtInToolsConfig.mcpDiscovery,
-  projectDescription
-),
-
-// DESPUÉS:
 system: await buildSystemPrompt(
   webSearch,
   enableMCP,
@@ -390,132 +322,120 @@ system: await buildSystemPrompt(
   builtInToolsConfig.mermaidValidation,
   builtInToolsConfig.mcpDiscovery,
   projectDescription,
-  installedSkills    // ← añadir
+  installedSkills
 ),
 ```
 
-> **Nota:** Hay una segunda llamada a `buildSystemPrompt` en `aiService.ts` alrededor de la línea 1933 (para inference tasks). Aplicar el mismo cambio allí si se quiere consistencia completa. La prioridad es la llamada de `streamChat` (línea 1173).
+### E) Restricción explícita
+No modificar `sendSingleMessage()` en esta implementación.
 
 ---
 
-## 7. Flujo completo resultado
+## 7) Contratos de comportamiento
 
-```
-streamChat() inicia
-    │
-    ├── skillsService.listInstalledSkills()
-    │       └── Lee ~/levante/skills/{category}/{name}.md
-    │           Parsea frontmatter → InstalledSkill[]
-    │
-    ├── getBuiltInTools({ mermaidValidation, mcpDiscovery, skills })
-    │       └── createSkillTool(skills) → tool 'skill_execute'
-    │
-    ├── buildSystemPrompt(..., skills)
-    │       └── buildSkillsContext(skills)
-    │               └── "# Available Skills\n- coding/git-commit: ...\n..."
-    │
-    └── streamText({
-          model,
-          system: "...# Available Skills\n- coding/git-commit: ...",
-          tools: { builtin_validate_mermaid, mcp_discovery, skill_execute, ...mcpTools },
-          messages,
-        })
+## 7.1 Sección esperada en system prompt
+Con skills instaladas, el prompt debe incluir:
 
-Cuando el agente llama a skill_execute({ skill: "coding/git-commit" }):
-    └── execute() busca la skill por id/nombre
-        └── Retorna { skillId, skillName, instructions: content }
-            Claude lee `instructions` y las ejecuta en el siguiente turno
-```
-
----
-
-## 8. Ejemplo de sección en el system prompt
-
-Si el usuario tiene instaladas tres skills:
-
-```
+```text
 # Available Skills
 The following skills are available. Use the skill_execute tool to load and follow a skill's instructions when relevant:
-- coding/git-commit: Crea commits de git con mensajes descriptivos siguiendo conventional commits
-- writing/email-pro: Redacta emails profesionales estructurados y concisos
-- productivity/daily-standup: Genera el resumen de standup diario a partir de los cambios del día
+- coding/git-commit: Crea commits de git con mensajes descriptivos
+- writing/email-pro: Redacta emails profesionales
 ```
 
----
+Si no hay skills, no se añade esa sección.
 
-## 9. Ejemplo de tool result que recibe el agente
+## 7.2 Tool contract: `skill_execute`
+Input:
+```json
+{ "skill": "coding/git-commit", "args": "optional" }
+```
 
-Cuando llama a `skill_execute({ skill: "coding/git-commit" })`:
-
+Output éxito:
 ```json
 {
   "skillId": "coding/git-commit",
   "skillName": "Git Commit",
-  "instructions": "Analiza los cambios staged con `git diff --staged`.\n\nSigue el formato conventional commits:\n- feat: nueva funcionalidad\n- fix: corrección de bug\n- docs: documentación\n\nGenera el mensaje y ejecuta el commit."
+  "instructions": "...contenido completo markdown...",
+  "args": "optional"
 }
 ```
 
-El agente lee `instructions` y sigue ese flujo en la conversación.
-
----
-
-## 10. Import de tipo en `aiService.ts`
-
-Añadir el import del tipo si no existe ya:
-
-```typescript
-import type { InstalledSkill } from '../../types/skills';
+Output error:
+```json
+{
+  "error": "Skill \"x\" not found.",
+  "availableSkills": "coding/git-commit (\"Git Commit\"), ..."
+}
 ```
 
 ---
 
-## TODO: Soporte de skills a nivel de proyecto
-
-> **TODO — Implementación futura**
->
-> Actualmente el sistema solo lee skills del directorio global del usuario: `~/levante/skills/{category}/{name}.md`.
->
-> En el futuro, también se deberá leer del directorio de skills del proyecto activo. La lógica de precedencia sería:
->
-> 1. Skills globales del usuario (`~/levante/skills/`) — se cargan primero
-> 2. Skills del proyecto (`.levante/skills/` relativo al CWD o al proyecto activo) — sobrescriben las globales si tienen el mismo `id`
->
-> Implementación sugerida en `skillsContextBuilder.ts`:
->
-> ```typescript
-> // FUTURO: función que combina global + proyecto con precedencia
-> export async function discoverAllSkills(projectDir?: string): Promise<InstalledSkill[]> {
->   const global = await skillsService.listInstalledSkills();
->   if (!projectDir) return global;
->
->   const projectSkillsDir = path.join(projectDir, '.levante', 'skills');
->   const projectSkills = await readSkillsFromDir(projectSkillsDir, 'project');
->
->   // Las skills de proyecto sobrescriben las globales con el mismo id
->   const merged = new Map(global.map(s => [s.id, s]));
->   for (const s of projectSkills) merged.set(s.id, s);
->
->   return [...merged.values()].sort((a, b) => a.id.localeCompare(b.id));
-> }
-> ```
->
-> Para este TODO se necesita además:
-> - Saber cuál es el directorio del proyecto activo (exponer `projectStore` o `request.projectDir` al backend)
-> - Adaptar `streamChat()` para recibir y pasar `projectDir` a `discoverAllSkills()`
+## 8) Orden de implementación recomendado
+1. Crear `skillsContextBuilder.ts`.
+2. Integrar tool en `builtInTools.ts`.
+3. Integrar sección skills en `systemPromptBuilder.ts`.
+4. Cargar y propagar skills desde `streamChat()` en `aiService.ts`.
+5. Ejecutar validación manual (sección 9).
 
 ---
 
-## 11. Resumen de cambios por archivo
+## 9) Validación manual obligatoria
 
-| Archivo | Tipo | Cambio |
-|---|---|---|
-| `src/main/services/ai/skillsContextBuilder.ts` | **CREAR** | `buildSkillsContext()` + `createSkillTool()` |
-| `src/main/services/ai/builtInTools.ts` | modificar | Añadir `skills?` a config; registrar `skill_execute` |
-| `src/main/services/ai/systemPromptBuilder.ts` | modificar | Añadir param `skills?`; llamar `buildSkillsContext()` |
-| `src/main/services/aiService.ts` | modificar | Cargar skills; pasarlas a tools y system prompt |
+1. **Sin skills instaladas**:
+   - `skill_execute` no debe registrarse.
+   - `# Available Skills` no debe aparecer en el prompt.
 
-**Archivos que NO se tocan:**
-- `src/main/services/skillsService.ts` — ya funciona perfectamente
-- `src/types/skills.ts` — tipos ya existen y son suficientes
-- `src/main/services/directoryService.ts` — ya gestiona el directorio
-- Cualquier código del renderer — este cambio es puramente del proceso main
+2. **Con skills instaladas**:
+   - `skill_execute` debe aparecer en `toolNames` de logs.
+   - `# Available Skills` debe aparecer en `fullPrompt` de logs.
+
+3. **Invocación explícita por ID**:
+   - prompt usuario: “usa la skill coding/git-commit”.
+   - verificar `tool-call` a `skill_execute` y `tool-result` con `instructions`.
+
+4. **Invocación por nombre corto**:
+   - prompt usuario: “usa la skill git-commit”.
+   - verificar resolución por cascada y retorno correcto.
+
+5. **Skill no encontrada**:
+   - prompt usuario: skill inexistente.
+   - verificar retorno con `error` + `availableSkills`.
+
+6. **Con `enableMCP=false`**:
+   - confirmar que built-in tools siguen activos y skills siguen disponibles en `streamChat`.
+
+---
+
+## 10) Riesgos aceptados en esta versión
+- Sin saneamiento adicional de descripciones para prompt.
+- Sin desambiguación de colisiones de nombres.
+- Sin ajuste dinámico de token budget por modelo.
+- Sin truncado/fragmentación de `instructions` en tool result.
+- Sin cambios en `sendSingleMessage()`.
+
+Estos puntos son decisiones explícitas y no deben bloquear el release de esta feature.
+
+---
+
+## 11) Resumen final de archivos
+
+### Crear
+- `src/main/services/ai/skillsContextBuilder.ts`
+
+### Modificar
+- `src/main/services/ai/builtInTools.ts`
+- `src/main/services/ai/systemPromptBuilder.ts`
+- `src/main/services/aiService.ts` (solo `streamChat`)
+
+### No tocar
+- `src/main/services/skillsService.ts`
+- `src/types/skills.ts`
+- `src/main/services/directoryService.ts`
+- Renderer/UI
+- `sendSingleMessage()`
+
+---
+
+## 12) TODO futuro (fuera de esta entrega)
+Soporte de skills a nivel de proyecto (`.levante/skills`) con precedencia sobre globales por `id`.

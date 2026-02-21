@@ -1,4 +1,6 @@
 import { getLogger } from '../logging';
+import type { InstalledSkill } from '../../../types/skills';
+import { buildSkillsContext } from './skillsContextBuilder';
 
 const logger = getLogger();
 
@@ -12,7 +14,8 @@ export async function buildSystemPrompt(
   toolCount: number,
   mermaidValidation: boolean = true,
   mcpDiscoveryEnabled: boolean = true,
-  projectDescription?: string
+  projectDescription?: string,
+  skills?: InstalledSkill[]
 ): Promise<string> {
   // Add current date information
   const currentDate = new Date();
@@ -208,6 +211,11 @@ Example response format:
 *Requires: GitHub Personal Access Token*
 
 Click the button above to add it. Once configured, I'll be able to help you with GitHub operations."`;
+  }
+
+  const skillsSection = buildSkillsContext(skills ?? []);
+  if (skillsSection) {
+    systemPrompt += skillsSection;
   }
 
   // Debug log for final system prompt

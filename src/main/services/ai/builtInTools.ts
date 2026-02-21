@@ -6,12 +6,15 @@ import { mcpProviderService } from '../mcp/MCPProviderService';
 import { MCPConfigurationManager } from '../mcpConfigManager';
 import type { MCPProvider, MCPRegistryEntry } from '../../../renderer/types/mcp';
 import mcpProvidersData from '../../../renderer/data/mcpProviders.json';
+import type { InstalledSkill } from '../../../types/skills';
+import { createSkillTool } from './skillsContextBuilder';
 
 const logger = getLogger();
 
 export interface BuiltInToolsConfig {
     mermaidValidation: boolean;
     mcpDiscovery: boolean;
+    skills?: InstalledSkill[];
 }
 
 /**
@@ -58,6 +61,11 @@ export async function getBuiltInTools(config?: BuiltInToolsConfig): Promise<Reco
         if (discoveryTool) {
             tools['mcp_discovery'] = discoveryTool;
         }
+    }
+
+    if (config?.skills && config.skills.length > 0) {
+        tools['skill_execute'] = createSkillTool(config.skills);
+        logger.aiSdk.debug('Skill tool registered', { skillCount: config.skills.length });
     }
 
     logger.aiSdk.debug('Built-in tools created', {

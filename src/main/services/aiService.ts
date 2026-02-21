@@ -31,6 +31,8 @@ import type {
   ModelCategory,
   ModelCapabilities,
 } from "../../types/modelCategories";
+import type { InstalledSkill } from "../../types/skills";
+import { skillsService } from "./skillsService";
 
 export interface ChatRequest {
   messages: UIMessage[];
@@ -1033,7 +1035,24 @@ export class AIService {
       // Get built-in tools (always available, independent of MCP)
       const { getBuiltInTools } = await import('./ai/builtInTools');
       const builtInToolsConfig = await this.getBuiltInToolsConfig();
-      const builtInTools = await getBuiltInTools(builtInToolsConfig);
+
+      let installedSkills: InstalledSkill[] = [];
+      try {
+        installedSkills = await skillsService.listInstalledSkills();
+        this.logger.aiSdk.debug('Loaded installed skills for agent context', {
+          count: installedSkills.length,
+          ids: installedSkills.map((s) => s.id),
+        });
+      } catch (error) {
+        this.logger.aiSdk.warn('Failed to load installed skills', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      const builtInTools = await getBuiltInTools({
+        ...builtInToolsConfig,
+        skills: installedSkills,
+      });
 
       if (enableMCP) {
         // Verificar si el proveedor soporta aprobación de tools
@@ -1176,7 +1195,8 @@ export class AIService {
           Object.keys(tools).length,
           builtInToolsConfig.mermaidValidation,
           builtInToolsConfig.mcpDiscovery,
-          projectDescription
+          projectDescription,
+          installedSkills
         ),
         // Use stopWhen as recommended in AI SDK v5 (not maxSteps)
         // This allows the model to continue generating after tool results
