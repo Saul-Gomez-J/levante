@@ -27,4 +27,15 @@ export const tasksApi = {
 
   cleanup: (maxAgeMs?: number) =>
     ipcRenderer.invoke('levante/tasks:cleanup', maxAgeMs),
+
+  // Evento push: el main process notifica cuando se detecta un puerto
+  onPortDetected: (
+    callback: (data: { taskId: string; port: number; command: string; description?: string }) => void
+  ): (() => void) => {
+    const handler = (_: Electron.IpcRendererEvent, data: { taskId: string; port: number; command: string; description?: string }) => {
+      callback(data);
+    };
+    ipcRenderer.on('levante/tasks:portDetected', handler);
+    return () => ipcRenderer.removeListener('levante/tasks:portDetected', handler);
+  },
 };

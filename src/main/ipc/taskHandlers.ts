@@ -4,7 +4,7 @@
  * IPC handlers for background task management.
  */
 
-import { ipcMain } from 'electron';
+import { ipcMain, BrowserWindow } from 'electron';
 import { getLogger } from '../services/logging';
 import { taskManager, TaskStatus, GetOutputOptions, WaitTaskOptions } from '../services/tasks';
 
@@ -24,7 +24,33 @@ function fail(error: unknown) {
 /**
  * Setup all task-related IPC handlers
  */
-export function setupTaskHandlers(): void {
+let portDetectedForwarder:
+  | ((taskId: string, port: number, info: { command: string; description?: string }) => void)
+  | null = null;
+
+export function setupTaskHandlers(getMainWindow: () => BrowserWindow | null): void {
+  // Forward port detection events to the renderer
+  if (portDetectedForwarder) {
+    taskManager.off('task:port-detected', portDetectedForwarder);
+  }
+
+  portDetectedForwarder = (taskId: string, port: number, info: { command: string; description?: string }) => {
+    const mainWindow = getMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.webContents.isDestroyed()) {
+      return;
+    }
+
+    mainWindow.webContents.send('levante/tasks:portDetected', {
+      taskId,
+      port,
+      command: info.command,
+      description: info.description,
+    });
+    logger.ipc.info('Port detected event forwarded to renderer', { taskId, port });
+  };
+
+  taskManager.on('task:port-detected', portDetectedForwarder);
+
   // List tasks
   ipcMain.removeHandler('levante/tasks:list');
   ipcMain.handle('levante/tasks:list', async (_, filter?: { status?: TaskStatus }) => {

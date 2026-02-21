@@ -7,6 +7,7 @@
 
 import { spawn, ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
+import { EventEmitter } from 'events';
 import { getLogger } from '../logging';
 import {
   getShellConfig,
@@ -33,13 +34,52 @@ const MAX_OUTPUT_LINES = 5000;
 const MAX_OUTPUT_BYTES = 2 * 1024 * 1024; // 2MB
 
 /**
+ * Regex patterns for detecting server ports in task output.
+ * Ordered by specificity/priority.
+ */
+const PORT_DETECTION_PATTERNS: RegExp[] = [
+  // URL completa: http://localhost:3000 o http://127.0.0.1:8080
+  /https?:\/\/(?:localhost|127\.0\.0\.1):(\d{2,5})/i,
+  // Vite: ➜  Local:   http://localhost:5173/
+  /➜\s+Local:\s+https?:\/\/[^:]+:(\d{2,5})/i,
+  // Next.js: started server on 0.0.0.0:3000
+  /started server on [^:]+:(\d{2,5})/i,
+  // Express / genérico: Listening on port 3000
+  /(?:listening on|running on)\s+(?:port\s+)?(\d{2,5})/i,
+  // Flask/Werkzeug: * Running on http://127.0.0.1:5000
+  /\*\s+Running on\s+https?:\/\/[^:]+:(\d{2,5})/i,
+  // Genérico: port 3000 o :3000
+  /\bport[:\s]+(\d{2,5})\b/i,
+];
+
+const PORT_MIN = 1024;
+const PORT_MAX = 65535;
+
+function extractPortFromLine(line: string): number | null {
+  for (const pattern of PORT_DETECTION_PATTERNS) {
+    const match = line.match(pattern);
+    if (match?.[1]) {
+      const port = parseInt(match[1], 10);
+      if (port >= PORT_MIN && port <= PORT_MAX) {
+        return port;
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Background Task Manager Singleton
  *
  * Handles spawning, monitoring, and cleanup of background shell tasks.
  */
-class BackgroundTaskManager {
+class BackgroundTaskManager extends EventEmitter {
   private tasks: Map<string, TaskEntry> = new Map();
   private timeouts: Map<string, NodeJS.Timeout> = new Map();
+
+  constructor() {
+    super();
+  }
 
   /**
    * Spawn a new background task
@@ -65,6 +105,7 @@ class BackgroundTaskManager {
       exitCode: null,
       timedOut: false,
       interrupted: false,
+      detectedPort: null,
     };
 
     const entry: TaskEntry = {
@@ -385,6 +426,7 @@ class BackgroundTaskManager {
       exitCode: info.exitCode,
       timedOut: info.timedOut,
       interrupted: info.interrupted,
+      detectedPort: info.detectedPort,
     };
   }
 
@@ -449,6 +491,20 @@ class BackgroundTaskManager {
 
     entry.output.push(line);
     entry.outputBytes += lineBytes;
+
+    // Port detection: solo si aún no detectamos un puerto para esta tarea
+    if (entry.info.detectedPort === null && line.text.trim()) {
+      const port = extractPortFromLine(line.text);
+      if (port !== null) {
+        entry.info.detectedPort = port;
+        logger.aiSdk.info('Port detected in task output', {
+          taskId: entry.info.id,
+          port,
+          line: line.text.substring(0, 200),
+        });
+        this.emit('task:port-detected', entry.info.id, port, { ...entry.info });
+      }
+    }
   }
 
   private flushRemainders(taskId: string): void {

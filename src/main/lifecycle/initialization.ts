@@ -136,7 +136,7 @@ export async function registerIPCHandlers(getMainWindow: () => BrowserWindow | n
   setupWidgetHandlers();
   setupAnnouncementHandlers();
   setupCoworkHandlers();
-  setupTaskHandlers();
+  setupTaskHandlers(getMainWindow);
   setupProjectHandlers();
   setupSkillsHandlers();
 

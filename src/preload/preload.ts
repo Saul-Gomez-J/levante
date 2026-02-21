@@ -858,6 +858,9 @@ export interface LevanteAPI {
     kill: (taskId: string) => Promise<{ success: boolean; data?: boolean; error?: string }>;
     stats: () => Promise<{ success: boolean; data?: any; error?: string }>;
     cleanup: (maxAgeMs?: number) => Promise<{ success: boolean; data?: number; error?: string }>;
+    onPortDetected: (
+      callback: (data: { taskId: string; port: number; command: string; description?: string }) => void
+    ) => () => void;
   };
 
   // Projects API
