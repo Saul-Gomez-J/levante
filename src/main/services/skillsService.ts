@@ -189,7 +189,7 @@ async function scanSkillsDir(input: ScanSkillsDirInput): Promise<InstalledSkill[
           license: meta['license'],
           allowedTools: meta['allowed-tools'],
           model: meta['model'],
-          userInvocable: meta['user-invocable'] === 'true',
+          userInvocable: meta['user-invocable'] === undefined ? undefined : meta['user-invocable'] === 'true',
           content,
           installedAt: meta['installed-at'] ?? new Date().toISOString(),
           filePath,
