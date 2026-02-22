@@ -127,12 +127,12 @@ export function createMainWindow(): BrowserWindow {
   mainWindow.webContents.on("will-navigate", (event, url) => {
     const parsedUrl = new URL(url);
 
-    // Allow navigation within the app
-    const isDevServer = url.startsWith(process.env["MAIN_WINDOW_VITE_DEV_SERVER_URL"] || "");
-    const isLocalhost = parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1";
+    // Allow navigation only to the app's own dev server URL or file protocol
+    const devServerUrl = process.env["MAIN_WINDOW_VITE_DEV_SERVER_URL"] || "";
+    const isAppNavigation = devServerUrl && url.startsWith(devServerUrl);
     const isAppFile = parsedUrl.protocol === "file:";
 
-    if (isDevServer || (isLocalhost && process.env.NODE_ENV === "development") || isAppFile) {
+    if (isAppNavigation || isAppFile) {
       // Allow internal navigation
       logger.core.debug("Allowing internal navigation", {
         url: parsedUrl.host + parsedUrl.pathname,

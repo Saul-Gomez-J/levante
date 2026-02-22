@@ -203,7 +203,7 @@ export function WebPreviewPanel() {
               key={iframeKey}
               src={activeServer.url}
               title={`Preview :${activeServer.port}`}
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation"
+              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
               allow="fullscreen; clipboard-read; clipboard-write"
               className="absolute inset-0 w-full h-full border-0"
             />
