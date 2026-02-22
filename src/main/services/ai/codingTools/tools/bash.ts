@@ -26,7 +26,7 @@ export function createBashTool(config: BashToolConfig) {
 
   return tool({
     description: `Execute a bash command in the shell.
-Commands run in a bash shell with a ${Math.round(timeout / 1000)}s timeout.
+Foreground commands run in a bash shell with a ${Math.round(timeout / 1000)}s timeout.
 IMPORTANT:
 - Do NOT use for file operations (use read, write, edit tools instead)
 - Use for: git commands, npm/yarn, build tools, system commands
@@ -37,35 +37,28 @@ IMPORTANT:
       command: z.string().describe("The bash command to execute"),
       description: z.string().optional()
         .describe("Brief description of what this command does (for logging)"),
-      timeout: z.number().optional()
-        .describe(`Timeout in ms (max ${timeout})`),
       run_in_background: z.boolean()
-        .describe("REQUIRED. Set to true for long-running commands (dev servers, watch modes, builds >30s). Set to false for quick commands (git status, ls, cat). Background tasks return a taskId immediately."),
+        .describe("REQUIRED. Set to true for long-running commands (dev servers, watch modes, builds >30s). Set to false for quick commands (git status, ls, cat). Background tasks return a taskId immediately and run without timeout."),
     }),
 
-    execute: async ({ command, description, timeout: cmdTimeout, run_in_background }: { command: string; description?: string; timeout?: number; run_in_background: boolean }) => {
+    execute: async ({ command, description, run_in_background }: { command: string; description?: string; run_in_background: boolean }) => {
       // Debug log directo a consola
       console.log('[BASH_TOOL] Called with:', {
         command: command.substring(0, 100),
         description,
-        timeout: cmdTimeout,
         run_in_background,
       });
 
       logger.aiSdk.info('Bash tool called', {
         command: command.substring(0, 100),
         description,
-        timeout: cmdTimeout,
         run_in_background,
       });
-
-      const effectiveTimeout = Math.min(cmdTimeout ?? timeout, timeout);
 
       // Handle background execution
       if (run_in_background) {
         const { taskId, pid } = taskManager.spawn(command, {
           cwd: config.cwd,
-          timeout: effectiveTimeout,
           description,
         });
 
@@ -82,7 +75,7 @@ IMPORTANT:
       try {
         const result = await executeCommand(command, {
           cwd: config.cwd,
-          timeout: effectiveTimeout,
+          timeout,
         });
 
         // Combinar stdout y stderr
@@ -113,7 +106,7 @@ IMPORTANT:
           output: truncated.content,
           truncated: truncated.wasTruncated,
           ...(result.timedOut && {
-            warning: `Command timed out after ${effectiveTimeout}ms`
+            warning: `Command timed out after ${timeout}ms`
           }),
           ...(result.interrupted && {
             warning: "Command was interrupted"

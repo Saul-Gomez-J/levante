@@ -45,7 +45,6 @@ export interface TaskInfoDTO {
 
 export interface SpawnTaskOptions {
   cwd: string;
-  timeout?: number; // ms, default 120000
   description?: string;
   env?: NodeJS.ProcessEnv;
   onStdout?: (chunk: string) => void;

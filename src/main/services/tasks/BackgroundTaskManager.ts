@@ -2,7 +2,7 @@
  * Background Task Manager
  *
  * Manages shell commands running in background with output capture,
- * timeout handling, and lifecycle management.
+ * and lifecycle management.
  */
 
 import { spawn, ChildProcess } from 'child_process';
@@ -42,20 +42,34 @@ const PORT_DETECTION_PATTERNS: RegExp[] = [
   /https?:\/\/(?:localhost|127\.0\.0\.1):(\d{2,5})/i,
   // Vite: ➜  Local:   http://localhost:5173/
   /➜\s+Local:\s+https?:\/\/[^:]+:(\d{2,5})/i,
+  // Vite/Webpack: Local: http://localhost:5173/
+  /\bLocal:\s+https?:\/\/[^:]+:(\d{2,5})/i,
   // Next.js: started server on 0.0.0.0:3000
   /started server on [^:]+:(\d{2,5})/i,
   // Express / genérico: Listening on port 3000
   /(?:listening on|running on)\s+(?:port\s+)?(\d{2,5})/i,
   // Flask/Werkzeug: * Running on http://127.0.0.1:5000
   /\*\s+Running on\s+https?:\/\/[^:]+:(\d{2,5})/i,
-  // Genérico: port 3000 o :3000
-  /\bport[:\s]+(\d{2,5})\b/i,
+  // Genérico controlado: "port 3000" pero evitando "port 3000 is in use"
+  /\bport[:\s]+(\d{2,5})\b(?!\s+is\s+in\s+use)/i,
 ];
 
 const PORT_MIN = 1024;
 const PORT_MAX = 65535;
+const NON_ACTIVE_PORT_PATTERNS: RegExp[] = [
+  /\b(?:port|address)\s+\d{2,5}\s+is\s+in\s+use\b/i,
+  /\beaddrinuse\b/i,
+  /\btrying another one\b/i,
+];
 
 function extractPortFromLine(line: string): number | null {
+  // Ignore lines that mention conflicting/unavailable ports.
+  for (const pattern of NON_ACTIVE_PORT_PATTERNS) {
+    if (pattern.test(line)) {
+      return null;
+    }
+  }
+
   for (const pattern of PORT_DETECTION_PATTERNS) {
     const match = line.match(pattern);
     if (match?.[1]) {
@@ -75,7 +89,6 @@ function extractPortFromLine(line: string): number | null {
  */
 class BackgroundTaskManager extends EventEmitter {
   private tasks: Map<string, TaskEntry> = new Map();
-  private timeouts: Map<string, NodeJS.Timeout> = new Map();
 
   constructor() {
     super();
@@ -91,7 +104,6 @@ class BackgroundTaskManager extends EventEmitter {
     const taskId = randomUUID();
     const { shell, args } = getShellConfig();
     const env = options.env ?? getShellEnv();
-    const timeout = options.timeout ?? 120000;
 
     const info: TaskInfo = {
       id: taskId,
@@ -149,21 +161,11 @@ class BackgroundTaskManager extends EventEmitter {
         this.handleError(taskId, err);
       });
 
-      // Set up timeout
-      const timeoutId = setTimeout(() => {
-        this.handleTimeout(taskId);
-      }, timeout);
-
-      // Don't block process exit
-      timeoutId.unref?.();
-      this.timeouts.set(taskId, timeoutId);
-
       logger.aiSdk.info('Background task spawned', {
         taskId,
         command: command.substring(0, 100),
         pid: info.pid,
         cwd: options.cwd,
-        timeout,
       });
 
       return { taskId, pid: info.pid };
@@ -193,13 +195,6 @@ class BackgroundTaskManager extends EventEmitter {
 
     if (entry.info.status !== TaskStatus.RUNNING) {
       return false;
-    }
-
-    // Clear timeout
-    const timeoutId = this.timeouts.get(taskId);
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      this.timeouts.delete(taskId);
     }
 
     // Kill process tree
@@ -355,12 +350,6 @@ class BackgroundTaskManager extends EventEmitter {
   clearAll(): void {
     // Kill all running tasks
     for (const [taskId, entry] of this.tasks.entries()) {
-      // Clear timeout
-      const timeoutId = this.timeouts.get(taskId);
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-
       // Kill process if running
       if (entry.info.status === TaskStatus.RUNNING && entry.process?.pid) {
         try {
@@ -371,7 +360,6 @@ class BackgroundTaskManager extends EventEmitter {
       }
     }
 
-    this.timeouts.clear();
     this.tasks.clear();
 
     logger.aiSdk.info('All background tasks cleared');
@@ -536,13 +524,6 @@ class BackgroundTaskManager extends EventEmitter {
     const entry = this.tasks.get(taskId);
     if (!entry) return;
 
-    // Clear timeout
-    const timeoutId = this.timeouts.get(taskId);
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      this.timeouts.delete(taskId);
-    }
-
     // Don't overwrite terminal state (e.g., KILLED)
     if (entry.info.status !== TaskStatus.RUNNING) {
       return;
@@ -566,13 +547,6 @@ class BackgroundTaskManager extends EventEmitter {
   private handleError(taskId: string, error: Error): void {
     const entry = this.tasks.get(taskId);
     if (!entry) return;
-
-    // Clear timeout
-    const timeoutId = this.timeouts.get(taskId);
-    if (timeoutId) {
-      clearTimeout(timeoutId);
-      this.timeouts.delete(taskId);
-    }
 
     // Don't overwrite terminal state
     if (entry.info.status !== TaskStatus.RUNNING) {
@@ -598,26 +572,6 @@ class BackgroundTaskManager extends EventEmitter {
       taskId,
       error: error.message,
     });
-  }
-
-  private handleTimeout(taskId: string): void {
-    const entry = this.tasks.get(taskId);
-    if (!entry) return;
-
-    if (entry.info.status !== TaskStatus.RUNNING) {
-      return;
-    }
-
-    // Mark as timed out
-    entry.info.timedOut = true;
-
-    logger.aiSdk.warn('Background task timed out', {
-      taskId,
-      pid: entry.info.pid,
-    });
-
-    // Kill the task
-    this.kill(taskId);
   }
 }
 
