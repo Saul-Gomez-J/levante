@@ -124,8 +124,8 @@ describe('SkillsService', () => {
       expect(result.projectId).toBeUndefined();
       expect(result.filePath).toContain(mockGlobalSkillsDir);
 
-      // SKILL.md should exist inside skill directory
-      const skillMdPath = path.join(mockGlobalSkillsDir, 'skill-one', 'SKILL.md');
+      // skill.md should exist inside skill directory
+      const skillMdPath = path.join(mockGlobalSkillsDir, 'skill-one', 'skill.md');
       await expect(fs.access(skillMdPath)).resolves.toBeUndefined();
     });
 
@@ -141,8 +141,8 @@ describe('SkillsService', () => {
       expect(result.scopedKey).toBe('project:proj_test_1:test/skill-one');
       expect(result.filePath).toContain(tmpProjectCwd);
 
-      // SKILL.md should exist inside skill directory
-      const skillMdPath = path.join(tmpProjectCwd, '.levante', 'skills', 'skill-one', 'SKILL.md');
+      // skill.md should exist inside skill directory
+      const skillMdPath = path.join(tmpProjectCwd, '.levante', 'skills', 'skill-one', 'skill.md');
       await expect(fs.access(skillMdPath)).resolves.toBeUndefined();
     });
 
@@ -182,11 +182,11 @@ describe('SkillsService', () => {
       await service.uninstallSkill(mockBundle.id, { scope: 'global' });
 
       // Global skill dir should be gone
-      const globalPath = path.join(mockGlobalSkillsDir, 'skill-one', 'SKILL.md');
+      const globalPath = path.join(mockGlobalSkillsDir, 'skill-one', 'skill.md');
       await expect(fs.access(globalPath)).rejects.toThrow();
 
       // Project skill dir should still exist
-      const projectPath = path.join(tmpProjectCwd, '.levante', 'skills', 'skill-one', 'SKILL.md');
+      const projectPath = path.join(tmpProjectCwd, '.levante', 'skills', 'skill-one', 'skill.md');
       await expect(fs.access(projectPath)).resolves.toBeUndefined();
     });
 
@@ -197,11 +197,11 @@ describe('SkillsService', () => {
       await service.uninstallSkill(mockBundle.id, { scope: 'project', projectId: 'proj_test_1' });
 
       // Project skill dir should be gone
-      const projectPath = path.join(tmpProjectCwd, '.levante', 'skills', 'skill-one', 'SKILL.md');
+      const projectPath = path.join(tmpProjectCwd, '.levante', 'skills', 'skill-one', 'skill.md');
       await expect(fs.access(projectPath)).rejects.toThrow();
 
       // Global skill dir should still exist
-      const globalPath = path.join(mockGlobalSkillsDir, 'skill-one', 'SKILL.md');
+      const globalPath = path.join(mockGlobalSkillsDir, 'skill-one', 'skill.md');
       await expect(fs.access(globalPath)).resolves.toBeUndefined();
     });
   });

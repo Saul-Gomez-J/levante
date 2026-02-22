@@ -80,9 +80,31 @@ function sanitizePathSegment(value: string): string {
 }
 
 function buildSkillDir(baseDir: string, skillId: string): { name: string; skillDir: string } {
-  const name = sanitizePathSegment(decodeURIComponent(skillId).trim());
+  const decoded = decodeURIComponent(skillId).trim();
+  const parts = decoded.split('/');
+  const leafName = parts[parts.length - 1] || decoded;
+  const name = sanitizePathSegment(leafName);
   if (!name) throw new Error(`Invalid skill id after sanitization: ${skillId}`);
   return { name, skillDir: path.join(baseDir, name) };
+}
+
+function buildSkillFile(bundle: SkillBundleResponse, installedAt: string): string {
+  const lines: string[] = ['---'];
+  lines.push(`id: ${JSON.stringify(bundle.id)}`);
+  lines.push(`name: ${JSON.stringify(bundle.name)}`);
+  lines.push(`description: ${JSON.stringify(bundle.description ?? '')}`);
+  lines.push(`category: ${JSON.stringify(bundle.category ?? '')}`);
+  if (bundle.version)     lines.push(`version: ${JSON.stringify(bundle.version)}`);
+  if (bundle.author)      lines.push(`author: ${JSON.stringify(bundle.author)}`);
+  if (bundle.license)     lines.push(`license: ${JSON.stringify(bundle.license)}`);
+  if (bundle.allowedTools) lines.push(`allowed-tools: ${JSON.stringify(bundle.allowedTools)}`);
+  if (bundle.model)       lines.push(`model: ${JSON.stringify(bundle.model)}`);
+  if (bundle.userInvocable !== undefined) lines.push(`user-invocable: "${bundle.userInvocable}"`);
+  lines.push(`installed-at: ${JSON.stringify(installedAt)}`);
+  lines.push('---');
+  lines.push('');
+  lines.push(bundle.content ?? '');
+  return lines.join('\n');
 }
 
 function parseFrontmatter(raw: string): { meta: Record<string, string>; content: string } {
@@ -302,10 +324,15 @@ export class SkillsService {
       fileKeys.push(relativePath);
     }
 
+    const installedAt = new Date().toISOString();
+
+    // Always write canonical skill.md (overwrites any skill.md that may have come from bundle.files)
+    const skillMdContent = buildSkillFile(bundle, installedAt);
+    await fs.writeFile(path.join(skillDir, 'skill.md'), skillMdContent, 'utf-8');
+
     logger.core.info('Skill installed', { skillId: bundle.id, skillDir, scope, filesCount: fileKeys.length });
 
     const filePath = path.join(skillDir, 'skill.md');
-    const installedAt = new Date().toISOString();
 
     return {
       ...bundle,
