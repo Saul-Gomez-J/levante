@@ -148,6 +148,11 @@ export function BackgroundTasksDropdown({ className }: BackgroundTasksDropdownPr
     await loadOutput(task.id, 100);
   };
 
+  // Hide the control unless there are active background tasks.
+  if (stats.running === 0) {
+    return null;
+  }
+
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
