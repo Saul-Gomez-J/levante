@@ -472,7 +472,10 @@ function App() {
           const { skillId } = action.data as { skillId: string }
 
           const store = useSkillsStore.getState()
-          await Promise.all([store.loadCatalog(), store.loadInstalled()])
+          await Promise.all([
+            store.loadCatalog(),
+            store.loadInstalled({ mode: 'all-scopes' }),
+          ])
 
           const skill = useSkillsStore.getState().catalog.find((s) => s.id === skillId)
 

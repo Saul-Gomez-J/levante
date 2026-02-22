@@ -3,23 +3,39 @@ import type {
   SkillDescriptor,
   SkillCategory,
   InstalledSkill,
+  SkillScope,
+  InstallSkillOptions,
+  UninstallSkillOptions,
+  ListInstalledSkillsOptions,
 } from '../../types/skills';
+
+function buildScopedKey(scope: SkillScope, skillId: string, projectId?: string): string {
+  return `${scope}:${scope === 'project' ? projectId ?? 'unknown' : 'global'}:${skillId}`;
+}
 
 interface SkillsStore {
   catalog: SkillDescriptor[];
   categories: SkillCategory[];
   installedSkills: InstalledSkill[];
-  installedIds: Set<string>;
+  installedScopedKeys: Set<string>;
   isLoadingCatalog: boolean;
   isLoadingInstalled: boolean;
   error: string | null;
 
   loadCatalog: () => Promise<void>;
   loadCategories: () => Promise<void>;
-  loadInstalled: () => Promise<void>;
-  installSkill: (skill: SkillDescriptor) => Promise<void>;
-  uninstallSkill: (skillId: string) => Promise<void>;
+  loadInstalled: (options?: ListInstalledSkillsOptions) => Promise<void>;
+  installSkill: (skill: SkillDescriptor, options?: InstallSkillOptions) => Promise<void>;
+  uninstallSkill: (skillId: string, options: UninstallSkillOptions) => Promise<void>;
+
+  // Legacy compatibility: checks if installed globally
   isInstalled: (skillId: string) => boolean;
+
+  // New scope-aware selectors
+  getInstalledBySkillId: (skillId: string) => InstalledSkill[];
+  isInstalledAnywhere: (skillId: string) => boolean;
+  isInstalledInScope: (skillId: string, scope: SkillScope, projectId?: string) => boolean;
+
   clearError: () => void;
 }
 
@@ -27,7 +43,7 @@ export const useSkillsStore = create<SkillsStore>((set, get) => ({
   catalog: [],
   categories: [],
   installedSkills: [],
-  installedIds: new Set(),
+  installedScopedKeys: new Set(),
   isLoadingCatalog: false,
   isLoadingInstalled: false,
   error: null,
@@ -68,11 +84,11 @@ export const useSkillsStore = create<SkillsStore>((set, get) => ({
     }
   },
 
-  loadInstalled: async () => {
+  loadInstalled: async (options?: ListInstalledSkillsOptions) => {
     set({ isLoadingInstalled: true, error: null });
 
     try {
-      const result = await window.levante.skills.listInstalled();
+      const result = await window.levante.skills.listInstalled(options);
       if (!result.success) {
         throw new Error(result.error);
       }
@@ -80,7 +96,7 @@ export const useSkillsStore = create<SkillsStore>((set, get) => ({
       const installed = result.data;
       set({
         installedSkills: installed,
-        installedIds: new Set(installed.map((item) => item.id)),
+        installedScopedKeys: new Set(installed.map((item) => item.scopedKey)),
         isLoadingInstalled: false,
       });
     } catch (error) {
@@ -91,14 +107,14 @@ export const useSkillsStore = create<SkillsStore>((set, get) => ({
     }
   },
 
-  installSkill: async (skill: SkillDescriptor) => {
+  installSkill: async (skill: SkillDescriptor, options?: InstallSkillOptions) => {
     // Descargar el bundle completo (incluye todos los archivos compañeros)
     const bundleResult = await window.levante.skills.getBundle(skill.id);
     if (!bundleResult.success) {
       throw new Error(bundleResult.error);
     }
 
-    const result = await window.levante.skills.install(bundleResult.data);
+    const result = await window.levante.skills.install(bundleResult.data, options);
     if (!result.success) {
       throw new Error(result.error);
     }
@@ -106,32 +122,52 @@ export const useSkillsStore = create<SkillsStore>((set, get) => ({
     const installed = result.data;
 
     set((state) => {
-      const already = state.installedSkills.some((s) => s.id === installed.id);
+      // Upsert por scopedKey (no por id)
+      const already = state.installedSkills.some((s) => s.scopedKey === installed.scopedKey);
       const nextList = already
-        ? state.installedSkills.map((s) => (s.id === installed.id ? installed : s))
+        ? state.installedSkills.map((s) => (s.scopedKey === installed.scopedKey ? installed : s))
         : [...state.installedSkills, installed];
 
       return {
         installedSkills: nextList,
-        installedIds: new Set(nextList.map((s) => s.id)),
+        installedScopedKeys: new Set(nextList.map((s) => s.scopedKey)),
       };
     });
   },
 
-  uninstallSkill: async (skillId: string) => {
-    const result = await window.levante.skills.uninstall(skillId);
+  uninstallSkill: async (skillId: string, options: UninstallSkillOptions) => {
+    const result = await window.levante.skills.uninstall(skillId, options);
     if (!result.success) {
       throw new Error(result.error);
     }
 
+    const targetKey = buildScopedKey(options.scope, skillId, options.projectId);
+
     set((state) => {
-      const nextList = state.installedSkills.filter((s) => s.id !== skillId);
+      const nextList = state.installedSkills.filter((s) => s.scopedKey !== targetKey);
       return {
         installedSkills: nextList,
-        installedIds: new Set(nextList.map((s) => s.id)),
+        installedScopedKeys: new Set(nextList.map((s) => s.scopedKey)),
       };
     });
   },
 
-  isInstalled: (skillId: string) => get().installedIds.has(skillId),
+  // Legacy: check global installation only (for backwards compatibility)
+  isInstalled: (skillId: string) => {
+    const globalKey = buildScopedKey('global', skillId);
+    return get().installedScopedKeys.has(globalKey);
+  },
+
+  getInstalledBySkillId: (skillId: string) => {
+    return get().installedSkills.filter((s) => s.id === skillId);
+  },
+
+  isInstalledAnywhere: (skillId: string) => {
+    return get().installedSkills.some((s) => s.id === skillId);
+  },
+
+  isInstalledInScope: (skillId: string, scope: SkillScope, projectId?: string) => {
+    const key = buildScopedKey(scope, skillId, projectId);
+    return get().installedScopedKeys.has(key);
+  },
 }));

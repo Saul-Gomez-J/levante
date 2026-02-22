@@ -9,14 +9,23 @@ import type {
   SkillsCatalogResponse,
   SkillCategory,
   InstalledSkill,
+  SkillScope,
+  InstallSkillOptions,
+  UninstallSkillOptions,
+  ListInstalledSkillsOptions,
 } from '../../types/skills';
 
 const logger = getLogger();
 
 const SERVICES_HOST = 'http://localhost:5180';
 const CATALOG_ENDPOINT = '/api/skills.json';
-const BUNDLE_ENDPOINT = (category: string, name: string) =>
-  `/api/skills/${encodeURIComponent(category)}/${encodeURIComponent(name)}/bundle`;
+const BUNDLE_ENDPOINT = (skillId: string) => {
+  if (skillId.includes('/')) {
+    const [category, name] = skillId.split('/');
+    return `/api/skills/${encodeURIComponent(category)}/${encodeURIComponent(name)}/bundle`;
+  }
+  return `/api/skills/${encodeURIComponent(skillId)}/bundle`;
+};
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hora
 
 interface CacheEntry {
@@ -28,20 +37,36 @@ function getCachePath(): string {
   return path.join(app.getPath('userData'), 'skills-cache.json');
 }
 
-function getSkillsDir(): string {
+function getGlobalSkillsDir(): string {
   return directoryService.getSubdirPath('skills');
 }
 
-function splitSkillId(skillId: string): { category: string; name: string } {
-  const normalized = decodeURIComponent(skillId).trim();
-  const match = normalized.match(/^([^/]+)\/([^/]+)$/);
-  if (!match) {
-    throw new Error(`Invalid skill id format: "${skillId}". Expected "category/name".`);
+function getProjectSkillsDir(projectCwd: string): string {
+  return path.join(projectCwd, '.levante', 'skills');
+}
+
+function buildScopedKey(scope: SkillScope, skillId: string, projectId?: string): string {
+  return `${scope}:${scope === 'project' ? projectId ?? 'unknown' : 'global'}:${skillId}`;
+}
+
+async function resolveProjectForScope(projectId: string): Promise<{ id: string; name: string; cwd: string }> {
+  const { projectService } = await import('./projectService');
+  const result = await projectService.getProject(projectId);
+
+  if (!result.success || !result.data) {
+    throw new Error(`Project not found: ${projectId}`);
+  }
+
+  const project = result.data;
+
+  if (!project.cwd || project.cwd.trim() === '') {
+    throw new Error(`Project "${project.name}" does not have a working directory configured`);
   }
 
   return {
-    category: match[1],
-    name: match[2],
+    id: project.id,
+    name: project.name,
+    cwd: project.cwd,
   };
 }
 
@@ -54,48 +79,10 @@ function sanitizePathSegment(value: string): string {
     .slice(0, 120);
 }
 
-function buildInstalledPath(skillId: string): { category: string; name: string; filePath: string } {
-  const parts = splitSkillId(skillId);
-  const category = sanitizePathSegment(parts.category);
-  const name = sanitizePathSegment(parts.name);
-
-  if (!category || !name) {
-    throw new Error(`Invalid skill id after sanitization: ${skillId}`);
-  }
-
-  const filePath = path.join(getSkillsDir(), category, `${name}.md`);
-  return { category, name, filePath };
-}
-
-function yamlString(value: string): string {
-  return JSON.stringify(value ?? '');
-}
-
-function buildSkillFile(skill: SkillDescriptor, installedAt: string): string {
-  const lines: string[] = ['---'];
-
-  lines.push(`id: ${yamlString(skill.id)}`);
-  lines.push(`name: ${yamlString(skill.name)}`);
-  lines.push(`description: ${yamlString(skill.description)}`);
-  lines.push(`category: ${yamlString(skill.category)}`);
-
-  if (skill.author) lines.push(`author: ${yamlString(skill.author)}`);
-  if (skill.version) lines.push(`version: ${yamlString(skill.version)}`);
-  if (skill.license) lines.push(`license: ${yamlString(skill.license)}`);
-  if (skill.tags?.length) lines.push(`tags: [${skill.tags.map((tag) => yamlString(tag)).join(', ')}]`);
-  if (skill.allowedTools) lines.push(`allowed-tools: ${yamlString(skill.allowedTools)}`);
-  if (skill.model) lines.push(`model: ${yamlString(skill.model)}`);
-  if (typeof skill.userInvocable === 'boolean') lines.push(`user-invocable: ${skill.userInvocable}`);
-  if (skill.dependencies?.length) lines.push(`dependencies: [${skill.dependencies.map((d) => yamlString(d)).join(', ')}]`);
-  if (skill.source) lines.push(`source: ${yamlString(skill.source)}`);
-  if (skill.repo) lines.push(`repo: ${yamlString(skill.repo)}`);
-
-  lines.push(`installed-at: ${yamlString(installedAt)}`);
-  lines.push('---');
-  lines.push('');
-  lines.push(skill.content ?? '');
-
-  return lines.join('\n');
+function buildSkillDir(baseDir: string, skillId: string): { name: string; skillDir: string } {
+  const name = sanitizePathSegment(decodeURIComponent(skillId).trim());
+  if (!name) throw new Error(`Invalid skill id after sanitization: ${skillId}`);
+  return { name, skillDir: path.join(baseDir, name) };
 }
 
 function parseFrontmatter(raw: string): { meta: Record<string, string>; content: string } {
@@ -142,6 +129,68 @@ async function apiFetch<T>(endpoint: string): Promise<T> {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+interface ScanSkillsDirInput {
+  dir: string;
+  scope: SkillScope;
+  project?: { id: string; name: string; cwd: string };
+}
+
+async function scanSkillsDir(input: ScanSkillsDirInput): Promise<InstalledSkill[]> {
+  const { dir, scope, project } = input;
+  const installed: InstalledSkill[] = [];
+
+  try {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+
+      const skillName = entry.name.toString();
+      const skillDir = path.join(dir, skillName);
+      const filePath = path.join(skillDir, 'skill.md');
+
+      try {
+        const raw = await fs.readFile(filePath, 'utf-8');
+        const { meta, content } = parseFrontmatter(raw);
+
+        const skillId = meta['id']?.trim() || skillName;
+
+        installed.push({
+          id: skillId,
+          name: meta['name'] ?? skillName,
+          description: meta['description'] ?? '',
+          category: meta['category'] ?? '',
+          author: meta['author'],
+          version: meta['version'],
+          license: meta['license'],
+          allowedTools: meta['allowed-tools'],
+          model: meta['model'],
+          userInvocable: meta['user-invocable'] === 'true',
+          content,
+          installedAt: meta['installed-at'] ?? new Date().toISOString(),
+          filePath,
+          scope,
+          ...(project ? {
+            projectId: project.id,
+            projectName: project.name,
+            projectCwd: project.cwd,
+          } : {}),
+          scopedKey: buildScopedKey(scope, skillId, project?.id),
+        });
+      } catch (error) {
+        logger.core.warn('Failed to parse installed skill file', {
+          filePath,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+  } catch {
+    // dir doesn't exist => empty list
+  }
+
+  return installed;
 }
 
 export class SkillsService {
@@ -214,166 +263,184 @@ export class SkillsService {
   }
 
   async getBundle(skillId: string): Promise<SkillBundleResponse> {
-    const { category, name } = splitSkillId(skillId);
-    return apiFetch<SkillBundleResponse>(BUNDLE_ENDPOINT(category, name));
+    const bundle = await apiFetch<SkillBundleResponse>(BUNDLE_ENDPOINT(skillId));
+    logger.core.debug('Bundle fetched', { skillId, filesCount: Object.keys(bundle?.files ?? {}).length });
+    return bundle;
   }
 
-  async installSkill(skill: SkillBundleResponse): Promise<InstalledSkill> {
-    if (!skill?.id) {
+  async installSkill(bundle: SkillBundleResponse, options: InstallSkillOptions = {}): Promise<InstalledSkill> {
+    if (!bundle?.id) {
       throw new Error('Cannot install skill: missing id');
     }
 
-    await directoryService.ensureBaseDir();
+    const scope: SkillScope = options.scope ?? 'global';
+    let baseDir: string;
+    let project: { id: string; name: string; cwd: string } | undefined;
 
-    const { category, name, filePath } = buildInstalledPath(skill.id);
-    const categoryDir = path.dirname(filePath);
-
-    await fs.mkdir(categoryDir, { recursive: true });
-
-    const installedAt = new Date().toISOString();
-    const fileContent = buildSkillFile(skill, installedAt);
-    await fs.writeFile(filePath, fileContent, 'utf-8');
-
-    logger.core.info('Skill installed', { skillId: skill.id, filePath });
-
-    // Escribir archivos compañeros (rules/, scripts/, etc.) si los hay
-    const fileKeys: string[] = [];
-    let companionDir: string | undefined;
-
-    if (skill.files && Object.keys(skill.files).length > 0) {
-      companionDir = path.join(getSkillsDir(), category, name);
-
-      for (const [relativePath, content] of Object.entries(skill.files)) {
-        // Sanitizar cada segmento para prevenir path traversal.
-        // Soporta cualquier profundidad y extensión: "rules/animations.md", "scripts/setup.sh", etc.
-        const segments = relativePath
-          .split('/')
-          .map(sanitizePathSegment)
-          .filter(Boolean);
-
-        if (segments.length === 0) continue;
-
-        const fullPath = path.join(companionDir, ...segments);
-        await fs.mkdir(path.dirname(fullPath), { recursive: true });
-        await fs.writeFile(fullPath, content, 'utf-8');
-        fileKeys.push(relativePath);
+    if (scope === 'project') {
+      if (!options.projectId) {
+        throw new Error('projectId is required when scope is "project"');
       }
-
-      logger.core.info('Companion files installed', { skillId: skill.id, count: fileKeys.length });
+      project = await resolveProjectForScope(options.projectId);
+      baseDir = getProjectSkillsDir(project.cwd);
+    } else {
+      await directoryService.ensureBaseDir();
+      baseDir = getGlobalSkillsDir();
     }
 
+    const { skillDir } = buildSkillDir(baseDir, bundle.id);
+    await fs.mkdir(skillDir, { recursive: true });
+
+    // Write all files from bundle.files as-is (includes skill.md and companion files)
+    const fileKeys: string[] = [];
+    for (const [relativePath, content] of Object.entries(bundle.files ?? {})) {
+      const segments = relativePath.split('/').map(sanitizePathSegment).filter(Boolean);
+      if (segments.length === 0) continue;
+      const fullPath = path.join(skillDir, ...segments);
+      await fs.mkdir(path.dirname(fullPath), { recursive: true });
+      await fs.writeFile(fullPath, content, 'utf-8');
+      fileKeys.push(relativePath);
+    }
+
+    logger.core.info('Skill installed', { skillId: bundle.id, skillDir, scope, filesCount: fileKeys.length });
+
+    const filePath = path.join(skillDir, 'skill.md');
+    const installedAt = new Date().toISOString();
+
     return {
-      ...skill,
+      ...bundle,
       installedAt,
       filePath,
-      category,
-      ...(companionDir ? { companionDir, fileKeys } : {}),
+      ...(fileKeys.length ? { companionDir: skillDir, fileKeys } : {}),
+      scope,
+      ...(project ? {
+        projectId: project.id,
+        projectName: project.name,
+        projectCwd: project.cwd,
+      } : {}),
+      scopedKey: buildScopedKey(scope, bundle.id, project?.id),
     };
   }
 
-  async uninstallSkill(skillId: string): Promise<void> {
-    const { category, name, filePath } = buildInstalledPath(skillId);
+  async uninstallSkill(skillId: string, options: UninstallSkillOptions): Promise<void> {
+    const scope = options.scope;
+    let baseDir: string;
+
+    if (scope === 'project') {
+      if (!options.projectId) {
+        throw new Error('projectId is required when scope is "project"');
+      }
+      const project = await resolveProjectForScope(options.projectId);
+      baseDir = getProjectSkillsDir(project.cwd);
+    } else {
+      baseDir = getGlobalSkillsDir();
+    }
+
+    const { skillDir } = buildSkillDir(baseDir, skillId);
 
     try {
-      await fs.unlink(filePath);
-      logger.core.info('Skill uninstalled', { skillId, filePath });
+      await fs.rm(skillDir, { recursive: true, force: true });
+      logger.core.info('Skill uninstalled', { skillId, skillDir, scope });
     } catch (error: any) {
-      if (error?.code !== 'ENOENT') {
-        throw error;
-      }
-      logger.core.warn('Skill file not found during uninstall, continuing', { skillId, filePath });
-    }
-
-    // Borrar directorio de archivos compañeros si existe
-    const companionDir = path.join(getSkillsDir(), category, name);
-    try {
-      await fs.rm(companionDir, { recursive: true, force: true });
-      logger.core.info('Companion files removed', { skillId, companionDir });
-    } catch {
-      // ignore cleanup errors
-    }
-
-    // limpiar carpeta de categoria si queda vacia
-    const categoryDir = path.join(getSkillsDir(), category);
-    try {
-      const remaining = await fs.readdir(categoryDir);
-      if (remaining.length === 0) {
-        await fs.rmdir(categoryDir);
-      }
-    } catch {
-      // ignore cleanup errors
+      if (error?.code !== 'ENOENT') throw error;
+      logger.core.warn('Skill directory not found during uninstall', { skillId, skillDir, scope });
     }
   }
 
   async isInstalled(skillId: string): Promise<boolean> {
-    const { filePath } = buildInstalledPath(skillId);
+    const { skillDir } = buildSkillDir(getGlobalSkillsDir(), skillId);
     try {
-      await fs.access(filePath);
+      await fs.access(path.join(skillDir, 'skill.md'));
       return true;
     } catch {
       return false;
     }
   }
 
-  async listInstalledSkills(): Promise<InstalledSkill[]> {
-    const baseDir = getSkillsDir();
-    const installed: InstalledSkill[] = [];
+  async listInstalledSkills(options: ListInstalledSkillsOptions = {}): Promise<InstalledSkill[]> {
+    const mode = options.mode ?? 'global';
 
-    try {
-      const categories = await fs.readdir(baseDir, { withFileTypes: true });
+    if (mode === 'global') {
+      const globalDir = getGlobalSkillsDir();
+      const installed = await scanSkillsDir({ dir: globalDir, scope: 'global' });
+      installed.sort((a, b) => a.id.localeCompare(b.id));
+      return installed;
+    }
 
-      for (const categoryEntry of categories) {
-        if (!categoryEntry.isDirectory()) continue;
+    if (mode === 'project-merged') {
+      if (!options.projectId) {
+        throw new Error('projectId is required for mode "project-merged"');
+      }
 
-        const category = categoryEntry.name;
-        const categoryDir = path.join(baseDir, category);
-        const files = await fs.readdir(categoryDir, { withFileTypes: true });
+      const project = await resolveProjectForScope(options.projectId);
+      const globalDir = getGlobalSkillsDir();
+      const projectDir = getProjectSkillsDir(project.cwd);
 
-        for (const fileEntry of files) {
-          if (!fileEntry.isFile()) continue;
-          if (!fileEntry.name.endsWith('.md')) continue;
+      const [globalSkills, projectSkills] = await Promise.all([
+        scanSkillsDir({ dir: globalDir, scope: 'global' }),
+        scanSkillsDir({ dir: projectDir, scope: 'project', project }),
+      ]);
 
-          const filePath = path.join(categoryDir, fileEntry.name);
-          const fallbackName = fileEntry.name.replace(/\.md$/, '');
+      // Merge: project overrides global by skill.id
+      const merged = new Map<string, InstalledSkill>();
+      for (const skill of globalSkills) {
+        merged.set(skill.id, skill);
+      }
+      for (const skill of projectSkills) {
+        merged.set(skill.id, skill);
+      }
 
+      const result = [...merged.values()];
+      result.sort((a, b) => a.id.localeCompare(b.id));
+      return result;
+    }
+
+    if (mode === 'all-scopes') {
+      const { projectService } = await import('./projectService');
+      const globalDir = getGlobalSkillsDir();
+
+      const [globalSkills, projectsResult] = await Promise.all([
+        scanSkillsDir({ dir: globalDir, scope: 'global' }),
+        projectService.listProjects(),
+      ]);
+
+      globalSkills.sort((a, b) => a.id.localeCompare(b.id));
+
+      const projectSkillsArrays: InstalledSkill[] = [];
+
+      if (projectsResult.success) {
+        const projectsWithCwd = projectsResult.data.filter((p) => p.cwd && p.cwd.trim() !== '');
+
+        for (const project of projectsWithCwd) {
+          const projectDir = getProjectSkillsDir(project.cwd!);
           try {
-            const raw = await fs.readFile(filePath, 'utf-8');
-            const { meta, content } = parseFrontmatter(raw);
-
-            const metaId = meta['id']?.trim();
-            const skillId = metaId && /^([^/]+)\/([^/]+)$/.test(metaId)
-              ? metaId
-              : `${category}/${fallbackName}`;
-
-            installed.push({
-              id: skillId,
-              name: meta['name'] ?? fallbackName,
-              description: meta['description'] ?? '',
-              category: meta['category'] ?? category,
-              author: meta['author'],
-              version: meta['version'],
-              license: meta['license'],
-              allowedTools: meta['allowed-tools'],
-              model: meta['model'],
-              userInvocable: meta['user-invocable'] === 'true',
-              content,
-              installedAt: meta['installed-at'] ?? new Date().toISOString(),
-              filePath,
+            const skills = await scanSkillsDir({
+              dir: projectDir,
+              scope: 'project',
+              project: { id: project.id, name: project.name, cwd: project.cwd! },
             });
+            projectSkillsArrays.push(...skills);
           } catch (error) {
-            logger.core.warn('Failed to parse installed skill file', {
-              filePath,
+            logger.core.warn('Failed to scan project skills dir, continuing', {
+              projectId: project.id,
+              projectDir,
               error: error instanceof Error ? error.message : String(error),
             });
           }
         }
       }
-    } catch {
-      // carpeta aun no existe => lista vacia
+
+      // Sort project skills by projectName + id for stable order
+      projectSkillsArrays.sort((a, b) => {
+        const nameComp = (a.projectName ?? '').localeCompare(b.projectName ?? '');
+        if (nameComp !== 0) return nameComp;
+        return a.id.localeCompare(b.id);
+      });
+
+      return [...globalSkills, ...projectSkillsArrays];
     }
 
-    installed.sort((a, b) => a.id.localeCompare(b.id));
-    return installed;
+    return [];
   }
 }
 

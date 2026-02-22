@@ -9,6 +9,10 @@ export interface ChatRequest {
   webSearch?: boolean;
   enableMCP?: boolean;
   projectDescription?: string; // Descripción del proyecto (inyectada en system prompt)
+  // Contexto de proyecto para carga de skills por scope
+  projectContext?: {
+    projectId?: string;
+  };
   // Modo de codificación (Cowork mode)
   codeMode?: {
     enabled: boolean;

@@ -40,6 +40,10 @@ export interface ChatRequest {
   webSearch: boolean;
   enableMCP?: boolean;
   projectDescription?: string; // Descripción del proyecto (inyectada en system prompt)
+  // Contexto de proyecto para carga de skills por scope
+  projectContext?: {
+    projectId?: string;
+  };
   // Modo de codificación
   codeMode?: {
     enabled: boolean;
@@ -936,7 +940,7 @@ export class AIService {
   async *streamChat(
     request: ChatRequest
   ): AsyncGenerator<ChatStreamChunk, void, unknown> {
-    const { messages, model, webSearch, enableMCP = false, projectDescription } = request;
+    const { messages, model, webSearch, enableMCP = false, projectDescription, projectContext } = request;
 
     try {
       // Get model classification (Phase 3: Model Classification)
@@ -1036,11 +1040,18 @@ export class AIService {
       const { getBuiltInTools } = await import('./ai/builtInTools');
       const builtInToolsConfig = await this.getBuiltInToolsConfig();
 
+      const projectId = projectContext?.projectId;
       let installedSkills: InstalledSkill[] = [];
       try {
-        installedSkills = await skillsService.listInstalledSkills();
+        installedSkills = await skillsService.listInstalledSkills(
+          projectId
+            ? { mode: 'project-merged', projectId }
+            : { mode: 'global' }
+        );
         this.logger.aiSdk.debug('Loaded installed skills for agent context', {
           count: installedSkills.length,
+          projectId,
+          mode: projectId ? 'project-merged' : 'global',
           ids: installedSkills.map((s) => s.id),
         });
       } catch (error) {
@@ -1883,7 +1894,7 @@ export class AIService {
   async sendSingleMessage(
     request: ChatRequest
   ): Promise<{ response: string; sources?: any[]; reasoningText?: string }> {
-    const { messages, model, webSearch, enableMCP = false, projectDescription } = request;
+    const { messages, model, webSearch, enableMCP = false, projectDescription, projectContext } = request;
 
     try {
       // Get model classification (Phase 3: Model Classification)
@@ -1941,6 +1952,28 @@ export class AIService {
       // Get built-in tools config for system prompt
       const builtInToolsConfig = await this.getBuiltInToolsConfig();
 
+      // Load skills by scope (project-merged or global)
+      const singleMsgProjectId = projectContext?.projectId;
+      let singleMsgInstalledSkills: InstalledSkill[] = [];
+      try {
+        singleMsgInstalledSkills = await skillsService.listInstalledSkills(
+          singleMsgProjectId
+            ? { mode: 'project-merged', projectId: singleMsgProjectId }
+            : { mode: 'global' }
+        );
+      } catch (error) {
+        this.logger.aiSdk.warn('Failed to load installed skills for single message', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      // Get built-in tools with skills context
+      const { getBuiltInTools } = await import('./ai/builtInTools');
+      const singleMsgBuiltInTools = await getBuiltInTools({
+        ...builtInToolsConfig,
+        skills: singleMsgInstalledSkills,
+      });
+
       const messagesWithFileParts = await this.includeAttachmentsInMessageParts(
         messages,
         modelInfo?.capabilities
@@ -1949,17 +1982,18 @@ export class AIService {
       const result = await generateText({
         model: modelProvider,
         messages: await convertToModelMessages(sanitizeMessagesForModel(messagesWithFileParts)),
-        tools,
+        tools: { ...singleMsgBuiltInTools, ...tools },
         system: await buildSystemPrompt(
           webSearch,
           enableMCP,
-          Object.keys(tools).length,
+          Object.keys({ ...singleMsgBuiltInTools, ...tools }).length,
           builtInToolsConfig.mermaidValidation,
           builtInToolsConfig.mcpDiscovery,
-          projectDescription
+          projectDescription,
+          singleMsgInstalledSkills
         ),
-        stopWhen: stepCountIs(await calculateMaxSteps(Object.keys(tools).length)),
-        providerOptions: await getReasoningProviderOptions(model, undefined, Object.keys(tools).length > 0),
+        stopWhen: stepCountIs(await calculateMaxSteps(Object.keys({ ...singleMsgBuiltInTools, ...tools }).length)),
+        providerOptions: await getReasoningProviderOptions(model, undefined, Object.keys({ ...singleMsgBuiltInTools, ...tools }).length > 0),
       });
 
       return {

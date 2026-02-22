@@ -1,7 +1,12 @@
 import { ipcMain } from 'electron';
 import { getLogger } from '../services/logging';
 import { skillsService } from '../services/skillsService';
-import type { SkillBundleResponse } from '../../types/skills';
+import type {
+  SkillBundleResponse,
+  InstallSkillOptions,
+  UninstallSkillOptions,
+  ListInstalledSkillsOptions,
+} from '../../types/skills';
 
 const logger = getLogger();
 
@@ -58,13 +63,20 @@ export function setupSkillsHandlers(): void {
   });
 
   ipcMain.removeHandler('levante/skills:install');
-  ipcMain.handle('levante/skills:install', async (_, skill: SkillBundleResponse) => {
+  ipcMain.handle('levante/skills:install', async (_, payload: {
+    bundle: SkillBundleResponse;
+    options?: InstallSkillOptions;
+  }) => {
+    if (!payload?.bundle?.id) {
+      return fail(new Error('Invalid install payload: bundle.id is required'));
+    }
     try {
-      const installed = await skillsService.installSkill(skill);
+      const installed = await skillsService.installSkill(payload.bundle, payload.options);
       return ok(installed);
     } catch (error) {
       logger.ipc.error('Failed to install skill', {
-        skillId: skill?.id,
+        skillId: payload?.bundle?.id,
+        scope: payload?.options?.scope,
         error: error instanceof Error ? error.message : String(error),
       });
       return fail(error);
@@ -72,13 +84,23 @@ export function setupSkillsHandlers(): void {
   });
 
   ipcMain.removeHandler('levante/skills:uninstall');
-  ipcMain.handle('levante/skills:uninstall', async (_, skillId: string) => {
+  ipcMain.handle('levante/skills:uninstall', async (_, payload: {
+    skillId: string;
+    options: UninstallSkillOptions;
+  }) => {
+    if (!payload?.skillId) {
+      return fail(new Error('Invalid uninstall payload: skillId is required'));
+    }
+    if (!payload?.options?.scope) {
+      return fail(new Error('Invalid uninstall payload: options.scope is required'));
+    }
     try {
-      await skillsService.uninstallSkill(skillId);
+      await skillsService.uninstallSkill(payload.skillId, payload.options);
       return ok(true);
     } catch (error) {
       logger.ipc.error('Failed to uninstall skill', {
-        skillId,
+        skillId: payload?.skillId,
+        scope: payload?.options?.scope,
         error: error instanceof Error ? error.message : String(error),
       });
       return fail(error);
@@ -86,12 +108,22 @@ export function setupSkillsHandlers(): void {
   });
 
   ipcMain.removeHandler('levante/skills:listInstalled');
-  ipcMain.handle('levante/skills:listInstalled', async () => {
+  ipcMain.handle('levante/skills:listInstalled', async (_, payload?: {
+    options?: ListInstalledSkillsOptions;
+  }) => {
+    const options = payload?.options ?? {};
+
+    // Validate mode + projectId combination
+    if (options.mode === 'project-merged' && !options.projectId) {
+      return fail(new Error('projectId is required when mode is "project-merged"'));
+    }
+
     try {
-      const data = await skillsService.listInstalledSkills();
+      const data = await skillsService.listInstalledSkills(options);
       return ok(data);
     } catch (error) {
       logger.ipc.error('Failed to list installed skills', {
+        mode: options.mode,
         error: error instanceof Error ? error.message : String(error),
       });
       return fail(error);

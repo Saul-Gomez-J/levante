@@ -1,5 +1,4 @@
 export interface SkillDescriptor {
-  /** Formato obligatorio: "category/name" */
   id: string;
   name: string;
   description: string;
@@ -31,11 +30,41 @@ export interface SkillsCatalogResponse {
   skills: SkillDescriptor[];
 }
 
+export type SkillScope = 'global' | 'project';
+
 export interface InstalledSkill extends SkillDescriptor {
   installedAt: string; // ISO 8601
-  filePath: string; // ~/levante/skills/{category}/{name}.md
-  companionDir?: string; // ~/levante/skills/{category}/{name}/ (si hay archivos compañeros)
-  fileKeys?: string[]; // rutas relativas de los archivos compañeros instalados
+  filePath: string;
+  companionDir?: string;
+  fileKeys?: string[];
+
+  // Scope info
+  scope: SkillScope;
+  // presente solo en scope project
+  projectId?: string;
+  projectName?: string;
+  projectCwd?: string;
+
+  // clave canonica por instancia para evitar colisiones por skill.id
+  // format: "{scope}:{projectId|global}:{skillId}"
+  scopedKey: string;
+}
+
+export interface InstallSkillOptions {
+  scope?: SkillScope; // default 'global'
+  projectId?: string; // requerido si scope === 'project'
+}
+
+export interface UninstallSkillOptions {
+  scope: SkillScope;
+  projectId?: string; // requerido si scope === 'project'
+}
+
+export type ListInstalledMode = 'global' | 'project-merged' | 'all-scopes';
+
+export interface ListInstalledSkillsOptions {
+  mode?: ListInstalledMode; // default 'global'
+  projectId?: string; // requerido en mode 'project-merged'
 }
 
 /**

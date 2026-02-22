@@ -1,12 +1,12 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
-import { Download, Trash2, ExternalLink } from 'lucide-react'
-import type { SkillDescriptor } from '../../../types/skills'
+import { Download, Trash2, ExternalLink, Globe, FolderOpen } from 'lucide-react'
+import type { SkillDescriptor, InstalledSkill } from '../../../types/skills'
 
 interface SkillCardProps {
   skill: SkillDescriptor
-  isInstalled: boolean
+  installedInstances: InstalledSkill[]
   isLoading?: boolean
   onInstall: (skill: SkillDescriptor) => void
   onUninstall: (skillId: string) => void
@@ -15,12 +15,17 @@ interface SkillCardProps {
 
 export function SkillCard({
   skill,
-  isInstalled,
+  installedInstances,
   isLoading,
   onInstall,
   onUninstall,
   onViewDetails,
 }: SkillCardProps) {
+  const isInstalledAnywhere = installedInstances.length > 0
+  const hasGlobal = installedInstances.some((i) => i.scope === 'global')
+  const projectInstances = installedInstances.filter((i) => i.scope === 'project')
+  const MAX_PROJECT_BADGES = 2
+
   return (
     <Card className="flex flex-col hover:shadow-md transition-shadow">
       <CardHeader className="pb-2">
@@ -50,6 +55,29 @@ export function SkillCard({
             )}
           </div>
         )}
+
+        {/* Scope badges */}
+        {isInstalledAnywhere && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {hasGlobal && (
+              <Badge variant="outline" className="text-xs px-1.5 py-0 gap-1">
+                <Globe className="h-2.5 w-2.5" />
+                Global
+              </Badge>
+            )}
+            {projectInstances.slice(0, MAX_PROJECT_BADGES).map((inst) => (
+              <Badge key={inst.scopedKey} variant="outline" className="text-xs px-1.5 py-0 gap-1">
+                <FolderOpen className="h-2.5 w-2.5" />
+                {inst.projectName ?? 'Project'}
+              </Badge>
+            ))}
+            {projectInstances.length > MAX_PROJECT_BADGES && (
+              <Badge variant="outline" className="text-xs px-1.5 py-0">
+                +{projectInstances.length - MAX_PROJECT_BADGES}
+              </Badge>
+            )}
+          </div>
+        )}
       </CardContent>
 
       <CardFooter className="pt-2 gap-2">
@@ -63,28 +91,28 @@ export function SkillCard({
           Details
         </Button>
 
-        {isInstalled ? (
+        {isInstalledAnywhere && (
           <Button
             variant="outline"
             size="sm"
-            className="flex-1 text-xs text-destructive hover:text-destructive"
+            className="text-xs text-destructive hover:text-destructive"
             onClick={() => onUninstall(skill.id)}
             disabled={isLoading}
           >
             <Trash2 className="h-3 w-3 mr-1" />
             Remove
           </Button>
-        ) : (
-          <Button
-            size="sm"
-            className="flex-1 text-xs"
-            onClick={() => onInstall(skill)}
-            disabled={isLoading}
-          >
-            <Download className="h-3 w-3 mr-1" />
-            Install
-          </Button>
         )}
+
+        <Button
+          size="sm"
+          className="flex-1 text-xs"
+          onClick={() => onInstall(skill)}
+          disabled={isLoading}
+        >
+          <Download className="h-3 w-3 mr-1" />
+          Install
+        </Button>
       </CardFooter>
     </Card>
   )

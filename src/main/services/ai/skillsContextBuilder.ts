@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { InstalledSkill } from '../../../types/skills';
@@ -9,13 +10,14 @@ const logger = getLogger();
 const SKILLS_TOKEN_BUDGET = 4000;
 
 export function buildSkillsContext(skills: InstalledSkill[]): string {
-  // Decisión cerrada: no filtrar por userInvocable.
   if (skills.length === 0) return '';
 
   let usedTokens = 0;
   const entries: string[] = [];
 
   for (const skill of skills) {
+    if (skill.userInvocable === false) continue;
+
     const desc = skill.description?.trim() || skill.content.slice(0, 100).replace(/\n/g, ' ');
     const entry = `- ${skill.id}: ${desc}`;
     const tokens = Math.ceil(entry.length / 4);
@@ -95,12 +97,9 @@ Important:
         contentLength: found.content.length,
       });
 
-      return {
-        skillId: found.id,
-        skillName: found.name,
-        instructions: found.content,
-        ...(args ? { args } : {}),
-      };
+      const baseDir = path.dirname(found.filePath);
+      const content = args ? `${found.content}\n\n---\nContext provided: ${args}` : found.content;
+      return `Base directory for this skill: ${baseDir}\n\n${content}`;
     },
   });
 }

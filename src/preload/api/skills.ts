@@ -5,6 +5,9 @@ import type {
   SkillCategory,
   InstalledSkill,
   IPCResult,
+  InstallSkillOptions,
+  UninstallSkillOptions,
+  ListInstalledSkillsOptions,
 } from '../../types/skills';
 
 export const skillsApi = {
@@ -17,14 +20,14 @@ export const skillsApi = {
   getBundle: (skillId: string): Promise<IPCResult<SkillBundleResponse>> =>
     ipcRenderer.invoke('levante/skills:getBundle', skillId),
 
-  install: (skill: SkillBundleResponse): Promise<IPCResult<InstalledSkill>> =>
-    ipcRenderer.invoke('levante/skills:install', skill),
+  install: (bundle: SkillBundleResponse, options?: InstallSkillOptions): Promise<IPCResult<InstalledSkill>> =>
+    ipcRenderer.invoke('levante/skills:install', { bundle, options }),
 
-  uninstall: (skillId: string): Promise<IPCResult<boolean>> =>
-    ipcRenderer.invoke('levante/skills:uninstall', skillId),
+  uninstall: (skillId: string, options: UninstallSkillOptions): Promise<IPCResult<boolean>> =>
+    ipcRenderer.invoke('levante/skills:uninstall', { skillId, options }),
 
-  listInstalled: (): Promise<IPCResult<InstalledSkill[]>> =>
-    ipcRenderer.invoke('levante/skills:listInstalled'),
+  listInstalled: (options?: ListInstalledSkillsOptions): Promise<IPCResult<InstalledSkill[]>> =>
+    ipcRenderer.invoke('levante/skills:listInstalled', { options }),
 
   isInstalled: (skillId: string): Promise<IPCResult<boolean>> =>
     ipcRenderer.invoke('levante/skills:isInstalled', skillId),
