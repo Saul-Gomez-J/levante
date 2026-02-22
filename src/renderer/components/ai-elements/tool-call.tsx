@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
+import { DiffViewer } from '@/components/ai-elements/diff-viewer';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -129,7 +130,7 @@ export function ToolCall({ toolCall, className }: ToolCallProps) {
 
             {/* Sección: Result */}
             {toolCall.result && (
-              <ResultSection result={toolCall.result} />
+              <ResultSection result={toolCall.result} toolName={toolCall.name} />
             )}
 
             {/* Sección: Metadata */}
@@ -188,51 +189,140 @@ function ArgumentsSection({ arguments: args }: { arguments: Record<string, any> 
   );
 }
 
-function ResultSection({ result }: { result: NonNullable<ToolCallData['result']> }) {
+function ResultSection({
+  result,
+  toolName,
+}: {
+  result: NonNullable<ToolCallData['result']>;
+  toolName: string;
+}) {
   const theme = useThemeDetector();
   const [wrapEnabled, setWrapEnabled] = useState(false);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  const [showRawJson, setShowRawJson] = useState(false);
 
   const content = result.success ? result.content : result.error;
 
-  // Detect if content is JSON:
-  // 1. If content is an object (not string) -> it's JSON
-  // 2. If content is a string that looks like JSON -> try to parse it
+  const normalizedToolName = (toolName || '').trim().toLowerCase();
+  const isDiffTool = normalizedToolName === 'write' || normalizedToolName === 'edit';
+
+  const objectContent =
+    typeof content === 'object' && content !== null ? (content as Record<string, unknown>) : null;
+
+  const diffText = typeof objectContent?.diff === 'string' ? objectContent.diff : '';
+  const linesAdded = typeof objectContent?.linesAdded === 'number' ? objectContent.linesAdded : null;
+  const linesRemoved =
+    typeof objectContent?.linesRemoved === 'number' ? objectContent.linesRemoved : null;
+  const pathValue = typeof objectContent?.path === 'string' ? objectContent.path : '';
+
+  const hasChangeCounters = linesAdded !== null && linesRemoved !== null;
+  const hasRealChangesFromCounters = hasChangeCounters && (linesAdded > 0 || linesRemoved > 0);
+  const hasRealChangesFromHunk = !hasChangeCounters && /(^|\n)@@ /.test(diffText);
+  const hasRealDiffChanges = hasRealChangesFromCounters || hasRealChangesFromHunk;
+
+  const canRenderDiff =
+    result.success &&
+    isDiffTool &&
+    diffText.trim().length > 0 &&
+    hasRealDiffChanges;
+
+  const copyDiffToClipboard = () => {
+    if (diffText) {
+      navigator.clipboard.writeText(diffText);
+    }
+  };
+
+  const shortPath = pathValue
+    ? pathValue.split(/[/\\]/).slice(-2).join('/')
+    : '';
+
+  // Branch temprano: evita serializar JSON pesado cuando se muestra diff.
+  if (canRenderDiff && !showRawJson) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-semibold flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
+            Cambios en archivo
+          </h4>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowRawJson(true)}
+              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Raw
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={copyDiffToClipboard}
+              className="gap-2"
+              title="Copiar diff"
+            >
+              <Copy className="w-4 h-4" />
+              Copiar
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 text-xs">
+          {linesAdded !== null && linesAdded > 0 && (
+            <span className="text-green-600 dark:text-green-400 font-medium">
+              +{linesAdded} añadidas
+            </span>
+          )}
+          {linesRemoved !== null && linesRemoved > 0 && (
+            <span className="text-red-600 dark:text-red-400 font-medium">
+              -{linesRemoved} eliminadas
+            </span>
+          )}
+          {shortPath && (
+            <span
+              className="text-muted-foreground ml-auto font-mono truncate max-w-[220px]"
+              title={pathValue}
+            >
+              {shortPath}
+            </span>
+          )}
+        </div>
+
+        <DiffViewer diff={diffText} />
+      </div>
+    );
+  }
+
+  // Vista genérica original (JSON/texto)
   let isJSON = false;
   let contentString = '';
 
   if (typeof content === 'object' && content !== null) {
-    // Content is already a JSON object
     isJSON = true;
     contentString = JSON.stringify(content, null, 2);
   } else if (typeof content === 'string') {
-    // Check if string looks like JSON
     const trimmed = content.trim();
-    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) ||
-        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+    if (
+      (trimmed.startsWith('{') && trimmed.endsWith('}')) ||
+      (trimmed.startsWith('[') && trimmed.endsWith(']'))
+    ) {
       try {
-        // Try to parse and format it nicely
         const parsed = JSON.parse(trimmed);
         isJSON = true;
         contentString = JSON.stringify(parsed, null, 2);
       } catch {
-        // Not valid JSON, treat as plain text
         isJSON = false;
         contentString = content;
       }
     } else {
-      // Plain text
       contentString = content;
     }
   } else {
-    // Fallback for other types (number, boolean, etc.)
     contentString = String(content || '');
   }
 
-  // Calculate adaptive height based on content length
   const lineCount = contentString.split('\n').length;
   const adaptiveHeight = Math.min(Math.max(lineCount * 20, 300), 600);
-  // Fullscreen uses larger height to show more content
   const fullscreenHeight = Math.min(Math.max(lineCount * 20, 600), 2000);
 
   const copyToClipboard = () => {
@@ -258,12 +348,22 @@ function ResultSection({ result }: { result: NonNullable<ToolCallData['result']>
           )}
         </h4>
         <div className="flex gap-2">
+          {canRenderDiff && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowRawJson(false)}
+              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              Diff
+            </Button>
+          )}
           <Button
             variant="outline"
             size="sm"
             onClick={() => setWrapEnabled(!wrapEnabled)}
-            className={cn("gap-2", wrapEnabled && "bg-accent")}
-            title={wrapEnabled ? "Desactivar ajuste de línea" : "Activar ajuste de línea"}
+            className={cn('gap-2', wrapEnabled && 'bg-accent')}
+            title={wrapEnabled ? 'Desactivar ajuste de línea' : 'Activar ajuste de línea'}
           >
             <WrapText className="w-4 h-4" />
           </Button>
@@ -276,12 +376,7 @@ function ResultSection({ result }: { result: NonNullable<ToolCallData['result']>
           >
             <Maximize2 className="w-4 h-4" />
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={copyToClipboard}
-            className="gap-2"
-          >
+          <Button variant="outline" size="sm" onClick={copyToClipboard} className="gap-2">
             <Copy className="w-4 h-4" />
             Copiar
           </Button>
@@ -292,9 +387,14 @@ function ResultSection({ result }: { result: NonNullable<ToolCallData['result']>
         <CodeMirror
           value={contentString}
           height={`${adaptiveHeight}px`}
-          extensions={isJSON
-            ? (wrapEnabled ? [json(), EditorView.lineWrapping] : [json()])
-            : (wrapEnabled ? [EditorView.lineWrapping] : [])
+          extensions={
+            isJSON
+              ? wrapEnabled
+                ? [json(), EditorView.lineWrapping]
+                : [json()]
+              : wrapEnabled
+                ? [EditorView.lineWrapping]
+                : []
           }
           theme={theme === 'dark' ? oneDark : 'light'}
           editable={false}
@@ -309,7 +409,6 @@ function ResultSection({ result }: { result: NonNullable<ToolCallData['result']>
         />
       </div>
 
-      {/* Fullscreen Dialog */}
       <Dialog open={fullscreenOpen} onOpenChange={setFullscreenOpen}>
         <DialogContent className="max-w-[90vw] h-[90vh] flex flex-col">
           <DialogHeader>
@@ -334,17 +433,12 @@ function ResultSection({ result }: { result: NonNullable<ToolCallData['result']>
                 variant="outline"
                 size="sm"
                 onClick={() => setWrapEnabled(!wrapEnabled)}
-                className={cn("gap-2", wrapEnabled && "bg-accent")}
-                title={wrapEnabled ? "Desactivar ajuste de línea" : "Activar ajuste de línea"}
+                className={cn('gap-2', wrapEnabled && 'bg-accent')}
+                title={wrapEnabled ? 'Desactivar ajuste de línea' : 'Activar ajuste de línea'}
               >
                 <WrapText className="w-4 h-4" />
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={copyToClipboard}
-                className="gap-2"
-              >
+              <Button variant="outline" size="sm" onClick={copyToClipboard} className="gap-2">
                 <Copy className="w-4 h-4" />
                 Copiar
               </Button>
@@ -354,9 +448,14 @@ function ResultSection({ result }: { result: NonNullable<ToolCallData['result']>
               <CodeMirror
                 value={contentString}
                 height={`${fullscreenHeight}px`}
-                extensions={isJSON
-                  ? (wrapEnabled ? [json(), EditorView.lineWrapping] : [json()])
-                  : (wrapEnabled ? [EditorView.lineWrapping] : [])
+                extensions={
+                  isJSON
+                    ? wrapEnabled
+                      ? [json(), EditorView.lineWrapping]
+                      : [json()]
+                    : wrapEnabled
+                      ? [EditorView.lineWrapping]
+                      : []
                 }
                 theme={theme === 'dark' ? oneDark : 'light'}
                 editable={false}
