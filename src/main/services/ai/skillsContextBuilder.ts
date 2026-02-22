@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { tool } from 'ai';
 import { z } from 'zod';
 import type { InstalledSkill } from '../../../types/skills';
@@ -96,7 +97,9 @@ Important:
         contentLength: found.content.length,
       });
 
-      return args ? `${found.content}\n\n---\nContext provided: ${args}` : found.content;
+      const baseDir = path.dirname(found.filePath);
+      const content = args ? `${found.content}\n\n---\nContext provided: ${args}` : found.content;
+      return `Base directory for this skill: ${baseDir}\n\n${content}`;
     },
   });
 }
