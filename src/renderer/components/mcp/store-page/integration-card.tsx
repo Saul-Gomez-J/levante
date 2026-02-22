@@ -138,6 +138,12 @@ export function IntegrationCard({
           <Badge variant="secondary" className="text-xs">
             {category}
           </Badge>
+          {/* Custom badge — cuando no hay entrada de catálogo */}
+          {mode === 'active' && !entry && (
+            <Badge variant="outline" className="text-xs">
+              Custom
+            </Badge>
+          )}
           {/* Source badge (official/community) */}
           {entry?.source && SOURCE_CONFIG[entry.source] && (
             <Badge
