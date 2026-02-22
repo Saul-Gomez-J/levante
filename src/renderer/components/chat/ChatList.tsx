@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Search, Plus, Trash2, MoreVertical, Pencil, FolderOpen, ChevronDown, ChevronRight, MessageSquare } from 'lucide-react';
+import { Search, Plus, Trash2, MoreVertical, Pencil, FolderOpen } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,10 +22,11 @@ interface ChatListProps {
   loading?: boolean;
   // Project props
   projects?: Project[];
+  selectedProjectId?: string;
+  onProjectSelect?: (project: Project) => void;
   onCreateProject?: () => void;
   onEditProject?: (project: Project) => void;
   onDeleteProject?: (projectId: string, projectName: string, sessionCount: number) => void;
-  onNewSessionInProject?: (projectId: string) => void;
 }
 
 export function ChatList({
@@ -37,16 +38,16 @@ export function ChatList({
   onRenameChat,
   loading = false,
   projects = [],
+  selectedProjectId,
+  onProjectSelect,
   onCreateProject,
   onEditProject,
   onDeleteProject,
-  onNewSessionInProject,
 }: ChatListProps) {
   const { t } = useTranslation('chat');
   const [searchQuery, setSearchQuery] = useState('');
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
-  const [collapsedProjects, setCollapsedProjects] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Separate loose sessions from project sessions
@@ -120,28 +121,6 @@ export function ChatList({
       inputRef.current.select();
     }
   }, [editingSessionId]);
-
-  const toggleProjectCollapse = (projectId: string) => {
-    setCollapsedProjects((prev) => {
-      const next = new Set(prev);
-      if (next.has(projectId)) {
-        next.delete(projectId);
-      } else {
-        next.add(projectId);
-      }
-      return next;
-    });
-  };
-
-  const getProjectSessions = (projectId: string) => {
-    const projectSessions = sessions.filter((s) => s.project_id === projectId);
-    if (!searchQuery.trim()) return projectSessions;
-    return projectSessions.filter(
-      (s) =>
-        s.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.model.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  };
 
   const renderSession = (session: ChatSession) => (
     <div
@@ -269,91 +248,58 @@ export function ChatList({
               </div>
 
               {/* Project list */}
-              {projects.map((project) => {
-                const projectSessions = getProjectSessions(project.id);
-                const isCollapsed = collapsedProjects.has(project.id);
+              {projects.map((project) => (
+                <div
+                  key={project.id}
+                  className={cn(
+                    'group flex items-center gap-2 px-2 py-1.5 rounded-lg mx-2 mb-0.5 cursor-pointer',
+                    'hover:bg-accent/30 transition-colors',
+                    selectedProjectId === project.id && 'bg-accent/50'
+                  )}
+                  onClick={() => onProjectSelect?.(project)}
+                >
+                  <FolderOpen size={14} className="shrink-0 text-muted-foreground" />
+                  <span className="text-sm font-medium truncate flex-1">{project.name}</span>
 
-                return (
-                  <div key={project.id} className="mb-1">
-                    {/* Project header */}
-                    <div className="group flex items-center gap-1 px-2 py-1 rounded-lg mx-2 hover:bg-accent/30 cursor-pointer">
-                      <button
-                        className="flex items-center gap-1 flex-1 min-w-0 text-left"
-                        onClick={() => toggleProjectCollapse(project.id)}
-                      >
-                        {isCollapsed ? (
-                          <ChevronRight size={14} className="shrink-0 text-muted-foreground" />
-                        ) : (
-                          <ChevronDown size={14} className="shrink-0 text-muted-foreground" />
+                  {(onEditProject || onDeleteProject) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="opacity-0 group-hover:opacity-100 transition-opacity h-5 w-5 p-0 shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MoreVertical size={12} />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {onEditProject && (
+                          <DropdownMenuItem onSelect={() => onEditProject(project)}>
+                            <Pencil size={14} className="mr-2" />
+                            {t('chat_list.edit_project')}
+                          </DropdownMenuItem>
                         )}
-                        <FolderOpen size={14} className="shrink-0 text-muted-foreground" />
-                        <span className="text-sm font-medium truncate">{project.name}</span>
-                        <span className="text-xs text-muted-foreground ml-1 shrink-0">
-                          {projectSessions.length}
-                        </span>
-                      </button>
-
-                      {(onEditProject || onDeleteProject) && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="opacity-0 group-hover:opacity-100 transition-opacity h-5 w-5 p-0 shrink-0"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MoreVertical size={12} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {onEditProject && (
-                              <DropdownMenuItem onSelect={() => onEditProject(project)}>
-                                <Pencil size={14} className="mr-2" />
-                                {t('chat_list.edit_project')}
-                              </DropdownMenuItem>
-                            )}
-                            {onDeleteProject && (
-                              <DropdownMenuItem
-                                onSelect={() =>
-                                  onDeleteProject(
-                                    project.id,
-                                    project.name,
-                                    sessions.filter((s) => s.project_id === project.id).length
-                                  )
-                                }
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 size={14} className="mr-2" />
-                                {t('chat_list.delete_project')}
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
-                    </div>
-
-                    {/* Project sessions */}
-                    {!isCollapsed && (
-                      <div className="pl-2">
-                        {projectSessions
-                          .sort((a, b) => b.updated_at - a.updated_at)
-                          .map((session) => renderSession(session))}
-
-                        {/* New conversation in project */}
-                        {onNewSessionInProject && (
-                          <button
-                            className="flex items-center gap-2 mx-2 mb-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground rounded-lg hover:bg-accent/30 w-[calc(100%-1rem)] cursor-pointer"
-                            onClick={() => onNewSessionInProject(project.id)}
+                        {onDeleteProject && (
+                          <DropdownMenuItem
+                            onSelect={() =>
+                              onDeleteProject(
+                                project.id,
+                                project.name,
+                                sessions.filter((s) => s.project_id === project.id).length
+                              )
+                            }
+                            className="text-destructive focus:text-destructive"
                           >
-                            <MessageSquare size={12} />
-                            {t('chat_list.new_conversation_in_project')}
-                          </button>
+                            <Trash2 size={14} className="mr-2" />
+                            {t('chat_list.delete_project')}
+                          </DropdownMenuItem>
                         )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              ))}
 
               {/* Empty projects state */}
               {projects.length === 0 && onCreateProject && (

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { MainLayout } from '@/components/layout/MainLayout'
 import ChatPage from '@/pages/ChatPage'
+import { ProjectPage } from '@/pages/ProjectPage'
 import SettingsPage from '@/pages/SettingsPage'
 import ModelPage from '@/pages/ModelPage'
 import StorePage from '@/pages/StorePage'
@@ -278,6 +279,7 @@ function App() {
   const updateProject = useProjectStore((state) => state.updateProject)
   const deleteProject = useProjectStore((state) => state.deleteProject)
 
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null)
   const [projectModalOpen, setProjectModalOpen] = useState(false)
   const [editingProject, setEditingProject] = useState<Project | undefined>(undefined)
   const [deleteConfirmProject, setDeleteConfirmProject] = useState<{
@@ -299,9 +301,17 @@ function App() {
     }
   }
 
-  const handleNewSessionInProject = (projectId: string) => {
-    // Navigate to chat and create a session in the project
-    setCurrentPage('chat')
+  const handleProjectSelect = (project: Project) => {
+    setSelectedProject(project);
+    setCurrentPage('project');
+  };
+
+  const handleNewSessionInProject = (projectId: string, initialMessage?: string) => {
+    setSelectedProject(null);
+    setCurrentPage('chat');
+    if (initialMessage) {
+      setPendingPrompt(initialMessage);
+    }
     // We need a slight delay for the page to render before creating session
     setTimeout(async () => {
       await createSession('New Chat', undefined, 'chat', projectId)
@@ -509,6 +519,8 @@ function App() {
     switch (page) {
       case 'chat':
         return currentSession?.title || ''
+      case 'project':
+        return selectedProject?.name || ''
       case 'settings':
         return 'Settings'
       case 'model':
@@ -525,6 +537,14 @@ function App() {
   const renderPage = () => {
     switch (currentPage) {
       case 'chat': return <ChatPage />
+      case 'project':
+        return selectedProject ? (
+          <ProjectPage
+            project={selectedProject}
+            onSessionSelect={handleLoadSession}
+            onNewSessionInProject={handleNewSessionInProject}
+          />
+        ) : <ChatPage />
       case 'settings': return <SettingsPage />
       case 'model': return <ModelPage />
       case 'store': return <StorePage />
@@ -538,12 +558,14 @@ function App() {
   // Handle new chat with navigation
   const handleNewChat = () => {
     startNewChat();
+    setSelectedProject(null);
     setCurrentPage('chat');
   };
 
   // Handle session load with navigation
   const handleLoadSession = (sessionId: string) => {
     loadSession(sessionId);
+    setSelectedProject(null);
     setCurrentPage('chat');
   };
 
@@ -560,12 +582,13 @@ function App() {
         updateSessionTitle, // Rename chat session
         false, // loading state
         projects,
+        selectedProject?.id,
+        handleProjectSelect,
         () => { setEditingProject(undefined); setProjectModalOpen(true); },
         (project: Project) => { setEditingProject(project); setProjectModalOpen(true); },
         (projectId: string, projectName: string, sessionCount: number) => {
           setDeleteConfirmProject({ id: projectId, name: projectName, count: sessionCount });
-        },
-        handleNewSessionInProject
+        }
       );
     }
     return null;

@@ -945,16 +945,23 @@ const ChatPage = () => {
     persistMessage
   ]);
 
-  // Handle pending prompt from deep link
+  // Handle pending prompt from deep link or project page
   useEffect(() => {
     if (pendingPrompt) {
-      setInput(pendingPrompt);
+      if (!currentSession) {
+        // No session yet (e.g. coming from ProjectPage): queue to auto-send when session is created
+        setPendingFirstMessage(pendingPrompt);
+      } else {
+        // Already in a session: just fill the input
+        setInput(pendingPrompt);
+      }
       setPendingPrompt(null);
-      logger.core.info('Applied pending prompt from deep link', {
+      logger.core.info('Applied pending prompt', {
         promptLength: pendingPrompt.length,
+        autoSubmit: !currentSession,
       });
     }
-  }, [pendingPrompt, setPendingPrompt]);
+  }, [pendingPrompt, currentSession, setPendingPrompt]);
 
   // Check if chat is empty
   const isChatEmpty = messages.length === 0 && status !== 'streaming';
@@ -1134,10 +1141,11 @@ ChatPageWithProvider.getSidebarContent = (
   onRenameChat: (sessionId: string, newTitle: string) => void,
   loading: boolean = false,
   projects?: any[],
+  selectedProjectId?: string,
+  onProjectSelect?: (project: any) => void,
   onCreateProject?: () => void,
   onEditProject?: (project: any) => void,
   onDeleteProject?: (projectId: string, projectName: string, sessionCount: number) => void,
-  onNewSessionInProject?: (projectId: string) => void
 ) => {
   return (
     <ChatList
@@ -1149,10 +1157,11 @@ ChatPageWithProvider.getSidebarContent = (
       onRenameChat={onRenameChat}
       loading={loading}
       projects={projects}
+      selectedProjectId={selectedProjectId}
+      onProjectSelect={onProjectSelect}
       onCreateProject={onCreateProject}
       onEditProject={onEditProject}
       onDeleteProject={onDeleteProject}
-      onNewSessionInProject={onNewSessionInProject}
     />
   );
 };
