@@ -5,9 +5,10 @@
 
 import { tool } from "ai";
 import { z } from "zod";
-import { mkdir, writeFile } from "fs/promises";
+import { mkdir, readFile, writeFile } from "fs/promises";
 import { dirname } from "path";
 import { resolveToCwd } from "../utils/path-utils";
+import { countDiffChanges, generateDiffString } from "./edit-diff";
 
 export interface WriteToolConfig {
   cwd: string;
@@ -28,6 +29,18 @@ IMPORTANT: This will overwrite existing files. Always read a file first before w
       try {
         const resolvedPath = resolveToCwd(file_path, config.cwd);
 
+        // Leer contenido previo solo para generar diff.
+        // Ignorar únicamente ENOENT (archivo no existe todavía).
+        let previousContent = "";
+        try {
+          previousContent = await readFile(resolvedPath, "utf8");
+        } catch (error) {
+          const err = error as NodeJS.ErrnoException;
+          if (err.code !== "ENOENT") {
+            throw error;
+          }
+        }
+
         // Crear directorio padre si no existe
         await mkdir(dirname(resolvedPath), { recursive: true });
 
@@ -37,9 +50,16 @@ IMPORTANT: This will overwrite existing files. Always read a file first before w
         const lines = content.split("\n").length;
         const bytes = Buffer.byteLength(content, "utf8");
 
+        // Generar diff y métricas de cambios
+        const diff = generateDiffString(previousContent, content, file_path);
+        const changes = countDiffChanges(diff);
+
         return {
           success: true,
           path: resolvedPath,
+          diff,
+          linesAdded: changes.added,
+          linesRemoved: changes.removed,
           message: `Successfully wrote ${lines} lines (${bytes} bytes) to ${file_path}`,
         };
       } catch (error) {
