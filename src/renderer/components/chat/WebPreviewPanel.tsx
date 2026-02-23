@@ -13,7 +13,7 @@ import { useWebPreviewStore, type DetectedServer } from '@/stores/webPreviewStor
 import { Badge } from '@/components/ui/badge';
 
 const MIN_PANEL_WIDTH = 320;
-const MAX_PANEL_WIDTH = 900;
+const MIN_CHAT_WIDTH = 300;
 const DEFAULT_PANEL_WIDTH = 480;
 
 function ServerTab({
@@ -58,23 +58,30 @@ export function WebPreviewPanel() {
 
   const [width, setWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [iframeKey, setIframeKey] = useState(0); // para forzar reload
+  const [isDragging, setIsDragging] = useState(false);
   const isResizing = useRef(false);
   const startX = useRef(0);
   const startWidth = useRef(0);
+  const maxWidthRef = useRef(DEFAULT_PANEL_WIDTH * 2);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const activeServer = servers.find((s) => s.taskId === activeTaskId) ?? servers[0];
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     isResizing.current = true;
+    setIsDragging(true);
     startX.current = e.clientX;
     startWidth.current = width;
+    maxWidthRef.current = containerRef.current?.parentElement
+      ? containerRef.current.parentElement.clientWidth - MIN_CHAT_WIDTH
+      : DEFAULT_PANEL_WIDTH * 2;
 
     const handleMouseMove = (ev: MouseEvent) => {
       if (!isResizing.current) return;
       const delta = startX.current - ev.clientX;
       const newWidth = Math.min(
-        MAX_PANEL_WIDTH,
+        maxWidthRef.current,
         Math.max(MIN_PANEL_WIDTH, startWidth.current + delta)
       );
       setWidth(newWidth);
@@ -82,6 +89,7 @@ export function WebPreviewPanel() {
 
     const handleMouseUp = () => {
       isResizing.current = false;
+      setIsDragging(false);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
@@ -106,6 +114,7 @@ export function WebPreviewPanel() {
 
   return (
     <div
+      ref={containerRef}
       className="flex shrink-0 h-full"
       style={{ width }}
     >
@@ -184,6 +193,9 @@ export function WebPreviewPanel() {
 
         {/* Contenido */}
         <div className="flex-1 relative overflow-hidden">
+          {isDragging && (
+            <div className="absolute inset-0 z-50 cursor-col-resize" />
+          )}
           {!activeServer ? (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
               No server selected
