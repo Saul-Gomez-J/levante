@@ -24,6 +24,7 @@ import {
 } from '@/components/ai-elements/reasoning';
 import { ToolCall } from '@/components/ai-elements/tool-call';
 import { ToolApprovalInline } from '@/components/ai-elements/tool-approval';
+import { DiffViewer } from '@/components/ai-elements/diff-viewer';
 import { UIResourceMessage } from '@/components/chat/UIResourceMessage';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { extractUIResources } from '@/types/ui-resource';
@@ -31,8 +32,13 @@ import { cn } from '@/lib/utils';
 import { getRendererLogger } from '@/services/logger';
 import type { UIMessage } from '@ai-sdk/react';
 import { useState, useMemo } from 'react';
-import { Check } from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 
 const logger = getRendererLogger();
 
@@ -496,12 +502,51 @@ function ToolCallPart({ part, messageId, onPrompt, onSendMessage, chatMessages }
   const toolNameParts = toolName.split('_');
   const serverId = toolNameParts.length > 1 ? toolNameParts[0] : undefined;
 
+  // Inline diff rendering for write/edit tools
+  const normalizedToolName = toolName.trim().toLowerCase();
+  const isDiffTool = normalizedToolName === 'write' || normalizedToolName === 'edit';
+  const diffContent = isDiffTool && toolCall.result?.success && toolCall.result.content
+    ? (typeof toolCall.result.content === 'object' && toolCall.result.content !== null
+        ? (toolCall.result.content as Record<string, unknown>)
+        : null)
+    : null;
+  const diffText = typeof diffContent?.diff === 'string' ? diffContent.diff : '';
+  const linesAdded = typeof diffContent?.linesAdded === 'number' ? diffContent.linesAdded : null;
+  const linesRemoved = typeof diffContent?.linesRemoved === 'number' ? diffContent.linesRemoved : null;
+  const pathValue = typeof diffContent?.path === 'string'
+    ? diffContent.path
+    : typeof toolCall.arguments?.file_path === 'string' ? toolCall.arguments.file_path : '';
+  const hasRealChanges = (linesAdded !== null && linesRemoved !== null)
+    ? (linesAdded > 0 || linesRemoved > 0)
+    : /(^|\n)@@ /.test(diffText);
+  const showInlineDiff = isDiffTool && diffText.trim().length > 0 && hasRealChanges;
+  const shortPath = pathValue ? pathValue.split(/[/\\]/).slice(-2).join('/') : '';
+
   return (
     <div className="w-full">
       <ToolCall
         toolCall={toolCall}
         className="w-full"
       />
+      {showInlineDiff && (
+        <Collapsible defaultOpen={false} className="mt-1">
+          <CollapsibleTrigger className="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors group">
+            <ChevronRight className="w-3.5 h-3.5 transition-transform group-data-[state=open]:rotate-90 shrink-0" />
+            {shortPath && (
+              <span className="font-mono truncate">{shortPath}</span>
+            )}
+            {linesAdded !== null && linesAdded > 0 && (
+              <span className="text-green-600 dark:text-green-400 font-medium shrink-0">+{linesAdded}</span>
+            )}
+            {linesRemoved !== null && linesRemoved > 0 && (
+              <span className="text-red-600 dark:text-red-400 font-medium shrink-0">-{linesRemoved}</span>
+            )}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-1">
+            <DiffViewer diff={diffText} />
+          </CollapsibleContent>
+        </Collapsible>
+      )}
       {/* Render UI Resources from tool output - separated from tool call */}
       {uiResources.length > 0 && (
         <div className="my-4">

@@ -13,8 +13,16 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
 } from 'lucide-react';
 import { CodeBlock } from './code-block';
+import { DiffViewer } from './diff-viewer';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { createPatch } from 'diff';
 
 // ═══════════════════════════════════════════════════════
 // TYPES
@@ -64,6 +72,28 @@ export function ToolApprovalInline({
     ? toolName.split('_')[0]
     : 'unknown';
 
+  // Diff preview para tools edit/write
+  const normalizedTool = displayToolName.toLowerCase();
+  const isDiffTool = normalizedTool === 'edit' || normalizedTool === 'write';
+
+  let previewDiff = '';
+  let previewFilename = '';
+  if (isDiffTool) {
+    const filePath = String(input.file_path ?? 'file');
+    previewFilename = filePath.split(/[/\\]/).slice(-2).join('/');
+    const fname = filePath.split(/[/\\]/).pop() ?? 'file';
+    if (normalizedTool === 'edit') {
+      previewDiff = createPatch(fname, String(input.old_string ?? ''), String(input.new_string ?? ''));
+    } else {
+      previewDiff = createPatch(fname, '', String(input.content ?? ''));
+    }
+  }
+
+  const diffLines = previewDiff.split('\n');
+  const linesAdded = diffLines.filter(l => l.startsWith('+') && !l.startsWith('+++')).length;
+  const linesRemoved = diffLines.filter(l => l.startsWith('-') && !l.startsWith('---')).length;
+  const hasRealDiff = linesAdded > 0 || linesRemoved > 0;
+
   // Handler para aprobar para toda la sesión
   const handleApproveForSession = () => {
     // Primero aprobar esta herramienta
@@ -87,6 +117,27 @@ export function ToolApprovalInline({
           {serverId}
         </Badge>
       </div>
+
+      {/* Diff preview (edit/write tools) */}
+      {isDiffTool && hasRealDiff && (
+        <Collapsible defaultOpen={false}>
+          <CollapsibleTrigger className="flex items-center gap-2 w-full text-xs text-muted-foreground hover:text-foreground transition-colors group">
+            <ChevronRight className="w-3 h-3 transition-transform group-data-[state=open]:rotate-90 shrink-0" />
+            {previewFilename && (
+              <span className="font-mono truncate">{previewFilename}</span>
+            )}
+            {linesAdded > 0 && (
+              <span className="text-green-600 dark:text-green-400 font-medium shrink-0">+{linesAdded}</span>
+            )}
+            {linesRemoved > 0 && (
+              <span className="text-red-600 dark:text-red-400 font-medium shrink-0">-{linesRemoved}</span>
+            )}
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2">
+            <DiffViewer diff={previewDiff} />
+          </CollapsibleContent>
+        </Collapsible>
+      )}
 
       {/* Toggle Parameters */}
       <button

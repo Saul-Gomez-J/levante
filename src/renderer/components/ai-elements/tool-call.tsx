@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { DiffViewer } from '@/components/ai-elements/diff-viewer';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
@@ -130,7 +129,7 @@ export function ToolCall({ toolCall, className }: ToolCallProps) {
 
             {/* Sección: Result */}
             {toolCall.result && (
-              <ResultSection result={toolCall.result} toolName={toolCall.name} />
+              <ResultSection result={toolCall.result} />
             )}
 
             {/* Sección: Metadata */}
@@ -191,107 +190,14 @@ function ArgumentsSection({ arguments: args }: { arguments: Record<string, any> 
 
 function ResultSection({
   result,
-  toolName,
 }: {
   result: NonNullable<ToolCallData['result']>;
-  toolName: string;
 }) {
   const theme = useThemeDetector();
   const [wrapEnabled, setWrapEnabled] = useState(false);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
-  const [showRawJson, setShowRawJson] = useState(false);
 
   const content = result.success ? result.content : result.error;
-
-  const normalizedToolName = (toolName || '').trim().toLowerCase();
-  const isDiffTool = normalizedToolName === 'write' || normalizedToolName === 'edit';
-
-  const objectContent =
-    typeof content === 'object' && content !== null ? (content as Record<string, unknown>) : null;
-
-  const diffText = typeof objectContent?.diff === 'string' ? objectContent.diff : '';
-  const linesAdded = typeof objectContent?.linesAdded === 'number' ? objectContent.linesAdded : null;
-  const linesRemoved =
-    typeof objectContent?.linesRemoved === 'number' ? objectContent.linesRemoved : null;
-  const pathValue = typeof objectContent?.path === 'string' ? objectContent.path : '';
-
-  const hasChangeCounters = linesAdded !== null && linesRemoved !== null;
-  const hasRealChangesFromCounters = hasChangeCounters && (linesAdded > 0 || linesRemoved > 0);
-  const hasRealChangesFromHunk = !hasChangeCounters && /(^|\n)@@ /.test(diffText);
-  const hasRealDiffChanges = hasRealChangesFromCounters || hasRealChangesFromHunk;
-
-  const canRenderDiff =
-    result.success &&
-    isDiffTool &&
-    diffText.trim().length > 0 &&
-    hasRealDiffChanges;
-
-  const copyDiffToClipboard = () => {
-    if (diffText) {
-      navigator.clipboard.writeText(diffText);
-    }
-  };
-
-  const shortPath = pathValue
-    ? pathValue.split(/[/\\]/).slice(-2).join('/')
-    : '';
-
-  // Branch temprano: evita serializar JSON pesado cuando se muestra diff.
-  if (canRenderDiff && !showRawJson) {
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h4 className="text-sm font-semibold flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
-            Cambios en archivo
-          </h4>
-          <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowRawJson(true)}
-              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Raw
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={copyDiffToClipboard}
-              className="gap-2"
-              title="Copiar diff"
-            >
-              <Copy className="w-4 h-4" />
-              Copiar
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3 text-xs">
-          {linesAdded !== null && linesAdded > 0 && (
-            <span className="text-green-600 dark:text-green-400 font-medium">
-              +{linesAdded} añadidas
-            </span>
-          )}
-          {linesRemoved !== null && linesRemoved > 0 && (
-            <span className="text-red-600 dark:text-red-400 font-medium">
-              -{linesRemoved} eliminadas
-            </span>
-          )}
-          {shortPath && (
-            <span
-              className="text-muted-foreground ml-auto font-mono truncate max-w-[220px]"
-              title={pathValue}
-            >
-              {shortPath}
-            </span>
-          )}
-        </div>
-
-        <DiffViewer diff={diffText} />
-      </div>
-    );
-  }
 
   // Vista genérica original (JSON/texto)
   let isJSON = false;
@@ -348,16 +254,6 @@ function ResultSection({
           )}
         </h4>
         <div className="flex gap-2">
-          {canRenderDiff && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowRawJson(false)}
-              className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-            >
-              Diff
-            </Button>
-          )}
           <Button
             variant="outline"
             size="sm"
