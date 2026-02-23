@@ -16,6 +16,7 @@ export interface WriteToolConfig {
 
 export function createWriteTool(config: WriteToolConfig) {
   return tool({
+    needsApproval: true,
     description: `Write content to a file. Creates parent directories if needed.
 The file_path must be an absolute path or relative to the current directory.
 IMPORTANT: This will overwrite existing files. Always read a file first before writing if it exists.`,

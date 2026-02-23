@@ -25,6 +25,7 @@ export function createBashTool(config: BashToolConfig) {
   const maxBytes = config.maxOutputBytes ?? 50 * 1024;
 
   return tool({
+    needsApproval: true,
     description: `Execute a bash command in the shell.
 Foreground commands run in a bash shell with a ${Math.round(timeout / 1000)}s timeout.
 IMPORTANT:

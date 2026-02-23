@@ -1433,7 +1433,7 @@ export class AIService {
               toolCall: {
                 id: chunk.toolCallId,
                 name: chunk.toolName,
-                arguments: (chunk as any).arguments || {},
+                arguments: (chunk as any).input || (chunk as any).arguments || {},
                 status: "running" as const,
                 timestamp: Date.now(),
               },

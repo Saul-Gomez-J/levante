@@ -15,6 +15,7 @@ export interface EditToolConfig {
 
 export function createEditTool(config: EditToolConfig) {
   return tool({
+    needsApproval: true,
     description: `Edit a file by replacing exact string matches.
 The old_string must be unique in the file, or the edit will fail.
 Use replace_all: true to replace all occurrences.
