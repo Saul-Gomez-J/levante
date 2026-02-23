@@ -53,6 +53,12 @@ export interface ChatStreamChunk {
     status: 'success' | 'error';
     timestamp: number;
   };
+  toolApproval?: {
+    approvalId: string;
+    toolCallId: string;
+    toolName: string;
+    input: Record<string, any>;
+  };
   generatedAttachment?: {
     type: 'image' | 'audio' | 'video';
     mime: string;

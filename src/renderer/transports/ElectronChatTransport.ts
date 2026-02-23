@@ -310,6 +310,29 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       }
     }
 
+    // Handle tool approval requests (for needsApproval: true tools)
+    if (chunk.toolApproval) {
+      // Garantizar que input sea siempre un objeto
+      const safeInput = chunk.toolApproval.input ?? {};
+
+      // NO emitir tool-input-start aquí - si lo emitimos, resetea el part a 'input-streaming'
+      // y tool-approval-request nunca puede transicionar a 'approval-requested'
+
+      // Emit tool-approval-request chunk for AI SDK to set state to 'approval-requested'
+      yield {
+        type: "tool-approval-request",
+        toolCallId: chunk.toolApproval.toolCallId,
+        toolName: chunk.toolApproval.toolName,
+        approvalId: chunk.toolApproval.approvalId,
+        input: safeInput,
+        toolCall: {
+          toolCallId: chunk.toolApproval.toolCallId,
+          toolName: chunk.toolApproval.toolName,
+          input: safeInput,
+        },
+      } as any;
+    }
+
     // Handle tool calls (MCP integration)
     if (chunk.toolCall) {
       // Start of tool input

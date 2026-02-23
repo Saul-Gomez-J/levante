@@ -35,6 +35,7 @@ import { useMCPResources } from '@/hooks/useMCPResources';
 import { useFileAttachments } from '@/hooks/useFileAttachments';
 import { useModelSelection, isInferenceModel } from '@/hooks/useModelSelection';
 import { usePreference } from '@/hooks/usePreferences';
+import { useToolAutoApproval } from '@/hooks/useToolAutoApproval';
 import { WebPreviewPanel } from '@/components/chat/WebPreviewPanel';
 import { WebPreviewToast } from '@/components/chat/WebPreviewToast';
 import { useWebPreview } from '@/hooks/useWebPreview';
@@ -73,6 +74,13 @@ const ChatPage = () => {
     clearResources,
     getContextString,
   } = useMCPResources();
+
+  // Tool auto-approval hook
+  const {
+    approveServerForSession,
+    isServerAutoApproved,
+    clearAutoApprovals,
+  } = useToolAutoApproval();
 
   // Chat store
   const currentSession = useChatStore((state) => state.currentSession);
@@ -288,9 +296,39 @@ const ChatPage = () => {
     status,
     stop,
     error: chatError,
+    addToolApprovalResponse,
   } = useChat({
     id: currentSession?.id || 'new-chat',
     transport,
+
+    // ═══════════════════════════════════════════════════════
+    // Solo continuar automáticamente si hay APROBACIONES (approved: true)
+    // NO continuar si hay DENEGACIONES - respetar la decisión del usuario
+    // ═══════════════════════════════════════════════════════
+    sendAutomaticallyWhen: ({ messages }) => {
+      const lastAssistantMessage = messages
+        .slice()
+        .reverse()
+        .find((m) => m.role === 'assistant');
+
+      if (!lastAssistantMessage) return false;
+
+      const toolParts =
+        lastAssistantMessage.parts?.filter((p: any) =>
+          p.type?.startsWith('tool-')
+        ) || [];
+
+      const partsWithApprovalResponse = toolParts.filter(
+        (p: any) => p.state === 'approval-responded' && p.approval
+      );
+
+      if (partsWithApprovalResponse.length === 0) return false;
+
+      // Solo continuar si TODAS las respuestas son aprobaciones
+      return partsWithApprovalResponse.every(
+        (p: any) => p.approval.approved === true
+      );
+    },
 
     // Persist messages after AI finishes
     onFinish: async ({ message }) => {
@@ -570,9 +608,10 @@ const ChatPage = () => {
     // Update ref
     previousSessionIdRef.current = currentSessionId;
 
-    // Clear attachments and MCP resources when changing sessions
+    // Clear attachments, MCP resources, and auto-approvals when changing sessions
     clearAttachments();
     clearResources();
+    clearAutoApprovals();
 
     // If we just created this session, skip loading historical messages
     // (the messages are already in useChat state from sendMessageAI)
@@ -605,7 +644,7 @@ const ChatPage = () => {
       setMessages([]);
       focusPromptInput();
     }
-  }, [currentSession?.id, loadHistoricalMessages, setMessages, clearAttachments, clearResources, focusPromptInput]);
+  }, [currentSession?.id, loadHistoricalMessages, setMessages, clearAttachments, clearResources, clearAutoApprovals, focusPromptInput]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1061,6 +1100,9 @@ const ChatPage = () => {
                       onSendMessage={handleSendMessage}
                       chatMessages={messages}
                       onEditMessage={handleEditMessage}
+                      addToolApprovalResponse={addToolApprovalResponse}
+                      onApproveServerForSession={approveServerForSession}
+                      isServerAutoApproved={isServerAutoApproved}
                     />
                   ))}
 

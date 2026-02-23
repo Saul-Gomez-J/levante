@@ -23,6 +23,7 @@ import {
   ReasoningTrigger,
 } from '@/components/ai-elements/reasoning';
 import { ToolCall } from '@/components/ai-elements/tool-call';
+import { ToolApprovalInline } from '@/components/ai-elements/tool-approval';
 import { UIResourceMessage } from '@/components/chat/UIResourceMessage';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { extractUIResources } from '@/types/ui-resource';
@@ -30,6 +31,8 @@ import { cn } from '@/lib/utils';
 import { getRendererLogger } from '@/services/logger';
 import type { UIMessage } from '@ai-sdk/react';
 import { useState, useMemo } from 'react';
+import { Check } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 const logger = getRendererLogger();
 
@@ -44,6 +47,9 @@ interface ChatMessageItemProps {
   onSendMessage?: (text: string) => void;
   chatMessages?: UIMessage[];
   onEditMessage?: (messageId: string, newContent: string) => Promise<void>;
+  addToolApprovalResponse?: (response: { id: string; approved: boolean }) => void;
+  onApproveServerForSession?: (serverId: string) => void;
+  isServerAutoApproved?: (serverId: string) => boolean;
 }
 
 // ============================================================================
@@ -56,7 +62,10 @@ export function ChatMessageItem({
   onPrompt,
   onSendMessage,
   chatMessages,
-  onEditMessage
+  onEditMessage,
+  addToolApprovalResponse,
+  onApproveServerForSession,
+  isServerAutoApproved,
 }: ChatMessageItemProps) {
   const isAssistant = message.role === 'assistant';
   const isUser = message.role === 'user';
@@ -276,6 +285,52 @@ export function ChatMessageItem({
 
                   // Tool calls (MCP)
                   if (part?.type?.startsWith('tool-')) {
+                    // Si está esperando aprobación, mostrar UI de aprobación
+                    if (part.state === 'approval-requested' && addToolApprovalResponse) {
+                      const toolName = part.toolName || part.type.replace(/^tool-/, '');
+                      const serverId = toolName.includes('_') ? toolName.split('_')[0] : 'unknown';
+
+                      // Si el servidor está auto-aprobado, aprobar automáticamente
+                      if (isServerAutoApproved?.(serverId)) {
+                        queueMicrotask(() => {
+                          addToolApprovalResponse({
+                            id: part.approval?.id || part.toolCallId,
+                            approved: true,
+                          });
+                        });
+
+                        return (
+                          <div key={`${message.id}-${i}`} className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Check className="w-4 h-4 text-green-500" />
+                            <span>Auto-approved: {toolName.split('_').slice(1).join('_')}</span>
+                            <Badge variant="outline" className="text-xs">{serverId}</Badge>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <ToolApprovalInline
+                          key={`${message.id}-${i}`}
+                          toolName={toolName}
+                          input={part.input || {}}
+                          approvalId={part.approval?.id || part.toolCallId}
+                          onApprove={() => {
+                            addToolApprovalResponse({
+                              id: part.approval?.id || part.toolCallId,
+                              approved: true,
+                            });
+                          }}
+                          onDeny={() => {
+                            addToolApprovalResponse({
+                              id: part.approval?.id || part.toolCallId,
+                              approved: false,
+                            });
+                          }}
+                          onApproveForSession={onApproveServerForSession}
+                        />
+                      );
+                    }
+
                     return (
                       <ToolCallPart
                         key={`${message.id}-${i}`}
