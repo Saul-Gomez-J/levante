@@ -307,7 +307,8 @@ function App() {
   };
 
   const handleNewSessionInProject = (projectId: string, initialMessage?: string) => {
-    setSelectedProject(null);
+    const project = projects.find((p) => p.id === projectId);
+    if (project) setSelectedProject(project);
     setCurrentPage('chat');
     if (initialMessage) {
       setPendingPrompt(initialMessage);
@@ -561,15 +562,27 @@ function App() {
 
   // Handle new chat with navigation
   const handleNewChat = () => {
+    if (selectedProject) {
+      handleNewSessionInProject(selectedProject.id);
+      return;
+    }
     startNewChat();
     setSelectedProject(null);
     setCurrentPage('chat');
   };
 
   // Handle session load with navigation
-  const handleLoadSession = (sessionId: string) => {
-    loadSession(sessionId);
-    setSelectedProject(null);
+  const handleLoadSession = async (sessionId: string) => {
+    await loadSession(sessionId);
+    const loadedSession = useChatStore.getState().currentSession;
+
+    if (loadedSession?.id === sessionId && loadedSession.project_id) {
+      const project = projects.find((p) => p.id === loadedSession.project_id) ?? null;
+      setSelectedProject(project);
+    } else {
+      setSelectedProject(null);
+    }
+
     setCurrentPage('chat');
   };
 
@@ -699,6 +712,7 @@ function App() {
         sidebarContent={getSidebarContent()}
         onNewChat={handleNewChat}
         developerMode={developerMode}
+        selectedProjectName={selectedProject?.name}
       >
         {renderPage()}
       </MainLayout>

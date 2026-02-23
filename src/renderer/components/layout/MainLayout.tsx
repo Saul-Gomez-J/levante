@@ -30,10 +30,11 @@ interface MainLayoutProps {
   sidebarContent?: React.ReactNode // Custom sidebar content for specific pages
   onNewChat?: () => void // Callback for New Chat button
   developerMode?: boolean // Show developer-only features
+  selectedProjectName?: string
 }
 
 // Inner component that has access to useSidebar
-function MainLayoutContent({ children, title, currentPage, onPageChange, sidebarContent, onNewChat, developerMode, version, platform }: MainLayoutProps & { version: string; platform: string }) {
+function MainLayoutContent({ children, title, currentPage, onPageChange, sidebarContent, onNewChat, developerMode, selectedProjectName, version, platform }: MainLayoutProps & { version: string; platform: string }) {
   const { open } = useSidebar()
   const { t } = useTranslation('common')
 
@@ -163,6 +164,11 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
                 <Plus size={14} />
                 <span className="text-xs">{t('actions.new_chat')}</span>
               </Button>
+              {selectedProjectName && (
+                <span className="text-xs text-muted-foreground truncate max-w-32 ml-1" title={selectedProjectName}>
+                  {selectedProjectName}
+                </span>
+              )}
             </div>
           )}
 
@@ -183,7 +189,7 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
   )
 }
 
-export function MainLayout({ children, title = 'Chat', currentPage = 'chat', onPageChange, sidebarContent, onNewChat, developerMode }: MainLayoutProps) {
+export function MainLayout({ children, title = 'Chat', currentPage = 'chat', onPageChange, sidebarContent, onNewChat, developerMode, selectedProjectName }: MainLayoutProps) {
   const [version, setVersion] = useState<string>('')
   const [platform, setPlatform] = useState<string>('')
 
@@ -212,6 +218,7 @@ export function MainLayout({ children, title = 'Chat', currentPage = 'chat', onP
         sidebarContent={sidebarContent}
         onNewChat={onNewChat}
         developerMode={developerMode}
+        selectedProjectName={selectedProjectName}
         version={version}
         platform={platform}
       />
