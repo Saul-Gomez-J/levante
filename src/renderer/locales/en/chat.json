@@ -111,6 +111,17 @@
       "select_directory_hint": "Select a directory for coding tools",
       "missing_directory_warning": "Cowork is enabled but no working directory is selected. Coding tools are disabled."
     },
+    "skills": {
+      "label": "Skills",
+      "show_in_chat": "Show skills in chat",
+      "panel_title": "Skills",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "empty_enabled": "No enabled skills",
+      "empty_disabled": "No disabled skills",
+      "scope_global": "global",
+      "scope_project": "project"
+    },
     "enabled": "Enabled",
     "no_enabled_servers": "No enabled servers",
     "disabled_servers_info": "Toggle to enable",

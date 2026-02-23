@@ -259,4 +259,43 @@ describe('SkillsService', () => {
       ).rejects.toThrow('projectId is required');
     });
   });
+
+  describe('setUserInvocable', () => {
+    it('updates user-invocable for global skill', async () => {
+      await service.installSkill(mockBundle, { scope: 'global' });
+
+      const updated = await service.setUserInvocable(mockBundle.id, false, { scope: 'global' });
+      expect(updated.userInvocable).toBe(false);
+
+      const listed = await service.listInstalledSkills({ mode: 'global' });
+      expect(listed[0].userInvocable).toBe(false);
+    });
+
+    it('updates user-invocable for project skill', async () => {
+      await service.installSkill(mockBundle, { scope: 'project', projectId: 'proj_test_1' });
+
+      const updated = await service.setUserInvocable(mockBundle.id, true, {
+        scope: 'project',
+        projectId: 'proj_test_1',
+      });
+      expect(updated.userInvocable).toBe(true);
+      expect(updated.scope).toBe('project');
+    });
+  });
+
+  describe('listInstalledSkills (project-and-global)', () => {
+    it('returns project + global instances without merge', async () => {
+      await service.installSkill(mockBundle, { scope: 'global' });
+      await service.installSkill(mockBundle, { scope: 'project', projectId: 'proj_test_1' });
+
+      const result = await service.listInstalledSkills({
+        mode: 'project-and-global',
+        projectId: 'proj_test_1',
+      });
+
+      expect(result).toHaveLength(2);
+      expect(result.some((s) => s.scope === 'project')).toBe(true);
+      expect(result.some((s) => s.scope === 'global')).toBe(true);
+    });
+  });
 });

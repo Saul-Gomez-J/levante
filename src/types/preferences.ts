@@ -89,6 +89,8 @@ export interface UIPreferences {
   mcp?: MCPPreferences;
   /** Enable MCP tools in chat */
   enableMCP: boolean;
+  /** Enable Skills panel in chat */
+  enableSkills: boolean;
   /** Enable Cowork mode (coding tools) in chat */
   coworkMode: boolean;
   /** Working directory for Cowork mode (coding tools) */
@@ -161,6 +163,7 @@ export const DEFAULT_PREFERENCES: UIPreferences = {
   },
   mcp: DEFAULT_MCP_PREFERENCES,
   enableMCP: true,
+  enableSkills: true,
   coworkMode: false,
   coworkModeCwd: null
 };

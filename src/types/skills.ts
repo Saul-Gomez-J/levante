@@ -60,7 +60,12 @@ export interface UninstallSkillOptions {
   projectId?: string; // requerido si scope === 'project'
 }
 
-export type ListInstalledMode = 'global' | 'project-merged' | 'all-scopes';
+export interface SetUserInvocableOptions {
+  scope: SkillScope;
+  projectId?: string; // requerido si scope === 'project'
+}
+
+export type ListInstalledMode = 'global' | 'project-merged' | 'project-and-global' | 'all-scopes';
 
 export interface ListInstalledSkillsOptions {
   mode?: ListInstalledMode; // default 'global'

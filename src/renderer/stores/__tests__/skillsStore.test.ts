@@ -12,6 +12,7 @@ const mockLevante = {
     uninstall: vi.fn(),
     listInstalled: vi.fn(),
     isInstalled: vi.fn(),
+    setUserInvocable: vi.fn(),
   },
 };
 
@@ -136,6 +137,59 @@ describe('skillsStore', () => {
       expect(state.installedSkills[0].scope).toBe('project');
       expect(state.installedScopedKeys.has('global:global:test/skill-one')).toBe(false);
       expect(state.installedScopedKeys.has('project:proj_1:test/skill-one')).toBe(true);
+    });
+  });
+
+  describe('loadInstalledForChat', () => {
+    it('uses project-and-global mode when projectId exists', async () => {
+      mockLevante.skills.listInstalled.mockResolvedValue({ success: true, data: [] });
+
+      await act(async () => {
+        await useSkillsStore.getState().loadInstalledForChat('proj_1');
+      });
+
+      expect(mockLevante.skills.listInstalled).toHaveBeenCalledWith({
+        mode: 'project-and-global',
+        projectId: 'proj_1',
+      });
+    });
+
+    it('uses global mode when no projectId', async () => {
+      mockLevante.skills.listInstalled.mockResolvedValue({ success: true, data: [] });
+
+      await act(async () => {
+        await useSkillsStore.getState().loadInstalledForChat(null);
+      });
+
+      expect(mockLevante.skills.listInstalled).toHaveBeenCalledWith({ mode: 'global' });
+    });
+  });
+
+  describe('toggleUserInvocable', () => {
+    it('optimistically updates and keeps API result', async () => {
+      const skill = makeInstalledSkill({ userInvocable: true });
+      const updated = { ...skill, userInvocable: false };
+
+      useSkillsStore.setState({
+        installedSkills: [skill],
+        installedScopedKeys: new Set([skill.scopedKey]),
+      });
+
+      mockLevante.skills.setUserInvocable.mockResolvedValue({
+        success: true,
+        data: updated,
+      });
+
+      await act(async () => {
+        await useSkillsStore.getState().toggleUserInvocable(skill, false);
+      });
+
+      const state = useSkillsStore.getState();
+      expect(state.installedSkills[0].userInvocable).toBe(false);
+      expect(mockLevante.skills.setUserInvocable).toHaveBeenCalledWith(skill.id, false, {
+        scope: skill.scope,
+        projectId: skill.projectId,
+      });
     });
   });
 

@@ -111,6 +111,17 @@
       "select_directory_hint": "Selecciona una carpeta para las herramientas de código",
       "missing_directory_warning": "Cowork está activado pero no hay carpeta de trabajo seleccionada. Las herramientas de código están desactivadas."
     },
+    "skills": {
+      "label": "Skills",
+      "show_in_chat": "Mostrar skills en chat",
+      "panel_title": "Skills",
+      "enabled": "Habilitadas",
+      "disabled": "Deshabilitadas",
+      "empty_enabled": "No hay skills habilitadas",
+      "empty_disabled": "No hay skills deshabilitadas",
+      "scope_global": "global",
+      "scope_project": "proyecto"
+    },
     "enabled": "Habilitados",
     "no_enabled_servers": "No hay servidores habilitados",
     "disabled_servers_info": "Activa para habilitar",
