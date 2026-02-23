@@ -6,7 +6,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
-import { Wrench, Settings, ChevronDown, ChevronRight, RefreshCw, Code2, FolderOpen, AlertTriangle } from 'lucide-react';
+import { Wrench, Settings, ChevronDown, ChevronRight, RefreshCw, Code2, FolderOpen, AlertTriangle, BookOpen } from 'lucide-react';
 import { BackgroundTasksDropdown } from '@/components/chat/BackgroundTasksDropdown';
 import { WebPreviewButton } from '@/components/chat/WebPreviewButton';
 import { cn } from '@/lib/utils';
@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/collapsible';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ToolsWarning } from '@/components/settings/ToolsWarning';
+import { SkillsPanel } from '@/components/chat/SkillsPanel';
 import type { Tool } from '@/types/mcp';
 
 interface ToolsMenuProps {
@@ -32,6 +33,9 @@ interface ToolsMenuProps {
   onCoworkModeCwdChange: (cwd: string | null) => void | Promise<void>;
   coworkModeCwdSource?: 'none' | 'global' | 'project' | 'session';
   onResetCoworkModeCwdOverride?: () => void | Promise<void>;
+  enableSkills: boolean;
+  onSkillsChange: (enabled: boolean) => void;
+  projectId?: string | null;
   className?: string;
 }
 
@@ -44,10 +48,14 @@ export function ToolsMenu({
   onCoworkModeCwdChange,
   coworkModeCwdSource = 'none',
   onResetCoworkModeCwdOverride,
+  enableSkills,
+  onSkillsChange,
+  projectId,
   className
 }: ToolsMenuProps) {
   const { t } = useTranslation('chat');
   const [open, setOpen] = useState(false);
+  const [skillsOpen, setSkillsOpen] = useState(false);
   const [expandedServers, setExpandedServers] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<'enabled' | 'disabled'>('enabled');
 
@@ -215,6 +223,21 @@ export function ToolsMenu({
               )}
             </div>
           )}
+          {/* Skills Toggle */}
+          <div
+            className="flex items-center justify-between rounded-sm px-3 py-2 hover:bg-accent cursor-pointer"
+            onClick={() => onSkillsChange(!enableSkills)}
+          >
+            <div className="flex items-center gap-2">
+              <BookOpen size={16} className="text-muted-foreground" />
+              <span className="text-sm">{t('tools_menu.skills.show_in_chat', 'Show skills in chat')}</span>
+            </div>
+            <Switch
+              checked={enableSkills}
+              onCheckedChange={onSkillsChange}
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
           {/* MCP Tools Toggle */}
           <div
             className="flex items-center justify-between rounded-sm px-3 py-2 hover:bg-accent cursor-pointer"
@@ -259,9 +282,6 @@ export function ToolsMenu({
               <span className="text-xs text-blue-600 max-w-20 truncate">
                 {getShortFolderName(coworkModeCwd)}
               </span>
-              <span className="text-[10px] uppercase tracking-wide text-blue-600/80">
-                {getCwdSourceLabel(coworkModeCwdSource)}
-              </span>
             </>
           ) : (
             <>
@@ -279,6 +299,20 @@ export function ToolsMenu({
 
       {/* Web Preview Button - visible when servers are detected */}
       <WebPreviewButton />
+
+      {/* Skills Dropdown - Only when Skills is enabled */}
+      {enableSkills && (
+        <DropdownMenu open={skillsOpen} onOpenChange={setSkillsOpen}>
+          <DropdownMenuTrigger asChild>
+            <div className="flex items-center justify-center h-8 w-8 rounded-lg ring-1 ring-primary/50 bg-primary/10 cursor-pointer">
+              <BookOpen size={16} className="text-foreground" />
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="w-96 max-h-[70vh] overflow-hidden p-0">
+            <SkillsPanel projectId={projectId} />
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
 
       {/* 4. Tools Dropdown (Wrench icon) - Only when MCP is enabled */}
       {enableMCP && (

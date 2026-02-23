@@ -215,6 +215,10 @@ export class PreferencesService {
             type: 'boolean',
             default: true
           },
+          enableSkills: {
+            type: 'boolean',
+            default: true
+          },
           coworkMode: {
             type: 'boolean',
             default: false

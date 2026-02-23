@@ -8,6 +8,7 @@ import type {
   InstallSkillOptions,
   UninstallSkillOptions,
   ListInstalledSkillsOptions,
+  SetUserInvocableOptions,
 } from '../../types/skills';
 
 export const skillsApi = {
@@ -31,4 +32,11 @@ export const skillsApi = {
 
   isInstalled: (skillId: string): Promise<IPCResult<boolean>> =>
     ipcRenderer.invoke('levante/skills:isInstalled', skillId),
+
+  setUserInvocable: (
+    skillId: string,
+    userInvocable: boolean,
+    options: SetUserInvocableOptions
+  ): Promise<IPCResult<InstalledSkill>> =>
+    ipcRenderer.invoke('levante/skills:setUserInvocable', { skillId, userInvocable, options }),
 };

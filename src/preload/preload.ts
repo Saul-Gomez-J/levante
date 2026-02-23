@@ -882,6 +882,11 @@ export interface LevanteAPI {
     uninstall: (skillId: string, options: import('../types/skills').UninstallSkillOptions) => Promise<import('../types/skills').IPCResult<boolean>>;
     listInstalled: (options?: import('../types/skills').ListInstalledSkillsOptions) => Promise<import('../types/skills').IPCResult<import('../types/skills').InstalledSkill[]>>;
     isInstalled: (skillId: string) => Promise<import('../types/skills').IPCResult<boolean>>;
+    setUserInvocable: (
+      skillId: string,
+      userInvocable: boolean,
+      options: import('../types/skills').SetUserInvocableOptions
+    ) => Promise<import('../types/skills').IPCResult<import('../types/skills').InstalledSkill>>;
   };
 }
 

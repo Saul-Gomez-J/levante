@@ -25,8 +25,10 @@ interface SkillsStore {
   loadCatalog: () => Promise<void>;
   loadCategories: () => Promise<void>;
   loadInstalled: (options?: ListInstalledSkillsOptions) => Promise<void>;
+  loadInstalledForChat: (projectId?: string | null) => Promise<void>;
   installSkill: (skill: SkillDescriptor, options?: InstallSkillOptions) => Promise<void>;
   uninstallSkill: (skillId: string, options: UninstallSkillOptions) => Promise<void>;
+  toggleUserInvocable: (skill: InstalledSkill, enabled: boolean) => Promise<void>;
 
   // Legacy compatibility: checks if installed globally
   isInstalled: (skillId: string) => boolean;
@@ -104,6 +106,53 @@ export const useSkillsStore = create<SkillsStore>((set, get) => ({
         isLoadingInstalled: false,
         error: error instanceof Error ? error.message : String(error),
       });
+    }
+  },
+
+  loadInstalledForChat: async (projectId?: string | null) => {
+    if (projectId) {
+      await get().loadInstalled({ mode: 'project-and-global', projectId });
+      return;
+    }
+    await get().loadInstalled({ mode: 'global' });
+  },
+
+  toggleUserInvocable: async (skill: InstalledSkill, enabled: boolean) => {
+    const previous = get().installedSkills.find((s) => s.scopedKey === skill.scopedKey);
+    if (!previous) return;
+
+    // Optimistic update
+    set((state) => ({
+      installedSkills: state.installedSkills.map((s) =>
+        s.scopedKey === skill.scopedKey ? { ...s, userInvocable: enabled } : s
+      ),
+    }));
+
+    try {
+      const result = await window.levante.skills.setUserInvocable(skill.id, enabled, {
+        scope: skill.scope,
+        projectId: skill.projectId,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+
+      const updated = result.data;
+      set((state) => ({
+        installedSkills: state.installedSkills.map((s) =>
+          s.scopedKey === skill.scopedKey ? updated : s
+        ),
+      }));
+    } catch (error) {
+      // Rollback
+      set((state) => ({
+        installedSkills: state.installedSkills.map((s) =>
+          s.scopedKey === skill.scopedKey ? previous : s
+        ),
+        error: error instanceof Error ? error.message : String(error),
+      }));
+      throw error;
     }
   },
 

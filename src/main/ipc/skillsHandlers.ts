@@ -6,6 +6,7 @@ import type {
   InstallSkillOptions,
   UninstallSkillOptions,
   ListInstalledSkillsOptions,
+  SetUserInvocableOptions,
 } from '../../types/skills';
 
 const logger = getLogger();
@@ -101,6 +102,43 @@ export function setupSkillsHandlers(): void {
       logger.ipc.error('Failed to uninstall skill', {
         skillId: payload?.skillId,
         scope: payload?.options?.scope,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return fail(error);
+    }
+  });
+
+  ipcMain.removeHandler('levante/skills:setUserInvocable');
+  ipcMain.handle('levante/skills:setUserInvocable', async (_, payload: {
+    skillId: string;
+    userInvocable: boolean;
+    options: SetUserInvocableOptions;
+  }) => {
+    if (!payload?.skillId) {
+      return fail(new Error('Invalid setUserInvocable payload: skillId is required'));
+    }
+    if (typeof payload?.userInvocable !== 'boolean') {
+      return fail(new Error('Invalid setUserInvocable payload: userInvocable must be boolean'));
+    }
+    if (!payload?.options?.scope) {
+      return fail(new Error('Invalid setUserInvocable payload: options.scope is required'));
+    }
+    if (payload.options.scope === 'project' && !payload.options.projectId) {
+      return fail(new Error('projectId is required when scope is "project"'));
+    }
+
+    try {
+      const data = await skillsService.setUserInvocable(
+        payload.skillId,
+        payload.userInvocable,
+        payload.options
+      );
+      return ok(data);
+    } catch (error) {
+      logger.ipc.error('Failed to set skill user-invocable', {
+        skillId: payload?.skillId,
+        scope: payload?.options?.scope,
+        projectId: payload?.options?.projectId,
         error: error instanceof Error ? error.message : String(error),
       });
       return fail(error);

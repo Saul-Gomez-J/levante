@@ -50,6 +50,7 @@ const ChatPage = () => {
   const { t } = useTranslation('chat');
   const [input, setInput] = useState('');
   const [enableMCP, setEnableMCP] = usePreference('enableMCP');
+  const [enableSkills, setEnableSkills] = usePreference('enableSkills');
   const [coworkMode, setCoworkMode] = usePreference('coworkMode');
   const [coworkModeCwd, setCoworkModeCwd] = usePreference('coworkModeCwd');
   const [userName, setUserName] = useState<string>(t('welcome.default_user_name'));
@@ -1062,6 +1063,9 @@ const ChatPage = () => {
                     onCoworkModeCwdChange={handleCoworkModeCwdChange}
                     coworkModeCwdSource={resolvedCoworkCwd.source}
                     onResetCoworkModeCwdOverride={currentSession ? handleResetCoworkModeCwdOverride : undefined}
+                    enableSkills={enableSkills ?? true}
+                    onSkillsChange={setEnableSkills}
+                    projectId={currentSession?.project_id ?? null}
                     model={model}
                     onModelChange={handleModelChange}
                     availableModels={filteredAvailableModels}
@@ -1131,6 +1135,9 @@ const ChatPage = () => {
                   onCoworkModeCwdChange={handleCoworkModeCwdChange}
                   coworkModeCwdSource={resolvedCoworkCwd.source}
                   onResetCoworkModeCwdOverride={currentSession ? handleResetCoworkModeCwdOverride : undefined}
+                  enableSkills={enableSkills ?? true}
+                  onSkillsChange={setEnableSkills}
+                  projectId={currentSession?.project_id ?? null}
                   model={model}
                   onModelChange={handleModelChange}
                   availableModels={filteredAvailableModels}

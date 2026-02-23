@@ -13,6 +13,7 @@ import type {
   InstallSkillOptions,
   UninstallSkillOptions,
   ListInstalledSkillsOptions,
+  SetUserInvocableOptions,
 } from '../../types/skills';
 
 const logger = getLogger();
@@ -128,6 +129,77 @@ function parseFrontmatter(raw: string): { meta: Record<string, string>; content:
   }
 
   return { meta, content: content.trim() };
+}
+
+function updateFrontmatterBoolean(raw: string, key: string, value: boolean): string {
+  const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) {
+    throw new Error('Invalid skill file: missing YAML frontmatter');
+  }
+
+  const [, frontmatter, content] = match;
+  const lines = frontmatter.split('\n');
+  const newLine = `${key}: "${value}"`;
+
+  let replaced = false;
+  const updatedLines = lines.map((line) => {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith(`${key}:`)) {
+      replaced = true;
+      const indent = line.slice(0, line.length - trimmed.length);
+      return `${indent}${newLine}`;
+    }
+    return line;
+  });
+
+  if (!replaced) {
+    const installedAtIndex = updatedLines.findIndex((line) => line.trimStart().startsWith('installed-at:'));
+    if (installedAtIndex >= 0) {
+      updatedLines.splice(installedAtIndex, 0, newLine);
+    } else {
+      updatedLines.push(newLine);
+    }
+  }
+
+  return `---\n${updatedLines.join('\n')}\n---\n${content}`;
+}
+
+async function readInstalledSkillFromFile(input: {
+  filePath: string;
+  fallbackSkillId: string;
+  scope: SkillScope;
+  project?: { id: string; name: string; cwd: string };
+}): Promise<InstalledSkill> {
+  const { filePath, fallbackSkillId, scope, project } = input;
+  const raw = await fs.readFile(filePath, 'utf-8');
+  const { meta, content } = parseFrontmatter(raw);
+
+  const skillId = meta['id']?.trim() || fallbackSkillId;
+
+  return {
+    id: skillId,
+    name: meta['name'] ?? skillId,
+    description: meta['description'] ?? '',
+    category: meta['category'] ?? '',
+    author: meta['author'],
+    version: meta['version'],
+    license: meta['license'],
+    allowedTools: meta['allowed-tools'],
+    model: meta['model'],
+    userInvocable: meta['user-invocable'] === undefined ? undefined : meta['user-invocable'] === 'true',
+    content,
+    installedAt: meta['installed-at'] ?? new Date().toISOString(),
+    filePath,
+    scope,
+    ...(project
+      ? {
+          projectId: project.id,
+          projectName: project.name,
+          projectCwd: project.cwd,
+        }
+      : {}),
+    scopedKey: buildScopedKey(scope, skillId, project?.id),
+  };
 }
 
 async function apiFetch<T>(endpoint: string): Promise<T> {
@@ -374,6 +446,48 @@ export class SkillsService {
     }
   }
 
+  async setUserInvocable(
+    skillId: string,
+    userInvocable: boolean,
+    options: SetUserInvocableOptions
+  ): Promise<InstalledSkill> {
+    const scope = options.scope;
+    let baseDir: string;
+    let project: { id: string; name: string; cwd: string } | undefined;
+
+    if (scope === 'project') {
+      if (!options.projectId) {
+        throw new Error('projectId is required when scope is "project"');
+      }
+      project = await resolveProjectForScope(options.projectId);
+      baseDir = getProjectSkillsDir(project.cwd);
+    } else {
+      baseDir = getGlobalSkillsDir();
+    }
+
+    const { skillDir } = buildSkillDir(baseDir, skillId);
+    const filePath = path.join(skillDir, 'skill.md');
+
+    const raw = await fs.readFile(filePath, 'utf-8');
+    const updatedRaw = updateFrontmatterBoolean(raw, 'user-invocable', userInvocable);
+    await fs.writeFile(filePath, updatedRaw, 'utf-8');
+
+    logger.core.info('Skill user-invocable updated', {
+      skillId,
+      scope,
+      projectId: project?.id,
+      userInvocable,
+      filePath,
+    });
+
+    return await readInstalledSkillFromFile({
+      filePath,
+      fallbackSkillId: skillId,
+      scope,
+      project,
+    });
+  }
+
   async isInstalled(skillId: string): Promise<boolean> {
     const { skillDir } = buildSkillDir(getGlobalSkillsDir(), skillId);
     try {
@@ -419,6 +533,28 @@ export class SkillsService {
 
       const result = [...merged.values()];
       result.sort((a, b) => a.id.localeCompare(b.id));
+      return result;
+    }
+
+    if (mode === 'project-and-global') {
+      if (!options.projectId) {
+        throw new Error('projectId is required for mode "project-and-global"');
+      }
+
+      const project = await resolveProjectForScope(options.projectId);
+      const globalDir = getGlobalSkillsDir();
+      const projectDir = getProjectSkillsDir(project.cwd);
+
+      const [globalSkills, projectSkills] = await Promise.all([
+        scanSkillsDir({ dir: globalDir, scope: 'global' }),
+        scanSkillsDir({ dir: projectDir, scope: 'project', project }),
+      ]);
+
+      const result = [...projectSkills, ...globalSkills];
+      result.sort((a, b) => {
+        if (a.scope !== b.scope) return a.scope === 'project' ? -1 : 1;
+        return a.id.localeCompare(b.id);
+      });
       return result;
     }
 
