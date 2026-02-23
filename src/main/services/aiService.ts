@@ -84,6 +84,12 @@ export interface ChatStreamChunk {
     status: "success" | "error";
     timestamp: number;
   };
+  toolApproval?: {
+    approvalId: string;
+    toolCallId: string;
+    toolName: string;
+    input: Record<string, any>;
+  };
   generatedAttachment?: {
     type: "image" | "audio" | "video";
     mime: string;
@@ -125,6 +131,21 @@ function sanitizeMessagesForModel(messages: UIMessage[]): UIMessage[] {
 
     const sanitizedParts = parts.map((part: any) => {
       if (!part) return part;
+
+      // FIX: Handle denied tool approvals
+      // When a tool is denied by the user, convert it to output-available with a denial message
+      // so that convertToModelMessages generates a proper tool_result.
+      // Without this, Anthropic/OpenRouter returns 500 because tool_use lacks tool_result.
+      if (part.state === 'approval-responded') {
+        const wasDenied = part.approval?.approved === false;
+        if (wasDenied) {
+          part = {
+            ...part,
+            state: 'output-available',
+            output: 'Tool execution was denied by the user.',
+          };
+        }
+      }
 
       // Remove providerExecuted if null (GitHub Issue #8061)
       // Databases like MongoDB convert undefined to null, causing validation errors
@@ -1347,6 +1368,37 @@ export class AIService {
             });
             // Clean up the accumulated text
             reasoningBlocks.delete(endId);
+            break;
+
+          case "tool-approval-request":
+            // Herramienta con needsApproval: true requiere aprobación del usuario
+            const approvalChunk = chunk as {
+              type: string;
+              approvalId: string;
+              toolCall?: {
+                toolCallId: string;
+                toolName: string;
+                input?: Record<string, unknown>;
+              };
+            };
+
+            this.logger.aiSdk.info("Tool approval request received", {
+              approvalId: approvalChunk.approvalId,
+              toolCallId: approvalChunk.toolCall?.toolCallId,
+              toolName: approvalChunk.toolCall?.toolName,
+            });
+
+            // Garantizar que input NUNCA sea undefined
+            const toolInput = approvalChunk.toolCall?.input ?? {};
+
+            yield {
+              toolApproval: {
+                approvalId: approvalChunk.approvalId,
+                toolCallId: approvalChunk.toolCall?.toolCallId ?? '',
+                toolName: approvalChunk.toolCall?.toolName ?? '',
+                input: toolInput,
+              },
+            };
             break;
 
           case "tool-call":
