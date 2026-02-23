@@ -259,7 +259,7 @@ export class ChatService {
       const attachmentsString = input.attachments ? JSON.stringify(input.attachments) : null;
       const reasoningString = input.reasoningText ? JSON.stringify(input.reasoningText) : null;
 
-      this.logger.database.debug('Inserting message into database', {
+      this.logger.database.debug('Upserting message into database', {
         messageId: id,
         hasAttachments: !!attachmentsString,
         attachmentsLength: attachmentsString?.length || 0,
@@ -277,12 +277,17 @@ export class ChatService {
         created_at: now
       };
 
-      // Try to insert with reasoning column first (new schema)
+      // Try to upsert with reasoning column first (new schema)
       // If it fails, retry without reasoning column (old schema)
       try {
         await databaseService.execute(
           `INSERT INTO messages (id, session_id, role, content, tool_calls, attachments, reasoning, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             content = excluded.content,
+             tool_calls = excluded.tool_calls,
+             attachments = excluded.attachments,
+             reasoning = excluded.reasoning`,
           [
             message.id as InValue,
             message.session_id as InValue,
@@ -298,12 +303,16 @@ export class ChatService {
         // If error is about missing column, retry without reasoning
         if (error?.message?.includes('no such column: reasoning') ||
           error?.message?.includes('table messages has no column named reasoning')) {
-          this.logger.database.warn('Reasoning column not found, inserting without it (migration pending)', {
+          this.logger.database.warn('Reasoning column not found, upserting without it (migration pending)', {
             messageId: id
           });
           await databaseService.execute(
             `INSERT INTO messages (id, session_id, role, content, tool_calls, attachments, created_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(id) DO UPDATE SET
+               content = excluded.content,
+               tool_calls = excluded.tool_calls,
+               attachments = excluded.attachments`,
             [
               message.id as InValue,
               message.session_id as InValue,
