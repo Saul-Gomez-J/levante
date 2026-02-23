@@ -314,7 +314,11 @@ function App() {
     }
     // We need a slight delay for the page to render before creating session
     setTimeout(async () => {
-      await createSession('New Chat', undefined, 'chat', projectId)
+      const models = await modelService.getAvailableModels();
+      const lastUsedResult = await window.levante.preferences.get('lastUsedModel');
+      const lastUsed = lastUsedResult.data as string | undefined;
+      const model = models.some(m => m.id === lastUsed) ? lastUsed : models[0]?.id;
+      await createSession('New Chat', model, 'chat', projectId)
     }, 50)
   }
 
