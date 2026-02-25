@@ -16,7 +16,11 @@ import type { SkillDescriptor, InstallSkillOptions, UninstallSkillOptions } from
 
 type ScopeFilter = 'all' | 'global' | string // string = projectId
 
-const SkillsPage = () => {
+interface SkillsPageProps {
+  installed: boolean;
+}
+
+const SkillsPage = ({ installed }: SkillsPageProps) => {
   const {
     catalog,
     categories,
@@ -62,10 +66,13 @@ const SkillsPage = () => {
     const q = searchQuery.toLowerCase().trim()
 
     return catalog.filter((skill) => {
+      // In installed view, only show skills that are installed somewhere
+      if (installed && !isInstalledAnywhere(skill.id)) return false
+
       if (selectedCategory && skill.category !== selectedCategory) return false
 
-      // Scope filter
-      if (scopeFilter !== 'all') {
+      // Scope filter — only applies in installed view
+      if (installed && scopeFilter !== 'all') {
         if (scopeFilter === 'global') {
           const instances = getInstalledBySkillId(skill.id)
           if (!instances.some((i) => i.scope === 'global')) return false
@@ -84,7 +91,7 @@ const SkillsPage = () => {
         skill.tags?.some((tag) => tag.toLowerCase().includes(q))
       )
     })
-  }, [catalog, searchQuery, selectedCategory, scopeFilter, getInstalledBySkillId])
+  }, [catalog, searchQuery, selectedCategory, scopeFilter, getInstalledBySkillId, isInstalledAnywhere, installed])
 
   const handleInstall = async (skill: SkillDescriptor) => {
     if (projectsWithCwd.length > 0) {
@@ -172,14 +179,12 @@ const SkillsPage = () => {
   const uninstallModalInstances = uninstallSkillId ? getInstalledBySkillId(uninstallSkillId) : []
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="px-6 py-4 border-b space-y-3 shrink-0">
-        <div>
-          <h1 className="text-xl font-semibold">Skills Store</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Browse and install AI agent skills
-          </p>
-        </div>
+    <div className="max-w-4xl mx-auto space-y-6 px-4 py-6">
+      {/* Header */}
+      <div className="space-y-4">
+        <h1 className="text-3xl font-bold">
+          {installed ? 'Installed Skills' : 'Skills Store'}
+        </h1>
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -197,75 +202,78 @@ const SkillsPage = () => {
           onSelect={setSelectedCategory}
         />
 
-        {/* Scope filter */}
-        <div className="flex flex-wrap gap-1">
-          <Button
-            variant={scopeFilter === 'all' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="text-xs h-7"
-            onClick={() => setScopeFilter('all')}
-          >
-            All
-          </Button>
-          <Button
-            variant={scopeFilter === 'global' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="text-xs h-7 gap-1"
-            onClick={() => setScopeFilter('global')}
-          >
-            <Globe className="h-3 w-3" />
-            Global
-          </Button>
-          {projectsWithCwd.map((project) => (
+        {/* Scope filter — only in installed view */}
+        {installed && (
+          <div className="flex flex-wrap gap-1">
             <Button
-              key={project.id}
-              variant={scopeFilter === project.id ? 'secondary' : 'ghost'}
+              variant={scopeFilter === 'all' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="text-xs h-7"
+              onClick={() => setScopeFilter('all')}
+            >
+              All
+            </Button>
+            <Button
+              variant={scopeFilter === 'global' ? 'secondary' : 'ghost'}
               size="sm"
               className="text-xs h-7 gap-1"
-              onClick={() => setScopeFilter(project.id)}
+              onClick={() => setScopeFilter('global')}
             >
-              <FolderOpen className="h-3 w-3" />
-              {project.name}
+              <Globe className="h-3 w-3" />
+              Global
             </Button>
+            {projectsWithCwd.map((project) => (
+              <Button
+                key={project.id}
+                variant={scopeFilter === project.id ? 'secondary' : 'ghost'}
+                size="sm"
+                className="text-xs h-7 gap-1"
+                onClick={() => setScopeFilter(project.id)}
+              >
+                <FolderOpen className="h-3 w-3" />
+                {project.name}
+              </Button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Content */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {isLoadingCatalog ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-48 rounded-lg" />
           ))}
         </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-6">
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {isLoadingCatalog ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-48 rounded-lg" />
-            ))}
-          </div>
-        ) : filteredSkills.length === 0 ? (
-          <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
-            {searchQuery || selectedCategory || scopeFilter !== 'all'
-              ? 'No skills match your filters.'
+      ) : filteredSkills.length === 0 ? (
+        <div className="flex items-center justify-center h-32 text-muted-foreground text-sm">
+          {searchQuery || selectedCategory || (installed && scopeFilter !== 'all')
+            ? 'No skills match your filters.'
+            : installed
+              ? 'No skills installed yet.'
               : 'No skills available.'}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredSkills.map((skill) => (
-              <SkillCard
-                key={skill.id}
-                skill={skill}
-                installedInstances={getInstalledBySkillId(skill.id)}
-                isLoading={processingIds.has(skill.id)}
-                onInstall={handleInstall}
-                onUninstall={handleUninstall}
-                onViewDetails={handleViewDetails}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredSkills.map((skill) => (
+            <SkillCard
+              key={skill.id}
+              skill={skill}
+              installedInstances={getInstalledBySkillId(skill.id)}
+              isLoading={processingIds.has(skill.id)}
+              onInstall={handleInstall}
+              onUninstall={handleUninstall}
+              onViewDetails={handleViewDetails}
+            />
+          ))}
+        </div>
+      )}
 
       <SkillDetailsModal
         skill={selectedSkill}
