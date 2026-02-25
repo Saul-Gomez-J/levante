@@ -11,6 +11,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { modelService } from '@/services/modelService';
 import { getRendererLogger } from '@/services/logger';
 import { usePreference } from '@/hooks/usePreferences';
+import { usePlatformStore } from '@/stores/platformStore';
 import type { Model, GroupedModelsByProvider } from '../../types/models';
 
 const logger = getRendererLogger();
@@ -79,6 +80,11 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
   const [groupedModelsByProvider, setGroupedModelsByProvider] = useState<GroupedModelsByProvider | null>(null);
   const [modelsLoading, setModelsLoading] = useState(true);
 
+  // Platform mode state
+  const appMode = usePlatformStore(s => s.appMode);
+  const platformModels = usePlatformStore(s => s.models);
+  const isPlatformMode = appMode === 'platform';
+
   // Load and save lastUsedModel from preferences
   const [lastUsedModel, setLastUsedModel] = usePreference('lastUsedModel');
 
@@ -109,24 +115,32 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
     const loadModels = async () => {
       setModelsLoading(true);
       try {
-        // Ensure model service is initialized
-        await modelService.initialize();
+        if (isPlatformMode) {
+          // Platform mode: use models from platformStore (flat list, no provider grouping)
+          setAvailableModels(platformModels);
+          setGroupedModelsByProvider(null);
 
-        // Load legacy single-provider models AND grouped multi-provider models
-        const [models, grouped] = await Promise.all([
-          modelService.getAvailableModels(),
-          modelService.getAllProvidersWithSelectedModels()
-        ]);
+          logger.models.debug('Loaded platform models', {
+            count: platformModels.length,
+          });
+        } else {
+          // Standalone mode: use modelService with multi-provider support
+          await modelService.initialize();
 
-        setAvailableModels(models);
-        setGroupedModelsByProvider(grouped);
+          const [models, grouped] = await Promise.all([
+            modelService.getAvailableModels(),
+            modelService.getAllProvidersWithSelectedModels()
+          ]);
 
-        // Log available models for debugging
-        logger.models.debug(`Loaded models`, {
-          count: models.length,
-          groupedCount: grouped.totalModelCount,
-          providerCount: grouped.providers.length
-        });
+          setAvailableModels(models);
+          setGroupedModelsByProvider(grouped);
+
+          logger.models.debug('Loaded models', {
+            count: models.length,
+            groupedCount: grouped.totalModelCount,
+            providerCount: grouped.providers.length
+          });
+        }
       } catch (error) {
         logger.models.error('Failed to load models', {
           error: error instanceof Error ? error.message : error
@@ -138,12 +152,11 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
 
     loadModels();
 
-
     // Also load user name if callback provided
     if (onLoadUserName) {
       onLoadUserName();
     }
-  }, [onLoadUserName]);
+  }, [onLoadUserName, isPlatformMode, platformModels]);
 
   // Auto-select model if only one is available OR use lastUsedModel when no model is selected
   useEffect(() => {
@@ -232,26 +245,27 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
 
     // If no current session, allow any model (it will determine session type on creation)
     if (!currentSession) {
-      // Check if we need to switch provider
-      try {
-        const newProviderId = await modelService.getProviderForModel(newModelId);
-        const activeProvider = await modelService.getActiveProvider();
+      // In platform mode, no provider switching needed
+      if (!isPlatformMode) {
+        try {
+          const newProviderId = await modelService.getProviderForModel(newModelId);
+          const activeProvider = await modelService.getActiveProvider();
 
-        if (newProviderId && activeProvider && newProviderId !== activeProvider.id) {
-          logger.models.info('Auto-switching provider for new session', {
-            from: activeProvider.id,
-            to: newProviderId,
-            model: newModelId
+          if (newProviderId && activeProvider && newProviderId !== activeProvider.id) {
+            logger.models.info('Auto-switching provider for new session', {
+              from: activeProvider.id,
+              to: newProviderId,
+              model: newModelId
+            });
+            await modelService.setActiveProvider(newProviderId);
+            const models = await modelService.getAvailableModels();
+            setAvailableModels(models);
+          }
+        } catch (err) {
+          logger.models.error('Failed to auto-switch provider', {
+            error: err instanceof Error ? err.message : String(err)
           });
-          await modelService.setActiveProvider(newProviderId);
-          // Refresh available models for the new active provider
-          const models = await modelService.getAvailableModels();
-          setAvailableModels(models);
         }
-      } catch (err) {
-        logger.models.error('Failed to auto-switch provider', {
-          error: err instanceof Error ? err.message : String(err)
-        });
       }
 
       setModel(newModelId);
@@ -295,31 +309,31 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
       }
     }
 
-    // Valid change - check provider switch
-    try {
-      const newProviderId = await modelService.getProviderForModel(newModelId);
-      const activeProvider = await modelService.getActiveProvider();
+    // Valid change - check provider switch (standalone mode only)
+    if (!isPlatformMode) {
+      try {
+        const newProviderId = await modelService.getProviderForModel(newModelId);
+        const activeProvider = await modelService.getActiveProvider();
 
-      if (newProviderId && activeProvider && newProviderId !== activeProvider.id) {
-        logger.models.info('Auto-switching provider for existing session', {
-          from: activeProvider.id,
-          to: newProviderId,
-          model: newModelId
+        if (newProviderId && activeProvider && newProviderId !== activeProvider.id) {
+          logger.models.info('Auto-switching provider for existing session', {
+            from: activeProvider.id,
+            to: newProviderId,
+            model: newModelId
+          });
+          await modelService.setActiveProvider(newProviderId);
+
+          const models = await modelService.getAvailableModels();
+          setAvailableModels(models);
+
+          const grouped = await modelService.getAllProvidersWithSelectedModels();
+          setGroupedModelsByProvider(grouped);
+        }
+      } catch (err) {
+        logger.models.error('Failed to auto-switch provider', {
+          error: err instanceof Error ? err.message : String(err)
         });
-        await modelService.setActiveProvider(newProviderId);
-
-        // Refresh available models (active provider changed)
-        const models = await modelService.getAvailableModels();
-        setAvailableModels(models);
-
-        // Also refresh grouped models to update order (active logic)
-        const grouped = await modelService.getAllProvidersWithSelectedModels();
-        setGroupedModelsByProvider(grouped);
       }
-    } catch (err) {
-      logger.models.error('Failed to auto-switch provider', {
-        error: err instanceof Error ? err.message : String(err)
-      });
     }
 
     logger.core.info('Model changed', {
@@ -329,7 +343,7 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
       compatible: true
     });
     setModel(newModelId);
-  }, [currentSession, availableModels, model, groupedModelsByProvider]);
+  }, [currentSession, availableModels, model, groupedModelsByProvider, isPlatformMode]);
 
   return {
     model,

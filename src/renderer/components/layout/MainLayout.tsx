@@ -17,6 +17,7 @@ import { MessageSquare, Settings, User, Bot, Store, Plus, PanelLeftClose, PanelL
 import { getRendererLogger } from '@/services/logger'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
+import { usePlatformStore } from '@/stores/platformStore'
 // @ts-ignore - PNG import
 import logoIcon from '@/assets/icons/icon.png'
 
@@ -37,6 +38,9 @@ interface MainLayoutProps {
 function MainLayoutContent({ children, title, currentPage, onPageChange, sidebarContent, onNewChat, developerMode, selectedProjectName, version, platform }: MainLayoutProps & { version: string; platform: string }) {
   const { open } = useSidebar()
   const { t } = useTranslation('common')
+  const appMode = usePlatformStore((s) => s.appMode)
+  const platformUser = usePlatformStore((s) => s.user)
+  const isPlatformMode = appMode === 'platform'
 
   return (
     <>
@@ -97,15 +101,27 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
                 {t('navigation.mcp')}
               </SidebarMenuButton>
             </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                onClick={() => onPageChange?.('model')}
-                isActive={currentPage === 'model'}
-              >
-                <Bot className="w-4 h-4" />
-                {t('navigation.models')}
-              </SidebarMenuButton>
-            </SidebarMenuItem>
+            {isPlatformMode ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => onPageChange?.('account')}
+                  isActive={currentPage === 'account'}
+                >
+                  <User className="w-4 h-4" />
+                  {t('navigation.account')}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ) : (
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  onClick={() => onPageChange?.('model')}
+                  isActive={currentPage === 'model'}
+                >
+                  <Bot className="w-4 h-4" />
+                  {t('navigation.models')}
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )}
             <SidebarMenuItem>
               <SidebarMenuButton
                 onClick={() => onPageChange?.('settings')}
@@ -127,7 +143,15 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
             </SidebarMenuItem>
           )}
         </SidebarMenu>
-          <div className="border-t pt-2 px-2">
+          {isPlatformMode && platformUser?.email && (
+            <div className="border-t pt-2 px-3">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
+                <User className="w-3 h-3 shrink-0" />
+                <span className="truncate">{platformUser.email}</span>
+              </div>
+            </div>
+          )}
+          <div className={`${isPlatformMode && platformUser?.email ? 'pt-1' : 'border-t pt-2'} px-2`}>
             <Button
               onClick={() => window.levante.openExternal('https://www.levanteapp.com/feedback')}
               variant="outline"

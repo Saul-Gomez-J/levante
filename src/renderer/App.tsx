@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { MainLayout } from '@/components/layout/MainLayout'
 import ChatPage from '@/pages/ChatPage'
 import { ProjectPage } from '@/pages/ProjectPage'
 import SettingsPage from '@/pages/SettingsPage'
 import ModelPage from '@/pages/ModelPage'
+import AccountPage from '@/pages/AccountPage'
 import StorePage from '@/pages/StorePage'
 import LogViewerPage from '@/pages/LogViewerPage'
 import { OnboardingWizard } from '@/pages/OnboardingWizard'
@@ -12,6 +13,7 @@ import { AnnouncementModal } from '@/components/announcements/AnnouncementModal'
 import { SkillInstallDeepLinkModal } from '@/components/skills/SkillInstallDeepLinkModal'
 import { useChatStore, initializeChatStore } from '@/stores/chatStore'
 import { useProjectStore } from '@/stores/projectStore'
+import { usePlatformStore } from '@/stores/platformStore'
 import { ProjectModal } from '@/components/projects/ProjectModal'
 import { useSkillsStore } from '@/stores/skillsStore'
 import { logger } from '@/services/logger'
@@ -43,7 +45,7 @@ function App() {
   const [wizardCompleted, setWizardCompleted] = useState<boolean | null>(null)
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
   const [developerMode, setDeveloperMode] = useState(false)
-  const { i18n } = useTranslation()
+  const { i18n, t: tModels } = useTranslation('models')
 
   // Listen for MCP events (tools/list_changed, etc.)
   useMCPEvents()
@@ -227,7 +229,8 @@ function App() {
 
       await Promise.all([
         initializeChatStore(),
-        modelService.initialize()
+        modelService.initialize(),
+        usePlatformStore.getState().initialize()
       ]);
       logger.core.info('Renderer services initialized successfully');
     };
@@ -261,6 +264,22 @@ function App() {
 
     checkAnnouncements();
   }, [wizardCompleted]);
+
+  // React to appMode changes (e.g. logout/login)
+  const appMode = usePlatformStore((s) => s.appMode)
+  const [showPlatformWelcome, setShowPlatformWelcome] = useState(false)
+  const prevAppModeRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    if (appMode === 'standalone' && currentPage === 'account') {
+      setCurrentPage('model')
+    }
+    // Show welcome modal when user logs into platform from model page
+    if (appMode === 'platform' && prevAppModeRef.current !== null && prevAppModeRef.current !== 'platform' && currentPage === 'model') {
+      setShowPlatformWelcome(true)
+    }
+    prevAppModeRef.current = appMode
+  }, [appMode, currentPage])
 
   // Chat management for sidebar - using Zustand selectors
   const currentSession = useChatStore((state) => state.currentSession)
@@ -530,6 +549,8 @@ function App() {
         return 'Settings'
       case 'model':
         return 'Model'
+      case 'account':
+        return 'Account'
       case 'store':
         return 'Store'
       case 'logs':
@@ -552,6 +573,7 @@ function App() {
         ) : <ChatPage />
       case 'settings': return <SettingsPage />
       case 'model': return <ModelPage />
+      case 'account': return <AccountPage />
       case 'store': return <StorePage />
       case 'logs':
         // Only show logs if developer mode is active
@@ -704,6 +726,28 @@ function App() {
         onOpenChange={setSkillDeepLinkOpen}
       />
 
+      {/* Platform Welcome Modal */}
+      <AlertDialog
+        open={showPlatformWelcome}
+        onOpenChange={setShowPlatformWelcome}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{tModels('platform.welcome_title')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {tModels('platform.welcome_description')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => {
+              setShowPlatformWelcome(false)
+              setCurrentPage('account')
+            }}>
+              {tModels('platform.welcome_go_to_account')}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <MainLayout
         title={getPageTitle(currentPage)}

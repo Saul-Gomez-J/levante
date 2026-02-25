@@ -82,6 +82,19 @@ export class UserProfileService {
                 additionalProperties: false
               }
             }
+          },
+          appMode: {
+            type: 'string',
+            enum: ['platform', 'standalone']
+          },
+          platformUser: {
+            type: 'object',
+            properties: {
+              email: { type: 'string' },
+              sub: { type: 'string' },
+              orgId: { type: 'string' },
+              teamId: { type: 'string' }
+            }
           }
         }
       });

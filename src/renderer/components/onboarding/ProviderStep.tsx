@@ -14,7 +14,6 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { CheckCircle2, XCircle, Loader2, ExternalLink, ChevronDown, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useOpenRouterOAuth } from '@/hooks/useOpenRouterOAuth';
-import { useLevantePlatformOAuth } from '@/hooks/useLevantePlatformOAuth';
 import type { Model } from '../../../types/models';
 
 interface ProviderStepProps {
@@ -40,13 +39,6 @@ const PROVIDERS = [
     description: '100+ models with a single API key',
     requiresKey: true,
     signupUrl: 'https://openrouter.ai/keys',
-  },
-  {
-    id: 'levante-platform',
-    name: 'Levante Platform',
-    description: 'Powered by Levante - Sign in with your account',
-    requiresKey: false,  // Uses OAuth, not API key
-    usesOAuth: true,
   },
   {
     id: 'vercel-gateway',
@@ -123,28 +115,12 @@ export function ProviderStep({
     }
   });
 
-  // OAuth hook for Levante Platform
-  const {
-    isAuthenticating: isLevantePlatformAuthenticating,
-    isConnected: isLevantePlatformConnected,
-    initiateOAuthFlow: initiateLevantePlatformOAuth,
-  } = useLevantePlatformOAuth({
-    onSuccess: () => {
-      // Auto-validate after successful OAuth
-      setTimeout(() => {
-        onValidate();
-      }, 500);
-    }
-  });
-
   const showApiKeyField = provider?.requiresKey;
   const showEndpointField = provider?.requiresEndpoint;
 
   // Check if required fields are filled
   const canValidate = () => {
     if (!selectedProvider) return false;
-    // Levante Platform uses OAuth - valid when connected
-    if (selectedProvider === 'levante-platform') return isLevantePlatformConnected;
     if (provider?.requiresKey && !apiKey) return false;
     if (provider?.requiresEndpoint && !endpoint) return false;
     return true;
@@ -201,38 +177,6 @@ export function ProviderStep({
                 <p className="text-xs text-center text-muted-foreground">
                   {t('provider.oauth.connect_message')}
                 </p>
-              </div>
-            )}
-
-            {/* OAuth Login for Levante Platform */}
-            {selectedProvider === 'levante-platform' && (
-              <div className="space-y-3">
-                {isLevantePlatformConnected ? (
-                  <Alert className="border-green-500/50 bg-green-500/10 dark:bg-green-500/20 [&>svg]:top-3.5">
-                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-                    <AlertDescription className="text-green-700 dark:text-green-300">
-                      {t('provider.oauth.connected', 'Connected to Levante Platform')}
-                    </AlertDescription>
-                  </Alert>
-                ) : (
-                  <>
-                    <Button
-                      onClick={initiateLevantePlatformOAuth}
-                      disabled={isLevantePlatformAuthenticating}
-                      className="w-full h-11"
-                      variant="default"
-                      type="button"
-                    >
-                      <ExternalLink className="mr-2 h-4 w-4" />
-                      {isLevantePlatformAuthenticating
-                        ? t('provider.oauth.waiting')
-                        : t('provider.oauth.sign_in_levante', 'Sign in with Levante Platform')}
-                    </Button>
-                    <p className="text-xs text-center text-muted-foreground">
-                      {t('provider.oauth.connect_message_levante', 'Sign in with your Levante Platform account to access AI models')}
-                    </p>
-                  </>
-                )}
               </div>
             )}
 

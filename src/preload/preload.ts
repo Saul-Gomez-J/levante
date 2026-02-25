@@ -66,6 +66,7 @@ import { coworkApi } from "./api/cowork";
 import { tasksApi } from "./api/tasks";
 import { projectsApi } from "./api/projects";
 import { skillsApi } from "./api/skills";
+import { platformApi } from "./api/platform";
 
 // Re-export types for backwards compatibility
 export type {
@@ -873,6 +874,26 @@ export interface LevanteAPI {
     getSessions: (projectId: string) => Promise<DatabaseResult<ChatSession[]>>;
   };
 
+  // Platform API
+  platform: {
+    login: (baseUrl?: string) => Promise<{
+      success: boolean;
+      data?: import('./types').PlatformStatus;
+      error?: string;
+    }>;
+    logout: () => Promise<{ success: boolean; error?: string }>;
+    getStatus: () => Promise<{
+      success: boolean;
+      data?: import('./types').PlatformStatus;
+      error?: string;
+    }>;
+    getModels: (baseUrl?: string) => Promise<{
+      success: boolean;
+      data?: any[];
+      error?: string;
+    }>;
+  };
+
   // Skills API
   skills: {
     getCatalog: () => Promise<import('../types/skills').IPCResult<import('../types/skills').SkillsCatalogResponse>>;
@@ -962,6 +983,9 @@ const api: LevanteAPI = {
 
   // Skills API
   skills: skillsApi,
+
+  // Platform API
+  platform: platformApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to
