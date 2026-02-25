@@ -21,7 +21,11 @@ import { useTranslation } from 'react-i18next';
 
 const logger = getRendererLogger();
 
-export function StoreLayout() {
+interface StoreLayoutProps {
+  installed: boolean;
+}
+
+export function StoreLayout({ installed }: StoreLayoutProps) {
   const { t } = useTranslation('mcp');
   const {
     activeServers,
@@ -504,7 +508,7 @@ export function StoreLayout() {
     <div className="max-w-4xl mx-auto space-y-6 px-4">
 
       {/* ── SECCIÓN: INSTALLED ─────────────────────────────────── */}
-      <section>
+      {installed && <section>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <h1 className="text-3xl font-bold">{t('active.title')}</h1>
@@ -563,10 +567,10 @@ export function StoreLayout() {
             </p>
           </div>
         )}
-      </section>
+      </section>}
 
       {/* ── SECCIÓN: CATALOG ───────────────────────────────────── */}
-      <section>
+      {!installed && <section>
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold">{t('store.title')}</h2>
           <div className="flex items-center gap-2">
@@ -683,7 +687,7 @@ export function StoreLayout() {
             );
           })}
         </div>
-      </section>
+      </section>}
 
       {/* ── MODALES Y PANELES ─────────────────────────────────── */}
       <FullJSONEditorPanel

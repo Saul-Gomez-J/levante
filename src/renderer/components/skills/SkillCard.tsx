@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
-import { Download, Trash2, ExternalLink, Globe, FolderOpen } from 'lucide-react'
+import { Download, Trash2, ExternalLink, Globe, FolderOpen, FolderPlus } from 'lucide-react'
 import type { SkillDescriptor, InstalledSkill } from '../../../types/skills'
 
 interface SkillCardProps {
@@ -34,9 +34,19 @@ export function SkillCard({
             <h3 className="font-semibold text-sm leading-tight">{skill.name}</h3>
             <p className="text-xs text-muted-foreground mt-0.5">{skill.category}</p>
           </div>
-          {skill.version && (
-            <span className="text-xs text-muted-foreground shrink-0">v{skill.version}</span>
-          )}
+          <div className="flex items-center gap-1 shrink-0">
+            {skill.version && (
+              <span className="text-xs text-muted-foreground">v{skill.version}</span>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5"
+              onClick={() => onViewDetails(skill)}
+            >
+              <ExternalLink className="h-3 w-3" />
+            </Button>
+          </div>
         </div>
       </CardHeader>
 
@@ -81,16 +91,6 @@ export function SkillCard({
       </CardContent>
 
       <CardFooter className="pt-2 gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="flex-1 text-xs"
-          onClick={() => onViewDetails(skill)}
-        >
-          <ExternalLink className="h-3 w-3 mr-1" />
-          Details
-        </Button>
-
         {isInstalledAnywhere && (
           <Button
             variant="outline"
@@ -110,8 +110,17 @@ export function SkillCard({
           onClick={() => onInstall(skill)}
           disabled={isLoading}
         >
-          <Download className="h-3 w-3 mr-1" />
-          Install
+          {isInstalledAnywhere ? (
+            <>
+              <FolderPlus className="h-3 w-3 mr-1" />
+              Add to project
+            </>
+          ) : (
+            <>
+              <Download className="h-3 w-3 mr-1" />
+              Install
+            </>
+          )}
         </Button>
       </CardFooter>
     </Card>
