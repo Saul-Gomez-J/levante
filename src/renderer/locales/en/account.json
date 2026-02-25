@@ -1,0 +1,12 @@
+{
+  "title": "Levante Platform",
+  "description": "Your account and subscription details",
+  "org_label": "Org: {{orgId}}",
+  "manage_plan": "Manage plan",
+  "log_out": "Log out",
+  "models_title": "Available models",
+  "models_description": "Models included in your plan ({{count}})",
+  "no_models": "No models available. Try refreshing or check your plan.",
+  "logout_confirm_title": "Log out of Levante Platform?",
+  "logout_confirm_description": "You will switch to standalone mode, where you'll need to configure your own API keys (OpenRouter, OpenAI, Anthropic, etc.) to use AI models. You can always log back in later from the Models page."
+}

@@ -2,15 +2,24 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WizardStep } from '@/components/onboarding/WizardStep';
 import { WelcomeStep } from '@/components/onboarding/WelcomeStep';
+import { ModeSelectionStep } from '@/components/onboarding/ModeSelectionStep';
 import { McpStep } from '@/components/onboarding/McpStep';
 import { ProviderStep } from '@/components/onboarding/ProviderStep';
 import { DirectoryStep } from '@/components/onboarding/DirectoryStep';
 import { CompletionStep } from '@/components/onboarding/CompletionStep';
 import { useModelStore, getModelStoreState } from '@/stores/modelStore';
+import { usePlatformStore } from '@/stores/platformStore';
 import { detectSystemLanguage } from '@/i18n/languageDetector';
 import type { ProviderValidationConfig } from '../../types/wizard';
 
-const TOTAL_STEPS = 5;
+/**
+ * Wizard steps differ by mode:
+ * - Platform: Welcome → ModeSelection → MCP → Directory → Completion (5 steps, skip ProviderStep)
+ * - Standalone: Welcome → ModeSelection → Provider → MCP → Directory → Completion (6 steps)
+ * - Before mode is chosen: TOTAL_STEPS = 5 (platform path, shorter)
+ */
+const PLATFORM_TOTAL_STEPS = 5;
+const STANDALONE_TOTAL_STEPS = 6;
 
 const PROVIDER_NAMES: Record<string, string> = {
   openrouter: 'OpenRouter',
@@ -37,6 +46,7 @@ interface OnboardingWizardProps {
 
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   const { updateProvider, setActiveProvider, syncProviderModels, providers } = useModelStore();
+  const { appMode, isAuthenticated: isPlatformConnected, setStandaloneMode } = usePlatformStore();
   const { i18n } = useTranslation();
   const userChangedLanguageRef = useRef(false);
 
@@ -44,8 +54,14 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   const [detectedLanguage, setDetectedLanguage] = useState<'en' | 'es'>('en');
   const [selectedLanguage, setSelectedLanguage] = useState<'en' | 'es'>('en');
 
+  // Mode selection state
+  const [chosenMode, setChosenMode] = useState<'platform' | 'standalone' | null>(null);
+
   // Wizard state
   const [currentStep, setCurrentStep] = useState(1);
+
+  // Total steps depends on chosen mode
+  const totalSteps = chosenMode === 'standalone' ? STANDALONE_TOTAL_STEPS : PLATFORM_TOTAL_STEPS;
 
   // Provider step state
   const [selectedProvider, setSelectedProvider] = useState('');
@@ -121,9 +137,34 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
     loadProfile();
   }, []);
 
+  /**
+   * Get the logical step name for the current step number based on mode.
+   *
+   * Platform flow:   1=Welcome, 2=ModeSelection, 3=MCP, 4=Directory, 5=Completion
+   * Standalone flow: 1=Welcome, 2=ModeSelection, 3=Provider, 4=MCP, 5=Directory, 6=Completion
+   */
+  const getStepName = (step: number): string => {
+    if (step === 1) return 'welcome';
+    if (step === 2) return 'modeSelection';
+    if (chosenMode === 'standalone') {
+      if (step === 3) return 'provider';
+      if (step === 4) return 'mcp';
+      if (step === 5) return 'directory';
+      if (step === 6) return 'completion';
+    } else {
+      // Platform mode (or mode not yet chosen)
+      if (step === 3) return 'mcp';
+      if (step === 4) return 'directory';
+      if (step === 5) return 'completion';
+    }
+    return 'unknown';
+  };
+
+  const currentStepName = getStepName(currentStep);
+
   const handleNext = async () => {
     // Step 1 (Welcome): Save language selection and start wizard
-    if (currentStep === 1) {
+    if (currentStepName === 'welcome') {
       try {
         await window.levante.preferences.set('language', selectedLanguage);
         i18n.changeLanguage(selectedLanguage);
@@ -133,13 +174,19 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
       }
     }
 
-    // Step 3 (Provider): Must validate before proceeding
-    if (currentStep === 3 && validationStatus !== 'valid') {
+    // Step: ModeSelection - handled by callbacks, not by Next button
+    if (currentStepName === 'modeSelection') {
+      // Should not reach here normally - mode selection advances via callbacks
       return;
     }
 
-    // Step 4 (Directory): Save analytics consent
-    if (currentStep === 4 && analyticsConsent !== null) {
+    // Provider step: Must validate before proceeding
+    if (currentStepName === 'provider' && validationStatus !== 'valid') {
+      return;
+    }
+
+    // Directory step: Save analytics consent
+    if (currentStepName === 'directory' && analyticsConsent !== null) {
       try {
         // Always generate UUID if it doesn't exist (regardless of consent choice)
         const profile = await window.levante.profile.get();
@@ -173,7 +220,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
       }
     }
 
-    if (currentStep < TOTAL_STEPS) {
+    if (currentStep < totalSteps) {
       setCurrentStep(currentStep + 1);
     } else {
       // Complete wizard and navigate to chat
@@ -425,11 +472,25 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
     }
   };
 
+  const handlePlatformLoginSuccess = () => {
+    setChosenMode('platform');
+    // Auto-advance past mode selection step
+    setCurrentStep(3); // Goes to MCP step in platform flow
+  };
+
+  const handleStandaloneSelect = async () => {
+    setChosenMode('standalone');
+    await setStandaloneMode();
+    // Auto-advance past mode selection step
+    setCurrentStep(3); // Goes to Provider step in standalone flow
+  };
+
   const handleComplete = async () => {
     try {
       // Complete wizard
+      const provider = chosenMode === 'platform' ? 'levante-platform' : selectedProvider;
       await window.levante.wizard.complete({
-        provider: selectedProvider,
+        provider,
         timestamp: new Date().toISOString(),
         version: '1.0.0',
       });
@@ -447,19 +508,23 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   };
 
   const getNextButtonLabel = () => {
-    if (currentStep === TOTAL_STEPS) {
+    if (currentStep === totalSteps) {
       return 'Start Using Levante';
     }
     return 'Next';
   };
 
   const isNextDisabled = () => {
-    // Step 3 (Provider) requires validation and model selection
-    if (currentStep === 3) {
+    // Mode selection step: handled by callbacks, Next button not shown
+    if (currentStepName === 'modeSelection') {
+      return true;
+    }
+    // Provider step: requires validation and model selection
+    if (currentStepName === 'provider') {
       return !selectedProvider || validationStatus !== 'valid' || !selectedModel;
     }
-    // Step 4 (Directory) requires analytics consent selection
-    if (currentStep === 4) {
+    // Directory step: requires analytics consent selection
+    if (currentStepName === 'directory') {
       return analyticsConsent === null;
     }
     return false;
@@ -468,21 +533,27 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   return (
     <WizardStep
       currentStep={currentStep}
-      totalSteps={TOTAL_STEPS}
+      totalSteps={totalSteps}
       onNext={handleNext}
       onBack={handleBack}
       nextLabel={getNextButtonLabel()}
       nextDisabled={isNextDisabled()}
     >
-      {currentStep === 1 && (
+      {currentStepName === 'welcome' && (
         <WelcomeStep
           selectedLanguage={selectedLanguage}
           detectedLanguage={detectedLanguage}
           onLanguageChange={handleLanguageChange}
         />
       )}
-      {currentStep === 2 && <McpStep />}
-      {currentStep === 3 && (
+      {currentStepName === 'modeSelection' && (
+        <ModeSelectionStep
+          onPlatformLogin={handlePlatformLoginSuccess}
+          onStandaloneSelect={handleStandaloneSelect}
+          isPlatformConnected={isPlatformConnected}
+        />
+      )}
+      {currentStepName === 'provider' && (
         <ProviderStep
           selectedProvider={selectedProvider}
           apiKey={apiKey}
@@ -499,15 +570,21 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
           onOAuthSuccess={handleOAuthSuccess}
         />
       )}
-      {currentStep === 4 && (
+      {currentStepName === 'mcp' && <McpStep />}
+      {currentStepName === 'directory' && (
         <DirectoryStep
           analyticsConsent={analyticsConsent}
           onAnalyticsConsentChange={setAnalyticsConsent}
         />
       )}
-      {currentStep === 5 && (
+      {currentStepName === 'completion' && (
         <CompletionStep
-          providerName={PROVIDER_NAMES[selectedProvider] || selectedProvider}
+          providerName={
+            chosenMode === 'platform'
+              ? 'Levante Platform'
+              : PROVIDER_NAMES[selectedProvider] || selectedProvider
+          }
+          appMode={chosenMode === 'platform' ? 'platform' : 'standalone'}
         />
       )}
     </WizardStep>

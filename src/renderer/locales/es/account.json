@@ -1,0 +1,12 @@
+{
+  "title": "Levante Platform",
+  "description": "Detalles de tu cuenta y suscripción",
+  "org_label": "Org: {{orgId}}",
+  "manage_plan": "Gestionar plan",
+  "log_out": "Cerrar sesión",
+  "models_title": "Modelos disponibles",
+  "models_description": "Modelos incluidos en tu plan ({{count}})",
+  "no_models": "No hay modelos disponibles. Intenta actualizar o revisa tu plan.",
+  "logout_confirm_title": "¿Cerrar sesión de Levante Platform?",
+  "logout_confirm_description": "Cambiarás al modo manual, donde tendrás que configurar tus propias claves de API (OpenRouter, OpenAI, Anthropic, etc.) para usar modelos de IA. Siempre puedes volver a iniciar sesión desde la página de Modelos."
+}

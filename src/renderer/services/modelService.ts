@@ -11,7 +11,6 @@ import { fetchAnthropicModels } from './model/providers/anthropicProvider';
 import { fetchGroqModels } from './model/providers/groqProvider';
 import { fetchXAIModels } from './model/providers/xAIProvider';
 import { fetchHuggingFaceModels } from './model/providers/huggingfaceProvider';
-import { fetchLevantePlatformModels } from './model/providers/levanteProvider';
 import { classifyModel, getCompatibleCategories, type ModelClassification } from '../../utils/modelClassification';
 
 const logger = getRendererLogger();
@@ -90,16 +89,6 @@ class ModelServiceImpl {
         isActive: false,
         settings: {},
         modelSource: 'dynamic'
-      },
-      {
-        id: 'levante-platform',
-        name: 'Levante Platform',
-        type: 'levante-platform',
-        models: [],
-        isActive: false,
-        settings: {},
-        modelSource: 'dynamic',
-        baseUrl: 'http://localhost:3000'
       },
       {
         id: 'vercel-gateway',
@@ -195,16 +184,6 @@ class ModelServiceImpl {
         isActive: false,
         settings: {},
         modelSource: 'dynamic'
-      },
-      {
-        id: 'levante-platform',
-        name: 'Levante Platform',
-        type: 'levante-platform',
-        models: [],
-        isActive: false,
-        settings: {},
-        modelSource: 'dynamic',
-        baseUrl: 'https://platform.levante.ai'
       },
       {
         id: 'vercel-gateway',
@@ -364,8 +343,8 @@ class ModelServiceImpl {
     // Only sync providers that have API keys configured to avoid empty results
     const now = Date.now();
     this.providers.forEach(provider => {
-      // Skip providers without API key (except openrouter which works without key, and levante-platform which uses OAuth)
-      const hasCredentials = provider.apiKey || provider.type === 'openrouter' || provider.type === 'levante-platform';
+      // Skip providers without API key (except openrouter which works without key)
+      const hasCredentials = provider.apiKey || provider.type === 'openrouter';
 
       if (provider.modelSource === 'dynamic' &&
         hasCredentials &&
@@ -549,12 +528,6 @@ class ModelServiceImpl {
       switch (provider.type) {
         case 'openrouter':
           models = await fetchOpenRouterModels(provider.apiKey);
-          break;
-        case 'levante-platform':
-          // Levante Platform uses OAuth tokens, not API keys
-          // The fetch function will get the token from the OAuth store
-          // Pass baseUrl for local development override
-          models = await fetchLevantePlatformModels(provider.baseUrl);
           break;
         case 'vercel-gateway':
           if (provider.apiKey && provider.baseUrl) {

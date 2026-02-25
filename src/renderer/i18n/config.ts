@@ -11,6 +11,7 @@ import enWizard from '../locales/en/wizard.json';
 import enMCP from '../locales/en/mcp.json';
 import enErrors from '../locales/en/errors.json';
 import enLogs from '../locales/en/logs.json';
+import enAccount from '../locales/en/account.json';
 
 import esCommon from '../locales/es/common.json';
 import esSettings from '../locales/es/settings.json';
@@ -20,6 +21,7 @@ import esWizard from '../locales/es/wizard.json';
 import esMCP from '../locales/es/mcp.json';
 import esErrors from '../locales/es/errors.json';
 import esLogs from '../locales/es/logs.json';
+import esAccount from '../locales/es/account.json';
 
 const resources = {
   en: {
@@ -31,6 +33,7 @@ const resources = {
     mcp: enMCP,
     errors: enErrors,
     logs: enLogs,
+    account: enAccount,
   },
   es: {
     common: esCommon,
@@ -41,6 +44,7 @@ const resources = {
     mcp: esMCP,
     errors: esErrors,
     logs: esLogs,
+    account: esAccount,
   },
 };
 

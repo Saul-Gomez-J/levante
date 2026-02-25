@@ -10,9 +10,12 @@ import {
   RuntimesSection,
   MCPSection
 } from '@/components/settings';
+import { usePlatformStore } from '@/stores/platformStore';
 
 const SettingsPage = () => {
   const [developerMode, setDeveloperMode] = useState(false);
+  const appMode = usePlatformStore((s) => s.appMode);
+  const isPlatformMode = appMode === 'platform';
 
   useEffect(() => {
     const loadMode = async () => {
@@ -39,7 +42,7 @@ const SettingsPage = () => {
       <div className="max-w-4xl mx-auto space-y-6 px-4 mb-10">
         <PersonalizationSection />
         <AppearanceSection />
-        <SecuritySection />
+        {!isPlatformMode && <SecuritySection />}
         <PrivacySection />
         <AIConfigSection />
         <ReasoningSection />

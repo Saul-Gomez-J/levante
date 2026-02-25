@@ -2,10 +2,9 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ExternalLink, RefreshCw, CheckCircle2, XCircle } from 'lucide-react';
+import { ExternalLink, RefreshCw } from 'lucide-react';
 import { useModelStore } from '@/stores/modelStore';
 import { useOpenRouterOAuth } from '@/hooks/useOpenRouterOAuth';
-import { useLevantePlatformOAuth } from '@/hooks/useLevantePlatformOAuth';
 import type { ProviderConfig } from '../../../types/models';
 import { useTranslation } from 'react-i18next';
 
@@ -99,117 +98,6 @@ export const OpenRouterConfig = ({ provider }: { provider: ProviderConfig }) => 
         <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
         {t('models.sync')}
       </Button>
-    </div>
-  );
-};
-
-export const LevantePlatformConfig = ({ provider }: { provider: ProviderConfig }) => {
-  const { t } = useTranslation('models');
-  const { syncProviderModels, syncing, updateProvider } = useModelStore();
-  const [baseUrl, setBaseUrl] = React.useState(provider.baseUrl || 'https://platform.levante.ai');
-
-  // Sync local state when provider changes
-  React.useEffect(() => {
-    setBaseUrl(provider.baseUrl || 'https://platform.levante.ai');
-  }, [provider.baseUrl]);
-
-  // OAuth hook using RFC 8414 Discovery
-  // Pass baseUrl for local development
-  const {
-    isAuthenticating,
-    isConnected,
-    initiateOAuthFlow,
-    disconnectOAuth,
-  } = useLevantePlatformOAuth({
-    baseUrl,
-    onSuccess: () => {
-      // Sync models after successful OAuth
-      syncProviderModels(provider.id);
-    }
-  });
-
-  const handleSaveBaseUrl = async () => {
-    await updateProvider(provider.id, { baseUrl });
-  };
-
-  const handleSync = () => {
-    syncProviderModels(provider.id);
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Base URL Configuration - for local development */}
-      <div className="space-y-2">
-        <Label htmlFor="levante-url">{t('base_url.label', 'Base URL')}</Label>
-        <div className="flex gap-2">
-          <Input
-            id="levante-url"
-            type="url"
-            value={baseUrl}
-            onChange={(e) => setBaseUrl(e.target.value)}
-          />
-          <Button onClick={handleSaveBaseUrl} variant="outline">{t('stats.save', 'Save')}</Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          {t('base_url.help_levante', 'Use http://localhost:3000 for local development')}
-        </p>
-      </div>
-
-      {/* OAuth Status */}
-      <div className="flex items-center gap-2 text-sm">
-        {isConnected ? (
-          <>
-            <CheckCircle2 className="w-4 h-4 text-green-500" />
-            <span className="text-green-600 dark:text-green-400">
-              {t('oauth.connected', 'Connected')}
-            </span>
-          </>
-        ) : (
-          <>
-            <XCircle className="w-4 h-4 text-muted-foreground" />
-            <span className="text-muted-foreground">
-              {t('oauth.not_connected', 'Not connected')}
-            </span>
-          </>
-        )}
-      </div>
-
-      {/* OAuth Login/Disconnect Button */}
-      <div className="space-y-3">
-        {isConnected ? (
-          <Button
-            onClick={disconnectOAuth}
-            disabled={isAuthenticating}
-            className="w-full h-11"
-            variant="outline"
-          >
-            {isAuthenticating ? t('oauth.disconnecting', 'Disconnecting...') : t('oauth.disconnect', 'Disconnect')}
-          </Button>
-        ) : (
-          <>
-            <Button
-              onClick={initiateOAuthFlow}
-              disabled={isAuthenticating}
-              className="w-full h-11"
-              variant="default"
-            >
-              <ExternalLink className="w-4 h-4 mr-2" />
-              {isAuthenticating ? t('oauth.waiting') : t('oauth.sign_in_levante', 'Sign in with Levante Platform')}
-            </Button>
-            <p className="text-xs text-center text-muted-foreground">
-              {t('oauth.connect_message_levante', 'Connect your Levante Platform account to access AI models')}
-            </p>
-          </>
-        )}
-      </div>
-
-      {/* Sync Button - only show when connected */}
-      {isConnected && (
-        <Button onClick={handleSync} disabled={syncing} variant="outline" className="w-full">
-          <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-          {t('models.sync')}
-        </Button>
-      )}
     </div>
   );
 };

@@ -5,6 +5,34 @@
 
 import type { LastSeenAnnouncements } from './announcement';
 
+/**
+ * Application mode
+ * - 'platform': Authenticated with Levante Platform, only platform models
+ * - 'standalone': User configures their own providers with API keys
+ * - null/undefined: Not yet chosen (first run)
+ */
+export type AppMode = 'platform' | 'standalone';
+
+/**
+ * Levante Platform authenticated user info
+ * Extracted from the JWT access token
+ */
+export interface PlatformUser {
+  email?: string;
+  sub?: string;
+  orgId?: string;
+  teamId?: string;
+}
+
+/**
+ * Platform status returned by PlatformService.getStatus()
+ */
+export interface PlatformStatus {
+  isAuthenticated: boolean;
+  user: PlatformUser | null;
+  allowedModels: string[];
+}
+
 export interface UserProfile {
   /**
    * Wizard completion status
@@ -48,6 +76,17 @@ export interface UserProfile {
    * Analytics consent and tracking
    */
   analytics?: AnalyticsConsent;
+
+  /**
+   * Application mode: 'platform' or 'standalone'
+   * Determines how the app operates (platform auth vs own API keys)
+   */
+  appMode?: AppMode;
+
+  /**
+   * Levante Platform user info (only set in platform mode)
+   */
+  platformUser?: PlatformUser;
 }
 
 /**

@@ -76,6 +76,15 @@
   "links": {
     "vercel_dashboard": "Vercel Dashboard"
   },
+  "platform": {
+    "title": "Levante Platform",
+    "sign_in": "Sign in",
+    "signing_in": "Signing in...",
+    "sign_in_description": "Sign in to access AI models without configuring API keys",
+    "welcome_title": "Welcome to Levante Platform!",
+    "welcome_description": "You're now connected. Your models and account are ready to use.",
+    "welcome_go_to_account": "Go to Account"
+  },
   "free_model_warning": {
     "title": "Free Model Privacy Notice",
     "description_1": "When you use a free model on OpenRouter, your prompts and completions may be shared with the provider team and published to public datasets.",

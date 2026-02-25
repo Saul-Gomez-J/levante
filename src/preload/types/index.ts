@@ -1,6 +1,6 @@
 import { UIMessage } from 'ai';
 import type { LogCategory, LogLevel, LogContext } from '../../main/types/logger';
-import type { UserProfile, WizardCompletionData } from '../../types/userProfile';
+import type { UserProfile, WizardCompletionData, AppMode, PlatformUser, PlatformStatus } from '../../types/userProfile';
 import type { ValidationResult, ProviderValidationConfig } from '../../types/wizard';
 
 export interface ChatRequest {
@@ -201,6 +201,9 @@ export type {
   LogContext,
   UserProfile,
   WizardCompletionData,
+  AppMode,
+  PlatformUser,
+  PlatformStatus,
   ValidationResult,
   ProviderValidationConfig,
 };

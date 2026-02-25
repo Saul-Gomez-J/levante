@@ -8,15 +8,31 @@ import type { LanguageModel } from "ai";
 import type { ProviderConfig } from "../../../types/models";
 import { getLogger } from '../logging';
 import { getOAuthService } from '../oauth';
+import { userProfileService } from '../userProfileService';
+import { platformService } from '../platformService';
 
 const logger = getLogger();
 
 /**
  * Resolve and configure the AI model provider for a given model ID
  * Handles all provider types: OpenRouter, Vercel Gateway, Local, and Cloud providers
+ *
+ * In platform mode, always routes to Levante Platform regardless of provider config.
  */
 export async function getModelProvider(modelId: string): Promise<LanguageModel> {
   try {
+    // Platform mode shortcut: always use Levante Platform
+    const profile = await userProfileService.getProfile();
+    if (profile.appMode === 'platform') {
+      const isAuth = await platformService.isAuthenticated();
+      if (isAuth) {
+        logger.aiSdk.info("Platform mode: routing to Levante Platform", { modelId });
+        return await configureLevantePlatformDirect(modelId);
+      }
+      throw new Error("Levante Platform session expired. Please log in again.");
+    }
+
+    // Standalone mode: standard multi-provider resolution
     // Get providers configuration from preferences via IPC
     const { preferencesService } = await import("../preferencesService");
 
@@ -400,13 +416,43 @@ function configureHuggingFace(provider: ProviderConfig, modelId: string) {
 }
 
 /**
- * Configure Levante Platform provider
+ * Configure Levante Platform directly (platform mode)
+ * Uses PlatformService to get the access token
+ */
+async function configureLevantePlatformDirect(modelId: string) {
+  const accessToken = await platformService.getAccessToken();
+
+  if (!accessToken) {
+    throw new Error(
+      "Levante Platform not authorized. Please log in again."
+    );
+  }
+
+  const baseUrl = "http://localhost:3000";
+  const apiBaseUrl = `${baseUrl}/api/v1`;
+
+  logger.aiSdk.debug("Creating Levante Platform provider (platform mode)", {
+    modelId,
+    baseURL: apiBaseUrl,
+  });
+
+  const levantePlatform = createOpenAICompatible({
+    name: "levante-platform",
+    apiKey: accessToken,
+    baseURL: apiBaseUrl,
+  });
+
+  return levantePlatform(modelId);
+}
+
+/**
+ * Configure Levante Platform provider (standalone/legacy)
  * Uses OAuth tokens instead of API keys
  */
 async function configureLevantePlatform(provider: ProviderConfig, modelId: string) {
   const LEVANTE_PLATFORM_SERVER_ID = "levante-platform";
   // Use baseUrl from provider config, fallback to production URL
-  const baseUrl = provider.baseUrl || "https://platform.levante.ai";
+  const baseUrl = provider.baseUrl || "http://localhost:3000";
   const apiBaseUrl = `${baseUrl}/api/v1`;
 
   // Get OAuth tokens

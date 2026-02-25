@@ -384,7 +384,7 @@ export class ModelFetchService {
   // Uses OAuth tokens instead of API keys
   static async fetchLevantePlatformModels(baseUrl?: string): Promise<any[]> {
     const LEVANTE_PLATFORM_SERVER_ID = "levante-platform";
-    const effectiveBaseUrl = baseUrl || "https://platform.levante.ai";
+    const effectiveBaseUrl = baseUrl || "http://localhost:3000";
 
     try {
       // Get OAuth service and check for valid tokens

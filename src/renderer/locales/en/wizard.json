@@ -114,6 +114,19 @@
       "connect_message": "Connect your account securely with one click"
     }
   },
+  "modeSelection": {
+    "title": "How do you want to use Levante?",
+    "subtitle": "Choose how you want to access AI models",
+    "recommended": "Recommended",
+    "platformDescription": "Sign in with your Levante account. Access all models included in your plan with no API keys needed.",
+    "connected": "Connected",
+    "continue": "Continue",
+    "connecting": "Connecting...",
+    "signIn": "Sign in with Levante",
+    "standalone": "Use your own API keys",
+    "standaloneDescription": "Configure providers like OpenRouter, OpenAI, Anthropic, and more with your own API keys.",
+    "configureKeys": "Configure API keys"
+  },
   "directory": {
     "title": "Your Data Location",
     "subtitle": "All Levante data is stored locally in your home directory",
@@ -141,7 +154,8 @@
       "select_models": "Select models from your provider (we've pre-selected popular ones)",
       "start_chatting": "Start chatting with AI",
       "explore_mcp": "Explore MCP tools in the Tools menu",
-      "customize_settings": "Customize settings to your preference"
+      "customize_settings": "Customize settings to your preference",
+      "start_chatting_platform": "Start chatting with the models available in your plan"
     },
     "tips": {
       "switch_providers": {
@@ -153,6 +167,9 @@
         "description": "for access to different models"
       }
     },
+    "platform_connected": "You're connected to <strong>Levante Platform</strong>",
+    "manage_account_title": "Manage your account",
+    "manage_account_description": "View your models and plan details in the Account page",
     "ready_message": "Ready to experience AI, your way?"
   },
   "steps": {
