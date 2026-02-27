@@ -358,7 +358,9 @@ function buildAnthropicOptions(
 
   const anthropicOptions: Record<string, unknown> = {
     thinking: {
-      enabled: config.mode === 'always' || config.mode === 'adaptive',
+      // Anthropic provider expects a discriminated union:
+      // thinking.type: 'enabled' | 'disabled'
+      type: config.mode === 'always' || config.mode === 'adaptive' ? 'enabled' : 'disabled',
       budgetTokens: config.maxOutputTokens || 4096,
     },
   };

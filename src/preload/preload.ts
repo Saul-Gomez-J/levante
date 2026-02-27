@@ -67,6 +67,7 @@ import { tasksApi } from "./api/tasks";
 import { projectsApi } from "./api/projects";
 import { skillsApi } from "./api/skills";
 import { platformApi } from "./api/platform";
+import { anthropicOAuthApi } from "./api/anthropicOAuth";
 
 // Re-export types for backwards compatibility
 export type {
@@ -253,7 +254,7 @@ export interface LevanteAPI {
       apiKey: string
     ) => Promise<{ success: boolean; data?: any[]; error?: string }>;
     fetchAnthropic: (
-      apiKey: string
+      params: { apiKey?: string; authMode?: 'api-key' | 'oauth' }
     ) => Promise<{ success: boolean; data?: any[]; error?: string }>;
     fetchGroq: (
       apiKey: string
@@ -894,6 +895,18 @@ export interface LevanteAPI {
     }>;
   };
 
+  // Anthropic OAuth API (Claude Max/Pro subscription)
+  anthropicOAuth: {
+    start: (mode: 'max' | 'console') => Promise<{ success: boolean; authUrl?: string; error?: string }>;
+    exchange: (code: string) => Promise<{ success: boolean; error?: string }>;
+    status: () => Promise<{
+      success: boolean;
+      data?: { isConnected: boolean; isExpired: boolean; expiresAt?: number };
+      error?: string;
+    }>;
+    disconnect: () => Promise<{ success: boolean; error?: string }>;
+  };
+
   // Skills API
   skills: {
     getCatalog: () => Promise<import('../types/skills').IPCResult<import('../types/skills').SkillsCatalogResponse>>;
@@ -986,6 +999,9 @@ const api: LevanteAPI = {
 
   // Platform API
   platform: platformApi,
+
+  // Anthropic OAuth API
+  anthropicOAuth: anthropicOAuthApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

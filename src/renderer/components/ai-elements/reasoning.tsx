@@ -64,6 +64,8 @@ export const Reasoning = memo(
     const [startTime, setStartTime] = useState<number | null>(null);
     // Track if streaming ever started (to distinguish live vs historical data)
     const [wasEverStreaming, setWasEverStreaming] = useState(false);
+    // Track if user manually closed to prevent auto-reopen during streaming
+    const [userManuallyClosed, setUserManuallyClosed] = useState(false);
 
     // Track duration when streaming starts and ends
     useEffect(() => {
@@ -81,7 +83,7 @@ export const Reasoning = memo(
     // Auto-open when streaming starts, auto-close when streaming ends (once only)
     // Only auto-close if this component was actually streaming (not historical data)
     useEffect(() => {
-      if (isStreaming && !isOpen) {
+      if (isStreaming && !isOpen && !userManuallyClosed) {
         setIsOpen(true);
       } else if (!isStreaming && isOpen && !defaultOpen && !hasAutoClosedRef && wasEverStreaming) {
         // Add a small delay before closing to allow user to see the content
@@ -91,9 +93,11 @@ export const Reasoning = memo(
         }, AUTO_CLOSE_DELAY);
         return () => clearTimeout(timer);
       }
-    }, [isStreaming, isOpen, defaultOpen, setIsOpen, hasAutoClosedRef, wasEverStreaming]);
+    }, [isStreaming, isOpen, defaultOpen, setIsOpen, hasAutoClosedRef, wasEverStreaming, userManuallyClosed]);
 
     const handleOpenChange = (newOpen: boolean) => {
+      if (!newOpen) setUserManuallyClosed(true);
+      else setUserManuallyClosed(false);
       setIsOpen(newOpen);
     };
 

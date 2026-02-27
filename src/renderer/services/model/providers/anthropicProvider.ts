@@ -6,9 +6,12 @@ const logger = getRendererLogger();
 /**
  * Fetch models from Anthropic API
  */
-export async function fetchAnthropicModels(apiKey: string): Promise<Model[]> {
+export async function fetchAnthropicModels(params: {
+  apiKey?: string;
+  authMode?: 'api-key' | 'oauth';
+}): Promise<Model[]> {
   try {
-    const result = await window.levante.models.fetchAnthropic(apiKey);
+    const result = await window.levante.models.fetchAnthropic(params);
 
     if (!result.success) {
       throw new Error(result.error || "Failed to fetch Anthropic models");

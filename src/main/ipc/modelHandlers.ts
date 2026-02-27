@@ -97,9 +97,9 @@ export function setupModelHandlers() {
 
   // Fetch Anthropic models
   ipcMain.removeHandler('levante/models/anthropic');
-  ipcMain.handle('levante/models/anthropic', async (_, apiKey: string) => {
+  ipcMain.handle('levante/models/anthropic', async (_, params: { apiKey?: string; authMode?: 'api-key' | 'oauth' }) => {
     try {
-      const models = await ModelFetchService.fetchAnthropicModels(apiKey);
+      const models = await ModelFetchService.fetchAnthropicModels(params || {});
       return {
         success: true,
         data: models

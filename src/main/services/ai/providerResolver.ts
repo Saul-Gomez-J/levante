@@ -142,7 +142,7 @@ async function configureProvider(provider: ProviderConfig, modelId: string): Pro
       return configureOpenAI(provider, modelId);
 
     case "anthropic":
-      return configureAnthropic(provider, modelId);
+      return await configureAnthropic(provider, modelId);
 
     case "google":
       return configureGoogle(provider, modelId);
@@ -266,19 +266,45 @@ function configureOpenAI(provider: ProviderConfig, modelId: string) {
 /**
  * Configure Anthropic provider
  */
-function configureAnthropic(provider: ProviderConfig, modelId: string) {
+async function configureAnthropic(provider: ProviderConfig, modelId: string): Promise<LanguageModel> {
+  if (provider.authMode === 'oauth') {
+    const { getAnthropicOAuthService } = await import('../anthropic/AnthropicOAuthService');
+    const oauth = getAnthropicOAuthService();
+
+    const anthropicProvider = createAnthropic({
+      apiKey: 'oauth-placeholder',
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+        const accessToken = await oauth.getValidAccessToken();
+
+        const headers = new Headers(init?.headers);
+        headers.delete('x-api-key');
+        headers.delete('X-Api-Key');
+        headers.set('authorization', `Bearer ${accessToken}`);
+
+        const existingBeta = headers.get('anthropic-beta') || '';
+        const betas = new Set([
+          'oauth-2025-04-20',
+          ...existingBeta.split(',').map(v => v.trim()).filter(Boolean),
+        ]);
+        headers.set('anthropic-beta', Array.from(betas).join(','));
+
+        return fetch(input, { ...init, headers });
+      },
+    });
+
+    return anthropicProvider(modelId);
+  }
+
   if (!provider.apiKey) {
     throw new Error(
-      `Anthropic API key missing for provider ${provider.name}`
+      `Anthropic API key missing for provider ${provider.name}. ` +
+      `Either provide an API key or connect with Claude Max/Pro subscription.`
     );
   }
 
   logger.aiSdk.debug("Creating Anthropic provider", { modelId });
 
-  const anthropicProvider = createAnthropic({
-    apiKey: provider.apiKey,
-  });
-
+  const anthropicProvider = createAnthropic({ apiKey: provider.apiKey });
   return anthropicProvider(modelId);
 }
 

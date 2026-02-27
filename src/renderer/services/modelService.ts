@@ -343,8 +343,11 @@ class ModelServiceImpl {
     // Only sync providers that have API keys configured to avoid empty results
     const now = Date.now();
     this.providers.forEach(provider => {
-      // Skip providers without API key (except openrouter which works without key)
-      const hasCredentials = provider.apiKey || provider.type === 'openrouter';
+      // Skip providers without API key (except openrouter which works without key, and anthropic OAuth)
+      const hasCredentials =
+        provider.type === 'openrouter' ||
+        !!provider.apiKey ||
+        (provider.type === 'anthropic' && provider.authMode === 'oauth');
 
       if (provider.modelSource === 'dynamic' &&
         hasCredentials &&
@@ -550,8 +553,10 @@ class ModelServiceImpl {
           }
           break;
         case 'anthropic':
-          if (provider.apiKey) {
-            models = await fetchAnthropicModels(provider.apiKey);
+          if (provider.authMode === 'oauth') {
+            models = await fetchAnthropicModels({ authMode: 'oauth' });
+          } else if (provider.apiKey) {
+            models = await fetchAnthropicModels({ apiKey: provider.apiKey, authMode: 'api-key' });
           }
           break;
         case 'groq':
