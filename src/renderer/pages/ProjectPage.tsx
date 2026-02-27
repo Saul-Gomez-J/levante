@@ -1,11 +1,15 @@
 import { useState, useEffect } from 'react';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, ArrowUp } from 'lucide-react';
 import { ChatSession, Project } from '../../types/database';
+import { modelService } from '@/services/modelService';
+import { ModelSearchableSelect } from '@/components/ai-elements/model-searchable-select';
+import { usePreference } from '@/hooks/usePreferences';
+import type { Model } from '../../types/models';
 
 interface ProjectPageProps {
   project: Project;
   onSessionSelect: (sessionId: string) => void;
-  onNewSessionInProject: (projectId: string, initialMessage?: string) => void;
+  onNewSessionInProject: (projectId: string, initialMessage?: string, modelId?: string) => void;
 }
 
 function formatDate(timestamp: number): string {
@@ -22,6 +26,11 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject }:
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
 
+  const [availableModels, setAvailableModels] = useState<Model[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [selectedModel, setSelectedModel] = useState<string>('');
+  const [lastUsedModel] = usePreference('lastUsedModel');
+
   useEffect(() => {
     const loadSessions = async () => {
       setLoading(true);
@@ -34,10 +43,25 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject }:
     loadSessions();
   }, [project.id]);
 
+  useEffect(() => {
+    const loadModels = async () => {
+      setModelsLoading(true);
+      const models = await modelService.getAvailableModels();
+      setAvailableModels(models);
+      if (lastUsedModel && models.some((m) => m.id === lastUsedModel)) {
+        setSelectedModel(lastUsedModel);
+      } else {
+        setSelectedModel('');
+      }
+      setModelsLoading(false);
+    };
+    loadModels();
+  }, [lastUsedModel]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim()) return;
-    onNewSessionInProject(project.id, input.trim());
+    if (!input.trim() || !selectedModel) return;
+    onNewSessionInProject(project.id, input.trim(), selectedModel);
   };
 
   return (
@@ -52,18 +76,38 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject }:
         {/* Chat input */}
         <div className="mb-8">
           <form onSubmit={handleSubmit}>
-            <textarea
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder={`Nuevo chat en ${project.name}`}
-              className="w-full rounded-2xl border bg-muted/50 px-4 py-4 text-sm resize-none min-h-[80px] outline-none focus:ring-1 focus:ring-ring"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmit(e as unknown as React.FormEvent);
-                }
-              }}
-            />
+            <div className="rounded-2xl border bg-muted/50 focus-within:ring-1 focus-within:ring-ring">
+              <textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={`Nuevo chat en ${project.name}`}
+                className="w-full px-4 pt-4 pb-2 text-sm resize-none min-h-[80px] bg-transparent outline-none"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e as unknown as React.FormEvent);
+                  }
+                }}
+              />
+              {/* Barra inferior */}
+              <div className="flex items-center justify-between px-3 pb-3">
+                <ModelSearchableSelect
+                  value={selectedModel}
+                  onValueChange={setSelectedModel}
+                  models={availableModels}
+                  loading={modelsLoading}
+                  placeholder="Selecciona un modelo"
+                  className="h-7 text-xs"
+                />
+                <button
+                  type="submit"
+                  disabled={!input.trim() || !selectedModel}
+                  className="rounded-full p-1.5 bg-foreground text-background disabled:opacity-30 disabled:cursor-not-allowed transition-opacity"
+                >
+                  <ArrowUp size={16} />
+                </button>
+              </div>
+            </div>
           </form>
         </div>
 

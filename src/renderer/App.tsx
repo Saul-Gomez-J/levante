@@ -325,7 +325,7 @@ function App() {
     setCurrentPage('project');
   };
 
-  const handleNewSessionInProject = (projectId: string, initialMessage?: string) => {
+  const handleNewSessionInProject = (projectId: string, initialMessage?: string, modelId?: string) => {
     const project = projects.find((p) => p.id === projectId);
     if (project) setSelectedProject(project);
     setCurrentPage('chat');
@@ -334,10 +334,14 @@ function App() {
     }
     // We need a slight delay for the page to render before creating session
     setTimeout(async () => {
-      const models = await modelService.getAvailableModels();
-      const lastUsedResult = await window.levante.preferences.get('lastUsedModel');
-      const lastUsed = lastUsedResult.data as string | undefined;
-      const model = models.some(m => m.id === lastUsed) ? lastUsed : models[0]?.id;
+      let model = modelId;
+      if (!model) {
+        // Fallback: auto-detect model if none provided
+        const models = await modelService.getAvailableModels();
+        const lastUsedResult = await window.levante.preferences.get('lastUsedModel');
+        const lastUsed = lastUsedResult.data as string | undefined;
+        model = models.some(m => m.id === lastUsed) ? lastUsed : models[0]?.id;
+      }
       await createSession('New Chat', model, 'chat', projectId)
     }, 50)
   }
