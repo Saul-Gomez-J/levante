@@ -5,16 +5,17 @@
  * de los servidores detectados en background tasks.
  */
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { X, RefreshCw, ExternalLink, Monitor, Server } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useWebPreviewStore, type DetectedServer } from '@/stores/webPreviewStore';
 import { Badge } from '@/components/ui/badge';
+import { useSidebar } from '@/components/ui/sidebar';
 
 const MIN_PANEL_WIDTH = 320;
 const MIN_CHAT_WIDTH = 300;
-const DEFAULT_PANEL_WIDTH = 480;
+const DEFAULT_PANEL_WIDTH = 640;
 
 function ServerTab({
   server,
@@ -55,6 +56,14 @@ function ServerTab({
 export function WebPreviewPanel() {
   const { servers, isPanelOpen, activeTaskId, closePanel, setActiveServer } =
     useWebPreviewStore();
+
+  const { setOpen: setSidebarOpen } = useSidebar();
+
+  useEffect(() => {
+    if (isPanelOpen) {
+      setSidebarOpen(false);
+    }
+  }, [isPanelOpen, setSidebarOpen]);
 
   const [width, setWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [iframeKey, setIframeKey] = useState(0); // para forzar reload
