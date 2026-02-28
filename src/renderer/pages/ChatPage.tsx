@@ -22,6 +22,8 @@ import {
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/stores/projectStore';
+import { usePlatformStore } from '@/stores/platformStore';
+import { LEVANTE_PLATFORM_URL } from '@/lib/platformConstants';
 import { StreamingProvider, useStreamingContext } from '@/contexts/StreamingContext';
 import { ChatList } from '@/components/chat/ChatList';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
@@ -49,6 +51,7 @@ const logger = getRendererLogger();
 const ChatPage = () => {
   const { t } = useTranslation('chat');
   const { t: tErrors } = useTranslation('errors');
+  const platformUser = usePlatformStore((s) => s.user);
   const [input, setInput] = useState('');
   const [enableMCP, setEnableMCP] = usePreference('enableMCP');
   const [enableSkills, setEnableSkills] = usePreference('enableSkills');
@@ -1060,20 +1063,26 @@ const ChatPage = () => {
             return (
               <div className="p-4 bg-destructive/10 border border-destructive/30 text-destructive text-sm flex items-start justify-between gap-3">
                 <span>{friendlyMessage}</span>
-                {category === 'insufficient_balance' && (
+                {category === 'insufficient_balance' && (() => {
+                  const orgId = platformUser?.orgId;
+                  const billingUrl = orgId
+                    ? `${LEVANTE_PLATFORM_URL}/org/${orgId}/billing`
+                    : `${LEVANTE_PLATFORM_URL}/billing`;
+                  return (
+                    <button
+                      type="button"
+                      className="shrink-0 underline underline-offset-2 hover:opacity-80 transition-opacity whitespace-nowrap"
+                      onClick={() => window.levante.openExternal(billingUrl)}
+                    >
+                      {t('manage_balance')}
+                    </button>
+                  );
+                })()}
+                {category === 'unauthorized' && (
                   <button
                     type="button"
                     className="shrink-0 underline underline-offset-2 hover:opacity-80 transition-opacity whitespace-nowrap"
-                    onClick={() => window.levante.openExternal('http://localhost:3000/billing')}
-                  >
-                    {t('manage_balance')}
-                  </button>
-                )}
-                {(category === 'unauthorized') && (
-                  <button
-                    type="button"
-                    className="shrink-0 underline underline-offset-2 hover:opacity-80 transition-opacity whitespace-nowrap"
-                    onClick={() => window.levante.openExternal('http://localhost:3000')}
+                    onClick={() => window.levante.openExternal(LEVANTE_PLATFORM_URL)}
                   >
                     {t('sign_in_again')}
                   </button>

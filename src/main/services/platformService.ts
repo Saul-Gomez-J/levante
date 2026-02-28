@@ -17,7 +17,7 @@ import type { PlatformUser, PlatformStatus } from '../../types/userProfile';
 const logger = getLogger();
 
 const LEVANTE_PLATFORM_SERVER_ID = 'levante-platform';
-const LEVANTE_PLATFORM_DEFAULT_URL = 'http://localhost:3000';
+const LEVANTE_PLATFORM_DEFAULT_URL = process.env.LEVANTE_PLATFORM_URL || 'http://localhost:3000';
 
 interface JWTPayload {
   sub?: string;
