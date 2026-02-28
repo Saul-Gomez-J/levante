@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -52,9 +52,8 @@ export function LogViewerTable({ entries, scrollRef }: LogViewerTableProps) {
         </TableHeader>
         <TableBody>
           {entries.map((entry) => (
-            <>
+            <React.Fragment key={entry.id}>
               <TableRow
-                key={entry.id}
                 className="cursor-pointer hover:bg-muted/50"
                 onClick={() => {
                   if (entry.context && Object.keys(entry.context).length > 0) {
@@ -105,7 +104,7 @@ export function LogViewerTable({ entries, scrollRef }: LogViewerTableProps) {
                   </TableCell>
                 </TableRow>
               )}
-            </>
+            </React.Fragment>
           ))}
         </TableBody>
       </Table>

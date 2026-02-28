@@ -229,6 +229,11 @@ export const useLogViewerStore = create<LogViewerState>()(
               : entry.timestamp,
           };
 
+          // Skip duplicate entries (can happen when loadRecent overlaps with onNewEntry)
+          if (state.entries.some((e) => e.id === normalizedEntry.id)) {
+            return state;
+          }
+
           const newEntries = [...state.entries, normalizedEntry];
 
           // Circular buffer: keep only last N entries
