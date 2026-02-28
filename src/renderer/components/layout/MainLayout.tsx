@@ -13,7 +13,7 @@ import {
   SidebarTrigger,
   useSidebar
 } from '@/components/ui/sidebar'
-import { MessageSquare, Settings, User, Bot, Store, Plus, PanelLeftClose, PanelLeft, FileText } from 'lucide-react'
+import { MessageSquare, Settings, User, Bot, Store, Plus, PanelLeftClose, PanelLeft, FileText, LogOut } from 'lucide-react'
 import { getRendererLogger } from '@/services/logger'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
@@ -40,7 +40,12 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
   const { t } = useTranslation('common')
   const appMode = usePlatformStore((s) => s.appMode)
   const platformUser = usePlatformStore((s) => s.user)
+  const platformLogout = usePlatformStore((s) => s.logout)
   const isPlatformMode = appMode === 'platform'
+
+  const userInitials = platformUser?.email
+    ? platformUser.email.slice(0, 2).toUpperCase()
+    : '?'
 
   return (
     <>
@@ -143,15 +148,26 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
             </SidebarMenuItem>
           )}
         </SidebarMenu>
-          {isPlatformMode && platformUser?.email && (
-            <div className="border-t pt-2 px-3">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
-                <User className="w-3 h-3 shrink-0" />
-                <span className="truncate">{platformUser.email}</span>
+          <div className="border-t pt-2 px-2 space-y-1">
+            {isPlatformMode && platformUser?.email && (
+              <div className="flex items-center gap-2 px-1 py-1.5 rounded-md hover:bg-muted/50 group">
+                <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/15 text-primary text-[11px] font-semibold shrink-0">
+                  {userInitials}
+                </div>
+                <span className="flex-1 text-xs text-muted-foreground truncate">
+                  {platformUser.email}
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="w-6 h-6 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                  title={t('actions.log_out', 'Log out')}
+                  onClick={platformLogout}
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                </Button>
               </div>
-            </div>
-          )}
-          <div className={`${isPlatformMode && platformUser?.email ? 'pt-1' : 'border-t pt-2'} px-2`}>
+            )}
             <Button
               onClick={() => window.levante.openExternal('https://www.levanteapp.com/feedback')}
               variant="outline"
