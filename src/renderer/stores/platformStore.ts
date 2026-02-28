@@ -111,20 +111,19 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
       set({
         appMode: 'platform',
         isAuthenticated: true,
+        isLoading: false,
         user: status.user,
         allowedModels: status.allowedModels,
       });
 
-      // Fetch full model metadata
-      await get().fetchModels();
+      // Fetch full model metadata in background (no await — unblocks welcome modal)
+      get().fetchModels();
     } catch (error) {
       logger.core.error( 'Platform login failed', {
         error: error instanceof Error ? error.message : error,
       });
-      set({ error: error instanceof Error ? error.message : 'Login failed' });
+      set({ isLoading: false, error: error instanceof Error ? error.message : 'Login failed' });
       throw error;
-    } finally {
-      set({ isLoading: false });
     }
   },
 

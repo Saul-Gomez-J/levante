@@ -31,6 +31,7 @@ export class OAuthRedirectServer {
     private resolveCallback?: (value: AuthorizationCallback) => void;
     private rejectCallback?: (error: Error) => void;
     private timeoutHandle?: NodeJS.Timeout;
+    private activeSockets = new Set<net.Socket>();
 
     private readonly DEFAULT_CONFIG: Required<LoopbackServerConfig> = {
         port: OAUTH_LOOPBACK_PORT, // Puerto fijo
@@ -96,6 +97,12 @@ export class OAuthRedirectServer {
             // Crear servidor HTTP
             this.server = http.createServer((req, res) => {
                 this.handleRequest(req, res, finalConfig.callbackPath);
+            });
+
+            // Track active sockets for force-close on stop()
+            this.server.on('connection', (socket: net.Socket) => {
+                this.activeSockets.add(socket);
+                socket.once('close', () => this.activeSockets.delete(socket));
             });
 
             // Iniciar servidor
@@ -170,11 +177,21 @@ export class OAuthRedirectServer {
     }
 
     /**
-     * Detiene el servidor
+     * Detiene el servidor, destruyendo sockets keep-alive tras 150ms
+     * para no bloquear el token exchange esperando que el browser cierre conexiones.
      */
     async stop(): Promise<void> {
         if (this.server) {
             this.logger.oauth.info('Stopping OAuth redirect server');
+
+            // Allow the success HTML response to reach the browser before closing
+            await new Promise<void>((resolve) => setTimeout(resolve, 150));
+
+            // Force-destroy any lingering keep-alive sockets so server.close() resolves immediately
+            for (const socket of this.activeSockets) {
+                socket.destroy();
+            }
+            this.activeSockets.clear();
 
             await new Promise<void>((resolve) => {
                 this.server!.close(() => {
