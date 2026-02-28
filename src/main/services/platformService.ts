@@ -23,8 +23,18 @@ interface JWTPayload {
   sub?: string;
   email?: string;
   allowed_models?: string[];
+  // Direct claims (legacy / future)
   org_id?: string;
   team_id?: string;
+  // Supabase stores custom server-side data in app_metadata
+  app_metadata?: {
+    org_id?: string;
+    organization_id?: string;
+    team_id?: string;
+    allowed_models?: string[];
+    [key: string]: unknown;
+  };
+  user_metadata?: Record<string, unknown>;
   exp?: number;
   iat?: number;
 }
@@ -238,7 +248,41 @@ class PlatformService {
   }
 
   /**
-   * Decode JWT and update user profile with platform info
+   * Fetch user profile from platform API to get org info not present in the JWT.
+   * Calls GET /api/v1/me — fails silently so login/status are never blocked.
+   */
+  private async fetchUserProfile(baseUrl: string): Promise<{ orgId?: string } | null> {
+    try {
+      const authHeaders = await this.getAuthHeaders();
+      const response = await safeFetch(`${baseUrl}/api/v1/me`, {
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      });
+
+      if (!response.ok) {
+        logger.oauth.debug('Platform /api/v1/me returned non-ok status', { status: response.status });
+        return null;
+      }
+
+      const data = await response.json();
+      // Support common shapes: { org_id }, { organization_id }, { org: { id } }
+      const orgId: string | undefined =
+        data.org_id
+        || data.organization_id
+        || data.org?.id;
+
+      logger.oauth.info('Fetched user profile from platform API', { orgId });
+      return { orgId };
+    } catch (error) {
+      logger.oauth.debug('Failed to fetch platform user profile', {
+        error: error instanceof Error ? error.message : error,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Decode JWT and update user profile with platform info.
+   * Falls back to /api/v1/me when org_id is absent from the JWT.
    */
   private async decodeTokenAndUpdateProfile(): Promise<PlatformStatus> {
     const accessToken = await this.getAccessToken();
@@ -249,14 +293,35 @@ class PlatformService {
 
     const decoded = this.decodeJWT(accessToken);
 
+    // org_id may be a direct claim or nested inside app_metadata (Supabase pattern)
+    let orgId = decoded.org_id
+      || decoded.app_metadata?.org_id
+      || decoded.app_metadata?.organization_id;
+
+    const teamId = decoded.team_id || decoded.app_metadata?.team_id;
+
+    // If org_id is not in the JWT, fetch it from the platform API (once per session)
+    if (!orgId) {
+      const profile = await this.fetchUserProfile(LEVANTE_PLATFORM_DEFAULT_URL);
+      orgId = profile?.orgId;
+    }
+
+    logger.oauth.info('Platform user resolved', {
+      sub: decoded.sub,
+      email: decoded.email,
+      orgId,
+    });
+
     const user: PlatformUser = {
       email: decoded.email,
       sub: decoded.sub,
-      orgId: decoded.org_id,
-      teamId: decoded.team_id,
+      orgId,
+      teamId,
     };
 
-    const allowedModels = decoded.allowed_models || [];
+    const allowedModels = decoded.allowed_models
+      || decoded.app_metadata?.allowed_models
+      || [];
 
     // Cache locally
     this.cachedUser = user;
