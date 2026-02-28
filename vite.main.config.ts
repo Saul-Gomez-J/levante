@@ -1,6 +1,4 @@
 import { defineConfig } from 'vite';
-import { resolve } from 'path';
-
 // https://vitejs.dev/config
 export default defineConfig(({ command }) => ({
   define: {
@@ -27,6 +25,9 @@ export default defineConfig(({ command }) => ({
         // Winston must be external - mcp-use's Logger.configure() loads it at runtime
         'winston',
         /^winston\/.*/,
+        'winston-daily-rotate-file',
+        'jwt-decode',
+        'diff',
         // NOTE: mcp-use bundled by Vite, but winston kept external for Logger
       ]
     }
