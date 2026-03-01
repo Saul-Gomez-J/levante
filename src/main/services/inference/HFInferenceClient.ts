@@ -286,8 +286,7 @@ export class HFInferenceClient {
         provider,
       });
 
-      // @ts-ignore SDK type mismatch with options and provider params
-      const blob = await this.client.textToImage({
+      const blob = await (this.client.textToImage as (args: unknown) => Promise<Blob>)({
         model,
         inputs: input.prompt,
         parameters: options,
