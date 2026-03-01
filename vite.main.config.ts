@@ -35,8 +35,6 @@ export default defineConfig(({ command }) => ({
         'winston',
         /^winston\/.*/,
         'winston-daily-rotate-file',
-        'jwt-decode',
-        'diff',
         // NOTE: mcp-use bundled by Vite, but winston kept external for Logger
       ]
     }
