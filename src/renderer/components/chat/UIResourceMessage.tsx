@@ -162,6 +162,8 @@ export function UIResourceMessage({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   // Track if user manually closed fullscreen to prevent widget from reopening it
   const userClosedFullscreenRef = useRef(false);
+  // Track previous displayMode to detect changes for host-context-changed notifications
+  const prevDisplayModeRef = useRef<UIResourceDisplayMode>('inline');
   // Chat overlay expanded state (controlled from here for keyboard shortcut to work)
   const [chatExpanded, setChatExpanded] = useState(false);
 
@@ -396,6 +398,23 @@ export function UIResourceMessage({
     return () => window.removeEventListener('keydown', handleGlobalKeyDown, true);
   }, [displayMode]);
 
+  // Notify MCP Apps widget when displayMode changes (from UI or widget request)
+  useEffect(() => {
+    if (widgetProtocol !== 'mcp-apps') return;
+    if (displayMode === prevDisplayModeRef.current) return;
+    prevDisplayModeRef.current = displayMode;
+
+    const targetWindow = iframeRef.current?.contentWindow;
+    if (targetWindow) {
+      targetWindow.postMessage({
+        jsonrpc: '2.0',
+        method: 'ui/notifications/host-context-changed',
+        params: { displayMode },
+      }, '*');
+      logger.mcp.debug('[MCP Apps] Sent host-context-changed', { displayMode });
+    }
+  }, [displayMode, widgetProtocol]);
+
   // Set up bridge event listeners for both MCP Apps (JSON-RPC 2.0) and OpenAI SDK
   useEffect(() => {
     // Handle both MCP Apps and OpenAI SDK widgets
@@ -489,12 +508,50 @@ export function UIResourceMessage({
           }
 
           case 'ui/display-mode': {
-            // Display mode change request
+            // Display mode change request (notification, no response)
             const mode = params.mode;
             logger.mcp.info('[MCP Apps] Widget requesting display mode', { mode });
             if (mode === 'inline' || mode === 'pip' || mode === 'fullscreen') {
+              if (mode === 'fullscreen' && userClosedFullscreenRef.current) {
+                break;
+              }
               setDisplayMode(mode);
             }
+            break;
+          }
+
+          case 'ui/request-display-mode': {
+            // Display mode change request (JSON-RPC request, expects response)
+            const mode = params.mode;
+            logger.mcp.info('[MCP Apps] Widget requesting display mode change', { mode });
+            if (mode === 'inline' || mode === 'pip' || mode === 'fullscreen') {
+              if (mode === 'fullscreen' && userClosedFullscreenRef.current) {
+                sendResponse({ mode: 'inline' });
+                break;
+              }
+              setDisplayMode(mode);
+              sendResponse({ mode });
+            } else {
+              sendResponse(null, { code: -32602, message: `Invalid display mode: ${mode}` });
+            }
+            break;
+          }
+
+          case 'ui/update-model-context': {
+            // Widget sending context update (e.g. "User edited diagram...")
+            logger.mcp.info('[MCP Apps] Widget updating model context', {
+              content: params.content,
+            });
+            sendResponse({});
+            break;
+          }
+
+          case 'notifications/message': {
+            // Log notification from widget (no response needed)
+            logger.mcp.debug('[MCP Apps] Widget log', {
+              level: params.level,
+              data: params.data,
+            });
             break;
           }
 
@@ -1002,186 +1059,135 @@ export function UIResourceMessage({
     return <UIResourceError error={error} />;
   }
 
-  // Inline mode
-  if (displayMode === 'inline') {
-    // Show loading state while proxy URL is being fetched for widgets that need the proxy
+  // Inline and Fullscreen modes — combined into a single return so the iframe is never
+  // remounted when displayMode changes. React keeps the same DOM element alive as long
+  // as the element type and tree position stay the same.
+  if (displayMode === 'inline' || displayMode === 'fullscreen') {
     const isLoadingProxy = needsWidgetProxy && !widgetProxyUrl;
-
-    return (
-      <div
-        ref={containerRef}
-        className={cn(
-          'relative group rounded-lg overflow-hidden bg-background',
-          'min-h-[100px]',
-          // Add focus styling for keyboard navigation
-          'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
-          className
-        )}
-        // Make container focusable for keyboard navigation
-        tabIndex={0}
-        // Focus the iframe when container is clicked
-        onClick={() => {
-          // Use direct ref for better performance
-          if (iframeRef.current) {
-            iframeRef.current.focus();
-          } else {
-            // Fallback to querySelector
-            const iframe = containerRef.current?.querySelector('iframe');
-            if (iframe) iframe.focus();
-          }
-        }}
-      >
-        {/* Show loading state while proxy URL is being fetched */}
-        {isLoadingProxy ? (
-          <UIResourceLoading />
-        ) : widgetProxyUrl ? (
-          <iframe
-            ref={iframeRef}
-            src={widgetProxyUrl}
-            title="MCP Widget"
-            sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation"
-            allow="fullscreen; autoplay; gamepad; clipboard-read; clipboard-write"
-            allowFullScreen
-            style={{
-              width: '100%',
-              minHeight: '200px',
-              height: '400px',
-              border: 'none',
-            }}
-            onLoad={() => {
-              // Send globals to iframe after it loads
-              if (iframeRef.current?.contentWindow) {
-                const globals = buildGlobals();
-                iframeRef.current.contentWindow.postMessage({
-                  type: 'openai:set_globals',
-                  globals,
-                }, '*');
-                iframeRef.current.focus();
-                logger.mcp.debug('Widget proxy iframe loaded, sent globals', { widgetId });
-              }
-            }}
-          />
-        ) : (
-          <Suspense fallback={<UIResourceLoading />}>
-            <UIResourceRenderer
-              resource={rendererResource}
-              onUIAction={onUIAction}
-              htmlProps={{
-                // Note: For non-Apps SDK widgets, use standard rendering
-                iframeRenderData: {
-                  theme,
-                  locale: typeof navigator !== 'undefined' ? navigator.language : 'en',
-                  // Pass widget data for the HTML template to access
-                  ...widgetData,
-                },
-                // Auto-resize iframe based on content height
-                autoResizeIframe: { height: true },
-                // Allow widget interactivity while maintaining security
-                sandboxPermissions: 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation',
-                style: {
-                  width: '100%',
-                  minHeight: '100px',
-                  border: 'none',
-                },
-                // Pass iframe ref for direct focus control (MCP-UI recommended)
-                iframeProps: {
-                  ref: iframeRef as React.RefObject<HTMLIFrameElement>,
-                  title: 'MCP Widget',
-                },
-              }}
-              remoteDomProps={{
-                library: basicComponentLibrary,
-              }}
-            />
-          </Suspense>
-        )}
-        <WidgetControls mode={displayMode} onModeChange={setDisplayMode} />
-      </div>
-    );
-  }
-
-  // Fullscreen mode
-  if (displayMode === 'fullscreen') {
-    const isLoadingProxy = needsWidgetProxy && !widgetProxyUrl;
+    const isFullscreen = displayMode === 'fullscreen';
     const widgetName = getWidgetName(resource);
 
     return (
-      <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col">
-        {/* Widget content - takes full space */}
+      <>
+        {/* When fullscreen: keep a placeholder in the original chat position so layout
+            doesn't collapse. When inline: this renders nothing (condition is false). */}
+        {isFullscreen && (
+          <div className={cn('relative rounded-lg bg-background min-h-[400px]', className)} />
+        )}
+
         <div
-          className="flex-1 overflow-auto focus-within:ring-2 focus-within:ring-ring min-h-0"
+          ref={containerRef}
+          className={isFullscreen
+            ? 'fixed inset-0 z-50 bg-background/95 backdrop-blur-sm flex flex-col'
+            : cn(
+                'relative group rounded-lg overflow-hidden bg-background',
+                'min-h-[100px]',
+                'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2',
+                className
+              )
+          }
           tabIndex={0}
           onClick={() => {
-            const iframe = document.querySelector('.fixed.inset-0 iframe') as HTMLIFrameElement;
-            if (iframe) iframe.focus();
+            if (iframeRef.current) {
+              iframeRef.current.focus();
+            } else {
+              const iframe = containerRef.current?.querySelector('iframe');
+              if (iframe) iframe.focus();
+            }
           }}
         >
-          {isLoadingProxy ? (
-            <UIResourceLoading />
-          ) : widgetProxyUrl ? (
-            <iframe
-              src={widgetProxyUrl}
-              title="MCP Widget"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation"
-              allow="fullscreen; autoplay; gamepad; clipboard-read; clipboard-write"
-              allowFullScreen
-              style={{
-                width: '100%',
-                height: '100%',
-                border: 'none',
-              }}
-              onLoad={(e) => {
-                const iframe = e.currentTarget;
-                if (iframe.contentWindow) {
-                  const globals = { ...buildGlobals(), displayMode: 'fullscreen' };
-                  iframe.contentWindow.postMessage({
-                    type: 'openai:set_globals',
-                    globals,
-                  }, '*');
-                  iframe.focus();
-                }
-              }}
-            />
-          ) : (
-            <Suspense fallback={<UIResourceLoading />}>
-              <UIResourceRenderer
-                resource={rendererResource}
-                onUIAction={onUIAction}
-                htmlProps={{
-                  iframeRenderData: {
-                    theme,
-                    locale: typeof navigator !== 'undefined' ? navigator.language : 'en',
-                    displayMode: 'fullscreen',
-                    ...widgetData,
-                  },
-                  sandboxPermissions: 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation',
-                  style: {
-                    width: '100%',
-                    height: '100%',
-                    border: 'none',
-                  },
+          {/* Inner wrapper: flex-1 in fullscreen (fills space above chat bar),
+              display:contents in inline (transparent to layout, preserves React tree depth).
+              Keeping the same nesting depth in both modes is what prevents the iframe
+              from being unmounted when display mode changes. */}
+          <div
+            className={isFullscreen
+              ? 'flex-1 overflow-hidden focus-within:ring-2 focus-within:ring-ring min-h-0'
+              : 'contents'
+            }
+          >
+            {isLoadingProxy ? (
+              <UIResourceLoading />
+            ) : widgetProxyUrl ? (
+              <iframe
+                ref={iframeRef}
+                src={widgetProxyUrl}
+                title="MCP Widget"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation"
+                allow="fullscreen; autoplay; gamepad; clipboard-read; clipboard-write"
+                allowFullScreen
+                style={{
+                  width: '100%',
+                  border: 'none',
+                  ...(isFullscreen
+                    ? { height: '100%', display: 'block' }
+                    : { height: '400px', minHeight: '200px' }
+                  ),
                 }}
-                remoteDomProps={{
-                  library: basicComponentLibrary,
+                onLoad={() => {
+                  if (iframeRef.current?.contentWindow) {
+                    const globals = buildGlobals();
+                    iframeRef.current.contentWindow.postMessage({
+                      type: 'openai:set_globals',
+                      globals,
+                    }, '*');
+                    iframeRef.current.focus();
+                    logger.mcp.debug('Widget proxy iframe loaded, sent globals', { widgetId });
+                  }
                 }}
               />
-            </Suspense>
+            ) : (
+              <Suspense fallback={<UIResourceLoading />}>
+                <UIResourceRenderer
+                  resource={rendererResource}
+                  onUIAction={onUIAction}
+                  htmlProps={{
+                    iframeRenderData: {
+                      theme,
+                      locale: typeof navigator !== 'undefined' ? navigator.language : 'en',
+                      ...widgetData,
+                    },
+                    autoResizeIframe: isFullscreen ? undefined : { height: true },
+                    sandboxPermissions: 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals allow-top-navigation-by-user-activation',
+                    style: {
+                      width: '100%',
+                      border: 'none',
+                      ...(isFullscreen
+                        ? { height: '100%' }
+                        : { minHeight: '100px' }
+                      ),
+                    },
+                    iframeProps: !isFullscreen ? {
+                      ref: iframeRef as React.RefObject<HTMLIFrameElement>,
+                      title: 'MCP Widget',
+                    } : undefined,
+                  }}
+                  remoteDomProps={{
+                    library: basicComponentLibrary,
+                  }}
+                />
+              </Suspense>
+            )}
+          </div>
+
+          {/* Mode-specific controls */}
+          {isFullscreen ? (
+            <FullscreenChatInput
+              onSubmit={onSendMessage || onPrompt || (() => {})}
+              onClose={() => {
+                userClosedFullscreenRef.current = true;
+                setDisplayMode('inline');
+              }}
+              widgetName={widgetName}
+              messages={simplifiedMessages}
+              expanded={chatExpanded}
+              onExpandedChange={setChatExpanded}
+            />
+          ) : (
+            <WidgetControls mode={displayMode} onModeChange={setDisplayMode} />
           )}
         </div>
-
-        {/* Bottom bar with chat input, title and close */}
-        <FullscreenChatInput
-          onSubmit={onSendMessage || onPrompt || (() => {})}
-          onClose={() => {
-            userClosedFullscreenRef.current = true;
-            setDisplayMode('inline');
-          }}
-          widgetName={widgetName}
-          messages={simplifiedMessages}
-          expanded={chatExpanded}
-          onExpandedChange={setChatExpanded}
-        />
-      </div>
+      </>
     );
   }
 
