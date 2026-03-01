@@ -291,7 +291,8 @@ if [[ "$AUTO_YES" == "true" ]]; then
 else
   read -r -p "$(echo -e "${BOLD}Proceed with release ${TAG}? [y/N]:${RESET} ")" CONFIRM
   echo ""
-  if [[ "${CONFIRM,,}" != "y" && "${CONFIRM,,}" != "yes" ]]; then
+  CONFIRM_LOWER="$(echo "$CONFIRM" | tr '[:upper:]' '[:lower:]')"
+  if [[ "$CONFIRM_LOWER" != "y" && "$CONFIRM_LOWER" != "yes" ]]; then
     info "Release cancelled."
     exit 0
   fi
@@ -351,7 +352,8 @@ else
   echo ""
 fi
 
-if [[ "${WAIT_CI,,}" != "y" && "${WAIT_CI,,}" != "yes" ]]; then
+WAIT_CI_LOWER="$(echo "$WAIT_CI" | tr '[:upper:]' '[:lower:]')"
+if [[ "$WAIT_CI_LOWER" != "y" && "$WAIT_CI_LOWER" != "yes" ]]; then
   REPO="$(gh repo view --json nameWithOwner -q .nameWithOwner)"
   info "Skipping CI wait. Check status at: https://github.com/${REPO}/actions"
   info "After CI completes, publish the draft release with:"
