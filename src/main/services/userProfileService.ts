@@ -275,6 +275,18 @@ export class UserProfileService {
   }
 
   /**
+   * Delete a key from the user profile store
+   */
+  async deleteKey(key: string): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+
+    this.ensureInitialized();
+    this.store.delete(key);
+  }
+
+  /**
    * Get user profile file path
    */
   async getProfilePath(): Promise<string> {

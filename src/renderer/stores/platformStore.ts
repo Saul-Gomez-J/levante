@@ -12,6 +12,7 @@ import { create } from 'zustand';
 import type { AppMode, PlatformUser, PlatformStatus } from '../../types/userProfile';
 import type { Model } from '../../types/models';
 import { getRendererLogger } from '@/services/logger';
+import { useOAuthStore } from './oauthStore';
 
 const logger = getRendererLogger();
 
@@ -135,6 +136,9 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
       set({ isLoading: true, error: null });
 
       await window.levante.platform.logout();
+
+      // Clear stale OAuth renderer state for the platform server
+      useOAuthStore.getState().clearServerState('levante-platform');
 
       set({
         appMode: 'standalone',

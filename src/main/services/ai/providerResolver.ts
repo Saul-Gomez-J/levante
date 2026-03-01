@@ -454,7 +454,7 @@ async function configureLevantePlatformDirect(modelId: string) {
     );
   }
 
-  const baseUrl = "http://localhost:3000";
+  const baseUrl = process.env.LEVANTE_PLATFORM_URL || "http://localhost:3000";
   const apiBaseUrl = `${baseUrl}/api/v1`;
 
   logger.aiSdk.debug("Creating Levante Platform provider (platform mode)", {

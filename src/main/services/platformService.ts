@@ -77,6 +77,13 @@ class PlatformService {
     // Decode JWT to extract user info and allowedModels
     const status = await this.decodeTokenAndUpdateProfile();
 
+    logger.oauth.info('Platform login - JWT decoded', {
+      email: status.user?.email,
+      sub: status.user?.sub,
+      orgId: status.user?.orgId ?? '(not in JWT — resolved by platform)',
+      teamId: status.user?.teamId,
+      allowedModels: status.allowedModels,
+    });
     logger.oauth.info('Levante Platform login successful', {
       email: status.user?.email,
       modelsCount: status.allowedModels.length,
@@ -105,6 +112,7 @@ class PlatformService {
     await userProfileService.updateProfile({
       appMode: 'standalone',
     });
+    await userProfileService.deleteKey('platformUser');
 
     logger.oauth.info('Levante Platform logout complete');
   }
