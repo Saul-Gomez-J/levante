@@ -21,6 +21,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { User, Mail, Building2, RefreshCw, LogOut, Bot, Loader2, ExternalLink } from 'lucide-react';
+import { LEVANTE_PLATFORM_URL } from '@/lib/platformConstants';
 
 export default function AccountPage() {
   const { t } = useTranslation('account');
@@ -38,7 +39,7 @@ export default function AccountPage() {
   };
 
   const handleOpenPlatform = () => {
-    window.levante.openExternal('http://localhost:3000');
+    window.levante.openExternal(LEVANTE_PLATFORM_URL);
   };
 
   return (
