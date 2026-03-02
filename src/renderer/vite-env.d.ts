@@ -1,5 +1,8 @@
 /// <reference types="vite/client" />
 
+// Build-time constants injected by vite.renderer.config.ts
+declare const __LEVANTE_PLATFORM_URL__: string;
+
 // Declare module types for media assets
 declare module '*.mp4' {
   const src: string;
