@@ -18,7 +18,9 @@ import type {
 
 const logger = getLogger();
 
-const SERVICES_HOST = 'http://localhost:5180';
+import { envConfig } from './envConfig';
+
+const SERVICES_HOST = envConfig.servicesHost;
 const CATALOG_ENDPOINT = '/api/skills.json';
 const BUNDLE_ENDPOINT = (skillId: string) => {
   if (skillId.includes('/')) {
