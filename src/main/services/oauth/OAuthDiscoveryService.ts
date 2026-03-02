@@ -69,12 +69,21 @@ export class OAuthDiscoveryService {
                         metadataUrl,
                     });
 
-                    const response = await fetch(metadataUrl, {
-                        method: 'GET',
-                        headers: {
-                            Accept: 'application/json',
-                        },
-                    });
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+                    let response: Response;
+                    try {
+                        response = await fetch(metadataUrl, {
+                            method: 'GET',
+                            headers: {
+                                Accept: 'application/json',
+                            },
+                            signal: controller.signal,
+                        });
+                    } finally {
+                        clearTimeout(timeoutId);
+                    }
 
                     if (!response.ok) {
                         const errorCode =
@@ -131,7 +140,7 @@ export class OAuthDiscoveryService {
                         lastError = error;
                     } else {
                         lastError = new OAuthDiscoveryError(
-                            'Failed to fetch protected resource metadata',
+                            `Failed to fetch protected resource metadata: ${error instanceof Error ? error.message : String(error)}`,
                             'NETWORK_ERROR',
                             { error, url: metadataUrl }
                         );
@@ -196,7 +205,7 @@ export class OAuthDiscoveryService {
             // Construir URLs candidatas (RFC 8414 con fallback)
             const metadataUrls = this.buildAuthServerMetadataUrls(authServerUrl);
 
-            this.logger.oauth.debug('Fetching authorization server metadata (candidates)', {
+            this.logger.oauth.info('Fetching authorization server metadata (candidates)', {
                 authServerUrl,
                 metadataUrls,
             });
@@ -205,16 +214,25 @@ export class OAuthDiscoveryService {
 
             for (const metadataUrl of metadataUrls) {
                 try {
-                    this.logger.oauth.debug('Attempting authorization server metadata fetch', {
+                    this.logger.oauth.info('Attempting authorization server metadata fetch', {
                         metadataUrl,
                     });
 
-                    const response = await fetch(metadataUrl, {
-                        method: 'GET',
-                        headers: {
-                            Accept: 'application/json',
-                        },
-                    });
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+                    let response: Response;
+                    try {
+                        response = await fetch(metadataUrl, {
+                            method: 'GET',
+                            headers: {
+                                Accept: 'application/json',
+                            },
+                            signal: controller.signal,
+                        });
+                    } finally {
+                        clearTimeout(timeoutId);
+                    }
 
                     if (!response.ok) {
                         const errorCode =
@@ -261,13 +279,13 @@ export class OAuthDiscoveryService {
                         lastError = error;
                     } else {
                         lastError = new OAuthDiscoveryError(
-                            'Failed to fetch authorization server metadata',
+                            `Failed to fetch authorization server metadata: ${error instanceof Error ? error.message : String(error)}`,
                             'NETWORK_ERROR',
                             { error, url: metadataUrl }
                         );
                     }
 
-                    this.logger.oauth.debug('Authorization server metadata fetch attempt failed', {
+                    this.logger.oauth.warn('Authorization server metadata fetch attempt failed', {
                         metadataUrl,
                         error: error instanceof Error ? error.message : error,
                     });
@@ -643,10 +661,19 @@ export class OAuthDiscoveryService {
             resourceUrl,
         });
 
-        const response = await fetch(metadataUrl, {
-            method: 'GET',
-            headers: { Accept: 'application/json' },
-        });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+        let response: Response;
+        try {
+            response = await fetch(metadataUrl, {
+                method: 'GET',
+                headers: { Accept: 'application/json' },
+                signal: controller.signal,
+            });
+        } finally {
+            clearTimeout(timeoutId);
+        }
 
         if (!response.ok) {
             throw new OAuthDiscoveryError(

@@ -7,6 +7,7 @@ import {
   normalizeEndpoint,
 } from "../utils/urlValidator";
 import { getOAuthService } from "./oauth";
+import { envConfig } from "./envConfig";
 
 interface ModelResponse {
   object: string;
@@ -435,7 +436,7 @@ export class ModelFetchService {
   // Uses OAuth tokens instead of API keys
   static async fetchLevantePlatformModels(baseUrl?: string): Promise<any[]> {
     const LEVANTE_PLATFORM_SERVER_ID = "levante-platform";
-    const effectiveBaseUrl = baseUrl || "http://localhost:3000";
+    const effectiveBaseUrl = baseUrl || envConfig.platformUrl;
 
     try {
       // Get OAuth service and check for valid tokens

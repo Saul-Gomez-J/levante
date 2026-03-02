@@ -478,8 +478,8 @@ async function configureLevantePlatformDirect(modelId: string) {
  */
 async function configureLevantePlatform(provider: ProviderConfig, modelId: string) {
   const LEVANTE_PLATFORM_SERVER_ID = "levante-platform";
-  // Use baseUrl from provider config, fallback to production URL
-  const baseUrl = provider.baseUrl || "http://localhost:3000";
+  // Use baseUrl from provider config, fallback to ENV_DEFAULTS platform URL
+  const baseUrl = provider.baseUrl || envConfig.platformUrl;
   const apiBaseUrl = `${baseUrl}/api/v1`;
 
   // Get OAuth tokens

@@ -1,7 +1,11 @@
+import { ENV_DEFAULTS } from '../../shared/envDefaults';
+
 /**
  * Levante Platform base URL.
- * Injected at build time by vite.renderer.config.ts:
- *   - development:  http://localhost:3000  (or LEVANTE_PLATFORM_URL env var)
- *   - production:   https://platform.levanteapp.com  (or LEVANTE_PLATFORM_URL env var)
+ * Resolved at build time by Vite:
+ *   - import.meta.env.DEV = true  → development (pnpm dev)
+ *   - import.meta.env.DEV = false → production  (pnpm make / CI)
  */
-export const LEVANTE_PLATFORM_URL: string = __LEVANTE_PLATFORM_URL__;
+export const LEVANTE_PLATFORM_URL: string = import.meta.env.DEV
+  ? ENV_DEFAULTS.development.LEVANTE_PLATFORM_URL
+  : ENV_DEFAULTS.production.LEVANTE_PLATFORM_URL;
