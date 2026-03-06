@@ -156,26 +156,6 @@ export function ToolsMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-72">
-          {/* Cowork Mode Toggle */}
-          <div
-            className="flex items-center justify-between rounded-sm px-3 py-2 hover:bg-accent cursor-pointer"
-            onClick={() => onCoworkModeChange(!coworkMode)}
-          >
-            <div className="flex items-center gap-2">
-              <Code2 size={16} className="text-muted-foreground" />
-              <span className="text-sm">{t('tools_menu.cowork.label', 'Cowork')}</span>
-              {coworkMode && (
-                <Badge variant="secondary" className={cn("text-xs", coworkModeCwd ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700")}>
-                  {t('tools_menu.cowork.active', 'active')}
-                </Badge>
-              )}
-            </div>
-            <Switch
-              checked={coworkMode}
-              onCheckedChange={onCoworkModeChange}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
           {/* Cowork Directory Selector - only show when cowork is enabled */}
           {coworkMode && (
             <div className="px-3 py-2 space-y-2">

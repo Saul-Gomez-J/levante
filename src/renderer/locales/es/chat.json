@@ -32,6 +32,10 @@
     "greeting_default": "¿Qué tal tu día?",
     "default_user_name": "Usuario"
   },
+  "mode_tabs": {
+    "chat": "Chat",
+    "cowork": "Cowork"
+  },
   "actions": {
     "copy": "Copiar",
     "regenerate": "Regenerar",
