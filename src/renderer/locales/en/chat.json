@@ -32,6 +32,10 @@
     "greeting_default": "How's your day going?",
     "default_user_name": "User"
   },
+  "mode_tabs": {
+    "chat": "Chat",
+    "cowork": "Cowork"
+  },
   "actions": {
     "copy": "Copy",
     "regenerate": "Regenerate",
