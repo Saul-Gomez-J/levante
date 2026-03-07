@@ -1,0 +1,105 @@
+/**
+ * PanelContextBar
+ *
+ * Secondary context line under tabs:
+ * - Server: URL + status
+ * - File: relative path + copy button
+ */
+
+import { Server, FileCode, FileText, Copy } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import type { PanelTab } from '@/stores/sidePanelStore';
+import { useFileBrowserStore } from '@/stores/fileBrowserStore';
+
+interface PanelContextBarProps {
+  tab: PanelTab | undefined;
+}
+
+function normalizePath(input: string): string {
+  return input.replace(/\\/g, '/');
+}
+
+function toRelativePath(filePath: string, workingDirectory: string | null): string {
+  if (!workingDirectory) return filePath;
+
+  const normalizedFile = normalizePath(filePath);
+  const normalizedRoot = normalizePath(workingDirectory).replace(/\/+$/, '');
+
+  if (normalizedFile === normalizedRoot) return '';
+  if (normalizedFile.startsWith(`${normalizedRoot}/`)) {
+    return normalizedFile.slice(normalizedRoot.length + 1);
+  }
+
+  return filePath;
+}
+
+export function PanelContextBar({ tab }: PanelContextBarProps) {
+  const workingDirectory = useFileBrowserStore((state) => state.workingDirectory);
+
+  if (!tab) return null;
+
+  switch (tab.type) {
+    case 'server':
+      return (
+        <div className="flex items-center gap-2 px-2 py-1 border-b bg-muted/20 shrink-0">
+          <Server size={11} className="text-muted-foreground shrink-0" />
+          <span className="text-xs font-mono text-muted-foreground truncate">{tab.url}</span>
+          {!tab.isAlive && (
+            <Badge variant="destructive" className="text-[10px] py-0 px-1.5 h-4 shrink-0">
+              offline
+            </Badge>
+          )}
+        </div>
+      );
+
+    case 'file': {
+      const relativePath = toRelativePath(tab.filePath, workingDirectory);
+
+      return (
+        <div className="flex items-center gap-2 px-2 py-1 border-b bg-muted/20 shrink-0">
+          <FileCode size={11} className="text-muted-foreground shrink-0" />
+          <span className="text-xs font-mono text-muted-foreground truncate flex-1">{relativePath}</span>
+
+          {tab.isTruncated && (
+            <Badge variant="outline" className="text-[9px] py-0 px-1 h-3.5 shrink-0">
+              truncated
+            </Badge>
+          )}
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 shrink-0"
+            onClick={() => {
+              void navigator.clipboard.writeText(tab.filePath);
+            }}
+            title="Copy path"
+          >
+            <Copy size={10} />
+          </Button>
+        </div>
+      );
+    }
+
+    case 'pdf':
+      return (
+        <div className="flex items-center gap-2 px-2 py-1 border-b bg-muted/20 shrink-0">
+          <FileText size={11} className="text-muted-foreground shrink-0" />
+          <span className="text-xs font-mono text-muted-foreground truncate flex-1">{tab.fileName}</span>
+          <span className="text-xs text-muted-foreground">Page {tab.currentPage} / {tab.totalPages}</span>
+        </div>
+      );
+
+    case 'doc':
+      return (
+        <div className="flex items-center gap-2 px-2 py-1 border-b bg-muted/20 shrink-0">
+          <FileText size={11} className="text-muted-foreground shrink-0" />
+          <span className="text-xs font-mono text-muted-foreground truncate flex-1">{tab.fileName}</span>
+        </div>
+      );
+
+    default:
+      return null;
+  }
+}

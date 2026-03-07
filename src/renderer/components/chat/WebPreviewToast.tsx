@@ -1,27 +1,27 @@
 /**
  * WebPreviewToast
  *
- * Notificación no-bloqueante que aparece cuando se detecta
- * un nuevo servidor por primera vez.
+ * Non-blocking notification when a new server is detected.
  */
 
 import { useEffect } from 'react';
 import { Monitor, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { useWebPreviewStore } from '@/stores/webPreviewStore';
+import { useSidePanelStore } from '@/stores/sidePanelStore';
 
 export function WebPreviewToast() {
-  const pendingToast = useWebPreviewStore((s) => s.pendingToast);
-  const clearToast = useWebPreviewStore((s) => s.clearToast);
-  const openPanel = useWebPreviewStore((s) => s.openPanel);
+  const pendingToast = useSidePanelStore((state) => state.pendingToast);
+  const clearToast = useSidePanelStore((state) => state.clearToast);
+  const openPanel = useSidePanelStore((state) => state.openPanel);
 
-  // Auto-dismiss después de 6 segundos
   useEffect(() => {
     if (!pendingToast) return;
+
     const timer = setTimeout(() => {
       clearToast();
     }, 6000);
+
     return () => clearTimeout(timer);
   }, [pendingToast, clearToast]);
 
@@ -44,16 +44,18 @@ export function WebPreviewToast() {
           <code className="font-mono text-primary">:{pendingToast.port}</code>
         </span>
       </div>
+
       <Button
         size="sm"
         className="h-7 text-xs"
         onClick={() => {
           clearToast();
-          openPanel(pendingToast.taskId);
+          openPanel(pendingToast.id);
         }}
       >
         Ver preview
       </Button>
+
       <Button
         variant="ghost"
         size="icon"

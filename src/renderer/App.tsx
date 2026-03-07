@@ -20,6 +20,7 @@ import { logger } from '@/services/logger'
 import { modelService } from '@/services/modelService'
 import { setupMermaidValidationHandler } from '@/services/mermaidValidationService'
 import { useMCPEvents } from '@/hooks/useMCPEvents'
+import { usePreference } from '@/hooks/usePreferences'
 
 import { useTranslation } from 'react-i18next'
 import { toast, Toaster } from 'sonner'
@@ -49,6 +50,9 @@ function App() {
 
   // Listen for MCP events (tools/list_changed, etc.)
   useMCPEvents()
+
+  const [coworkMode] = usePreference('coworkMode')
+  const [coworkModeCwd] = usePreference('coworkModeCwd')
 
   // MCP Deep Link Modal state
   const [mcpModalOpen, setMcpModalOpen] = useState(false)
@@ -612,6 +616,8 @@ function App() {
     setCurrentPage('chat');
   };
 
+  const effectiveSidebarCwd = selectedProject?.cwd ?? coworkModeCwd ?? null
+
   // Get sidebar content for current page
   const getSidebarContent = () => {
     // Show ChatList sidebar in all pages
@@ -631,7 +637,9 @@ function App() {
         (project: Project) => { setEditingProject(project); setProjectModalOpen(true); },
         (projectId: string, projectName: string, sessionCount: number) => {
           setDeleteConfirmProject({ id: projectId, name: projectName, count: sessionCount });
-        }
+        },
+        Boolean(coworkMode),
+        effectiveSidebarCwd,
       );
     }
     return null;

@@ -36,6 +36,7 @@ import { setupProjectHandlers } from "../ipc/projectHandlers";
 import { setupSkillsHandlers } from "../ipc/skillsHandlers";
 import { setupPlatformHandlers } from "../ipc/platformHandlers";
 import { setupAnthropicOAuthHandlers } from "../ipc/anthropicOAuthHandlers";
+import { setupFileSystemHandlers } from "../ipc/fileSystemHandlers";
 
 const logger = getLogger();
 
@@ -143,6 +144,7 @@ export async function registerIPCHandlers(getMainWindow: () => BrowserWindow | n
   setupSkillsHandlers();
   setupPlatformHandlers();
   setupAnthropicOAuthHandlers();
+  setupFileSystemHandlers(getMainWindow);
 
   // Note: Log viewer handlers are registered separately in main.ts after window creation
 
