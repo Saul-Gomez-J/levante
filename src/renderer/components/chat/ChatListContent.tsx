@@ -6,7 +6,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Trash2, MoreVertical, Pencil, FolderOpen, Plus } from 'lucide-react';
+import { Trash2, MoreVertical, Pencil } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -200,92 +200,7 @@ export function ChatListContent({
 
   return (
     <>
-      <div className="mt-2 pb-2 border-b">
-        <div className="flex items-center justify-between px-4 py-2">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-            {t('chat_list.projects_section')}
-          </span>
-          {onCreateProject && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground"
-              onClick={onCreateProject}
-              title={t('chat_list.new_project')}
-            >
-              <Plus size={14} />
-            </Button>
-          )}
-        </div>
-
-        {projects.map((project) => (
-          <div
-            key={project.id}
-            className={cn(
-              'group flex items-center gap-2 px-2 py-1.5 rounded-lg mx-2 mb-0.5 cursor-pointer',
-              'hover:bg-accent/30 transition-colors',
-              selectedProjectId === project.id && 'bg-accent/50'
-            )}
-            onClick={() => onProjectSelect?.(project)}
-          >
-            <FolderOpen size={14} className="shrink-0 text-muted-foreground" />
-            <span className="text-sm font-medium truncate flex-1">{project.name}</span>
-
-            {(onEditProject || onDeleteProject) && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="opacity-0 group-hover:opacity-100 transition-opacity h-5 w-5 p-0 shrink-0"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <MoreVertical size={12} />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  {onEditProject && (
-                    <DropdownMenuItem onSelect={() => onEditProject(project)}>
-                      <Pencil size={14} className="mr-2" />
-                      {t('chat_list.edit_project')}
-                    </DropdownMenuItem>
-                  )}
-                  {onDeleteProject && (
-                    <DropdownMenuItem
-                      onSelect={() =>
-                        onDeleteProject(
-                          project.id,
-                          project.name,
-                          sessions.filter((s) => s.project_id === project.id).length
-                        )
-                      }
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 size={14} className="mr-2" />
-                      {t('chat_list.delete_project')}
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-        ))}
-
-        {projects.length === 0 && onCreateProject && (
-          <button
-            className="w-full text-xs text-muted-foreground hover:text-foreground px-4 py-2 text-left"
-            onClick={onCreateProject}
-          >
-            + {t('chat_list.new_project')}
-          </button>
-        )}
-      </div>
-
       <div className="pt-2">
-        <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-          {t('chat_list.conversations_section')}
-        </div>
-
         {filteredLooseSessions.length > 0 ? (
           <div>
             {sortedGroupKeys.map((groupKey) => (

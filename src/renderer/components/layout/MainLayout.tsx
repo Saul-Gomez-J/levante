@@ -72,6 +72,7 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
                 <SidebarTrigger className="h-7 w-7 shrink-0" />
               )}
             </div>
+
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -101,38 +102,38 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
             <SidebarMenuButton
               onClick={() => onPageChange?.('store')}
               isActive={currentPage === 'store'}
-              >
-                <Store className="w-4 h-4" />
-                {t('navigation.mcp')}
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            {isPlatformMode ? (
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => onPageChange?.('account')}
-                  isActive={currentPage === 'account'}
-                >
-                  <User className="w-4 h-4" />
-                  {t('navigation.account')}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ) : (
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => onPageChange?.('model')}
-                  isActive={currentPage === 'model'}
-                >
-                  <Bot className="w-4 h-4" />
-                  {t('navigation.models')}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
+            >
+              <Store className="w-4 h-4" />
+              {t('navigation.mcp')}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          {isPlatformMode ? (
             <SidebarMenuItem>
               <SidebarMenuButton
-                onClick={() => onPageChange?.('settings')}
-                isActive={currentPage === 'settings'}
+                onClick={() => onPageChange?.('account')}
+                isActive={currentPage === 'account'}
               >
-                <Settings className="w-4 h-4" />
+                <User className="w-4 h-4" />
+                {t('navigation.account')}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={() => onPageChange?.('model')}
+                isActive={currentPage === 'model'}
+              >
+                <Bot className="w-4 h-4" />
+                {t('navigation.models')}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={() => onPageChange?.('settings')}
+              isActive={currentPage === 'settings'}
+            >
+              <Settings className="w-4 h-4" />
               {t('navigation.settings')}
             </SidebarMenuButton>
           </SidebarMenuItem>
