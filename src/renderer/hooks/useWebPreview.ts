@@ -2,21 +2,20 @@
  * useWebPreview hook
  *
  * Subscribes to port detection events and task status changes
- * to keep the web preview store in sync.
+ * to keep the side panel store in sync.
  */
 
 import { useEffect } from 'react';
-import { useWebPreviewStore } from '@/stores/webPreviewStore';
+import { useSidePanelStore } from '@/stores/sidePanelStore';
 
 export function useWebPreview() {
-  const addServer = useWebPreviewStore((s) => s.addServer);
-  const removeServer = useWebPreviewStore((s) => s.removeServer);
+  const addServerTab = useSidePanelStore((state) => state.addServerTab);
+  const removeServerTab = useSidePanelStore((state) => state.removeServerTab);
 
-  // Suscribirse al evento de detección de puertos desde el main process
   useEffect(() => {
     const unsubscribe = window.levante.tasks.onPortDetected((data) => {
-      addServer({
-        taskId: data.taskId,
+      addServerTab({
+        id: data.taskId,
         port: data.port,
         url: `http://localhost:${data.port}`,
         command: data.command,
@@ -27,10 +26,9 @@ export function useWebPreview() {
     });
 
     return unsubscribe;
-  }, [addServer]);
+  }, [addServerTab]);
 
-  // Reconciliar contra tareas RUNNING y limpiar previews de tareas terminadas.
-  // Si no hay tareas activas, se eliminan todos los servers del panel.
+  // Reconcile with running tasks and remove finished server tabs.
   useEffect(() => {
     let mounted = true;
 
@@ -45,14 +43,14 @@ export function useWebPreview() {
             : []
         );
 
-        const { servers } = useWebPreviewStore.getState();
-        for (const server of servers) {
-          if (!runningTaskIds.has(server.taskId)) {
-            removeServer(server.taskId);
+        const serverTabs = useSidePanelStore.getState().getServerTabs();
+        for (const server of serverTabs) {
+          if (!runningTaskIds.has(server.id)) {
+            removeServerTab(server.id);
           }
         }
       } catch {
-        // Ignore transient IPC errors; next interval will retry.
+        // Ignore transient IPC errors; next interval retries.
       }
     };
 
@@ -65,5 +63,5 @@ export function useWebPreview() {
       mounted = false;
       window.clearInterval(intervalId);
     };
-  }, [removeServer]);
+  }, [removeServerTab]);
 }

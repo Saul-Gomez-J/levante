@@ -80,6 +80,16 @@
       "this_week": "This Week",
       "this_month": "This Month",
       "older": "Older"
+    },
+    "file_browser": {
+      "tab_chats": "Chats",
+      "tab_files": "Files",
+      "search_files_placeholder": "Filter files...",
+      "show_hidden": "Show hidden files",
+      "hide_hidden": "Hide hidden files",
+      "refresh": "Refresh",
+      "empty_directory": "Empty directory",
+      "read_dir_error": "Failed to read directory"
     }
   },
   "tools_menu": {

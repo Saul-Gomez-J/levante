@@ -36,6 +36,8 @@ import { setupProjectHandlers } from "../ipc/projectHandlers";
 import { setupSkillsHandlers } from "../ipc/skillsHandlers";
 import { setupPlatformHandlers } from "../ipc/platformHandlers";
 import { setupAnthropicOAuthHandlers } from "../ipc/anthropicOAuthHandlers";
+import { setupFileSystemHandlers } from "../ipc/fileSystemHandlers";
+import { registerPdfProtocol } from "../services/filesystem/pdfProtocolService";
 
 const logger = getLogger();
 
@@ -110,6 +112,10 @@ export async function initializeServices(): Promise<void> {
       error: error instanceof Error ? error.message : error,
     });
   }
+
+  // 6. Register PDF protocol handler
+  registerPdfProtocol();
+  logger.core.info("PDF protocol registered successfully");
 }
 
 /**
@@ -143,6 +149,7 @@ export async function registerIPCHandlers(getMainWindow: () => BrowserWindow | n
   setupSkillsHandlers();
   setupPlatformHandlers();
   setupAnthropicOAuthHandlers();
+  setupFileSystemHandlers(getMainWindow);
 
   // Note: Log viewer handlers are registered separately in main.ts after window creation
 

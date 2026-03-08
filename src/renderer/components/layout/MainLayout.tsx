@@ -181,7 +181,7 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
           </div>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className='rounded-l-2xl h-screen flex flex-col'>
+      <SidebarInset className='rounded-l-2xl h-screen flex flex-col overflow-hidden'>
         {/* Custom titlebar for macOS - draggable area with controls */}
         <header
           className="flex shrink-0 items-center h-12 px-2"

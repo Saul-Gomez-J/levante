@@ -80,6 +80,16 @@
       "this_week": "Esta Semana",
       "this_month": "Este Mes",
       "older": "Más Antiguos"
+    },
+    "file_browser": {
+      "tab_chats": "Chats",
+      "tab_files": "Archivos",
+      "search_files_placeholder": "Filtrar archivos...",
+      "show_hidden": "Mostrar archivos ocultos",
+      "hide_hidden": "Ocultar archivos ocultos",
+      "refresh": "Actualizar",
+      "empty_directory": "Directorio vacío",
+      "read_dir_error": "No se pudo leer el directorio"
     }
   },
   "tools_menu": {

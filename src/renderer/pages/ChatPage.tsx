@@ -24,7 +24,7 @@ import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { LEVANTE_PLATFORM_URL } from '@/lib/platformConstants';
 import { StreamingProvider, useStreamingContext } from '@/contexts/StreamingContext';
-import { ChatList } from '@/components/chat/ChatList';
+import { SidebarSections } from '@/components/sidebar/SidebarSections';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { ChatPromptInput } from '@/components/chat/ChatPromptInput';
 import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
@@ -38,7 +38,7 @@ import { useFileAttachments } from '@/hooks/useFileAttachments';
 import { useModelSelection, isInferenceModel } from '@/hooks/useModelSelection';
 import { usePreference } from '@/hooks/usePreferences';
 import { useToolAutoApproval } from '@/hooks/useToolAutoApproval';
-import { WebPreviewPanel } from '@/components/chat/WebPreviewPanel';
+import { SidePanel } from '@/components/chat/SidePanel';
 import { WebPreviewToast } from '@/components/chat/WebPreviewToast';
 import { useWebPreview } from '@/hooks/useWebPreview';
 
@@ -1215,7 +1215,7 @@ const ChatPage = () => {
         </div>
 
         {/* Panel lateral de preview */}
-        <WebPreviewPanel />
+        <SidePanel />
       </div>
     </>
   );
@@ -1245,22 +1245,29 @@ ChatPageWithProvider.getSidebarContent = (
   onCreateProject?: () => void,
   onEditProject?: (project: any) => void,
   onDeleteProject?: (projectId: string, projectName: string, sessionCount: number) => void,
+  coworkModeEnabled: boolean = false,
+  effectiveCwd: string | null = null,
 ) => {
   return (
-    <ChatList
-      sessions={sessions}
-      currentSessionId={currentSessionId}
-      onSessionSelect={onSessionSelect}
+    <SidebarSections
       onNewChat={onNewChat}
-      onDeleteChat={onDeleteChat}
-      onRenameChat={onRenameChat}
       loading={loading}
-      projects={projects}
-      selectedProjectId={selectedProjectId}
-      onProjectSelect={onProjectSelect}
-      onCreateProject={onCreateProject}
-      onEditProject={onEditProject}
-      onDeleteProject={onDeleteProject}
+      coworkModeEnabled={coworkModeEnabled}
+      effectiveCwd={effectiveCwd}
+      chatListProps={{
+        sessions,
+        currentSessionId,
+        onSessionSelect,
+        onDeleteChat,
+        onRenameChat,
+        loading,
+        projects,
+        selectedProjectId,
+        onProjectSelect,
+        onCreateProject,
+        onEditProject,
+        onDeleteProject,
+      }}
     />
   );
 };

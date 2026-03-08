@@ -3,7 +3,7 @@
 import fixPath from "fix-path";
 fixPath();
 
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, protocol } from "electron";
 import { join } from "path";
 import { config } from "dotenv";
 import { initializeLogger } from "./services/logging";
@@ -24,6 +24,20 @@ import { setupLogViewerHandlers } from "./ipc/logViewerHandlers";
 // Load environment variables
 config({ path: join(__dirname, "../../.env.local") });
 config({ path: join(__dirname, "../../.env") });
+
+// Register levante-fs scheme as privileged (must be before app.whenReady)
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "levante-fs",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
 
 // Initialize logger
 initializeLogger();
