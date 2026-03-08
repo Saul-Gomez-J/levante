@@ -6,8 +6,7 @@
  * - File: relative path + copy button
  */
 
-import { Server, FileCode, FileText, Copy } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Server, FileCode, FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { PanelTab } from '@/stores/sidePanelStore';
 import { useFileBrowserStore } from '@/stores/fileBrowserStore';
@@ -67,17 +66,6 @@ export function PanelContextBar({ tab }: PanelContextBarProps) {
             </Badge>
           )}
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-5 w-5 shrink-0"
-            onClick={() => {
-              void navigator.clipboard.writeText(tab.filePath);
-            }}
-            title="Copy path"
-          >
-            <Copy size={10} />
-          </Button>
         </div>
       );
     }

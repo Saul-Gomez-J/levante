@@ -4,7 +4,8 @@
  * Contextual actions for active tab.
  */
 
-import { RefreshCw, ExternalLink, X, Copy } from 'lucide-react';
+import { useState } from 'react';
+import { RefreshCw, ExternalLink, X, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { PanelTab } from '@/stores/sidePanelStore';
 
@@ -16,6 +17,21 @@ interface PanelControlsProps {
 }
 
 export function PanelControls({ tab, onReload, onOpenExternal, onClose }: PanelControlsProps) {
+  const [isCopied, setIsCopied] = useState(false);
+
+  const canCopyContent =
+    tab?.type === 'file' && !tab.isBinary && !tab.isLoading && !!tab.content;
+
+  const handleCopyContent = async () => {
+    if (tab?.type !== 'file' || !tab.content) return;
+    try {
+      await navigator.clipboard.writeText(tab.content);
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    } catch {
+      // clipboard write failed
+    }
+  };
   return (
     <div className="flex items-center gap-0.5 shrink-0">
       {tab?.type === 'server' && (
@@ -44,17 +60,16 @@ export function PanelControls({ tab, onReload, onOpenExternal, onClose }: PanelC
         </>
       )}
 
-      {(tab?.type === 'file' || tab?.type === 'pdf') && (
+      {tab?.type === 'file' && (
         <Button
           variant="ghost"
           size="icon"
           className="h-6 w-6"
-          onClick={() => {
-            void navigator.clipboard.writeText(tab.filePath);
-          }}
-          title="Copy file path"
+          onClick={() => void handleCopyContent()}
+          disabled={!canCopyContent}
+          title="Copy content"
         >
-          <Copy size={12} />
+          {isCopied ? <Check size={12} /> : <Copy size={12} />}
         </Button>
       )}
 
