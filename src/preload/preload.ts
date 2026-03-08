@@ -934,6 +934,7 @@ export interface LevanteAPI {
       };
       error?: string;
     }>;
+    getPdfUrl: (path: string) => string;
   };
 
   // Anthropic OAuth API (Claude Max/Pro subscription)

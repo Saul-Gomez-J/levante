@@ -44,7 +44,7 @@ export function PanelControls({ tab, onReload, onOpenExternal, onClose }: PanelC
         </>
       )}
 
-      {tab?.type === 'file' && (
+      {(tab?.type === 'file' || tab?.type === 'pdf') && (
         <Button
           variant="ghost"
           size="icon"

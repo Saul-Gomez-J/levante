@@ -16,4 +16,6 @@ export const filesystemApi = {
     path: string,
     options?: { maxSize?: number; encoding?: string }
   ) => ipcRenderer.invoke('levante/fs:readFile', { path, options }),
+
+  getPdfUrl: (path: string) => `levante-fs://pdf?path=${encodeURIComponent(path)}`,
 };

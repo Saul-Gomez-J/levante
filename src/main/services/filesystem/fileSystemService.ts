@@ -253,6 +253,10 @@ class FileSystemService {
     };
   }
 
+  resolveAndValidatePath(requestedPath: string): string {
+    return this.validatePath(requestedPath);
+  }
+
   private validatePath(requestedPath: string): string {
     if (!this.workingDirectory) {
       throw new Error('No working directory configured');

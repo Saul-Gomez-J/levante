@@ -75,6 +75,10 @@ interface SidePanelState {
   openFileTab: (filePath: string) => Promise<void>;
   updateFileContent: (filePath: string, content: string) => void;
 
+  openPdfTab: (filePath: string) => void;
+  setPdfPage: (tabId: string, page: number) => void;
+  setPdfTotalPages: (tabId: string, totalPages: number) => void;
+
   getServerTabs: () => ServerTab[];
   getFileTabs: () => FileTab[];
 }
@@ -233,6 +237,12 @@ export const useSidePanelStore = create<SidePanelState>((set, get) => ({
   },
 
   openFileTab: async (filePath) => {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    if (ext === 'pdf') {
+      get().openPdfTab(filePath);
+      return;
+    }
+
     const tabId = normalizePath(filePath);
 
     const existing = get().tabs.find((tab) => tab.type === 'file' && tab.id === tabId);
@@ -336,6 +346,52 @@ export const useSidePanelStore = create<SidePanelState>((set, get) => ({
       tabs: state.tabs.map((tab) =>
         tab.type === 'file' && tab.id === tabId
           ? { ...tab, content, isLoading: false }
+          : tab
+      ),
+    }));
+  },
+
+  openPdfTab: (filePath) => {
+    const tabId = `pdf:${normalizePath(filePath)}`;
+
+    const existing = get().tabs.find((tab) => tab.type === 'pdf' && tab.id === tabId);
+    if (existing) {
+      set({ isPanelOpen: true, activeTabId: tabId });
+      return;
+    }
+
+    const fileName = getFileName(filePath);
+    const newTab: PdfTab = {
+      type: 'pdf',
+      id: tabId,
+      filePath,
+      fileName,
+      currentPage: 1,
+      totalPages: 0,
+    };
+
+    set((state) => ({
+      tabs: [...state.tabs, newTab],
+      activeTabId: tabId,
+      isPanelOpen: true,
+    }));
+  },
+
+  setPdfPage: (tabId, page) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.type === 'pdf' && tab.id === tabId
+          ? { ...tab, currentPage: page }
+          : tab
+      ),
+    }));
+  },
+
+  setPdfTotalPages: (tabId, totalPages) => {
+    set((state) => ({
+      tabs: state.tabs.map((tab) =>
+        tab.type === 'pdf' && tab.id === tabId
+          ? { ...tab, totalPages }
           : tab
       ),
     }));

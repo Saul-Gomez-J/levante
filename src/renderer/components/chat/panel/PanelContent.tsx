@@ -7,6 +7,7 @@
 import { Server } from 'lucide-react';
 import type { PanelTab, ServerTab } from '@/stores/sidePanelStore';
 import { FileContentRenderer } from '@/components/file-browser/FileContentRenderer';
+import { PdfViewer } from '@/components/file-browser/PdfViewer';
 
 interface PanelContentProps {
   tab: PanelTab | undefined;
@@ -41,7 +42,7 @@ function ServerContent({ server, iframeKey }: { server: ServerTab; iframeKey: nu
 
 export function PanelContent({ tab, isDragging, iframeKey = 0 }: PanelContentProps) {
   return (
-    <div className="flex-1 relative overflow-hidden">
+    <div className="flex-1 min-h-0 relative overflow-hidden">
       {isDragging && <div className="absolute inset-0 z-50 cursor-col-resize" />}
 
       {!tab ? (
@@ -52,6 +53,8 @@ export function PanelContent({ tab, isDragging, iframeKey = 0 }: PanelContentPro
         <ServerContent server={tab} iframeKey={iframeKey} />
       ) : tab.type === 'file' ? (
         <FileContentRenderer tab={tab} />
+      ) : tab.type === 'pdf' ? (
+        <PdfViewer tab={tab} />
       ) : (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
           Preview not available for this file type

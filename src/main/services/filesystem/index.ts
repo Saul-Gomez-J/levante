@@ -5,3 +5,4 @@ export type {
   ReadDirOptions,
   ReadFileOptions,
 } from './fileSystemService';
+export { registerPdfProtocol } from './pdfProtocolService';

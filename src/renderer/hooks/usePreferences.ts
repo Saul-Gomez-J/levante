@@ -31,12 +31,28 @@ export function usePreferences() {
     loadPreferences();
   }, []);
 
-  // Listen for preference changes
-  // Note: IPC listeners are not exposed in preload, so we'll rely on manual updates
-  // The theme and other preferences will update on page change or when explicitly called
+  // Keep all hook instances in sync via global preference-changed events
   useEffect(() => {
-    // TODO: Add IPC listeners via preload if real-time updates are needed
-    // For now, preferences are updated when explicitly set via setPreference
+    const handlePreferenceChange = (event: Event) => {
+      const customEvent = event as CustomEvent<PreferenceChangeEvent>;
+      const detail = customEvent.detail;
+      if (!detail?.key) return;
+
+      setPreferences((prev) => {
+        if (!prev) return prev;
+
+        return {
+          ...prev,
+          [detail.key]: detail.value,
+        };
+      });
+    };
+
+    window.addEventListener('preference-changed', handlePreferenceChange as EventListener);
+
+    return () => {
+      window.removeEventListener('preference-changed', handlePreferenceChange as EventListener);
+    };
   }, []);
 
   // Get single preference
@@ -73,6 +89,11 @@ export function usePreferences() {
             [key]: value
           };
         });
+
+        // Sync all mounted usePreferences/usePreference hook instances
+        window.dispatchEvent(new CustomEvent<PreferenceChangeEvent>('preference-changed', {
+          detail: { key, value }
+        }));
         
         return true;
       }
