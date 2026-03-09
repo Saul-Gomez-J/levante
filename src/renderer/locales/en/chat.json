@@ -48,6 +48,7 @@
     "loading": "Loading chats...",
     "no_chats": "No chats yet",
     "no_results": "No chats found",
+    "project_history": "{{projectName}}",
     "rename_chat": "Rename chat",
     "delete_chat": "Delete chat",
     "projects_section": "Projects",
