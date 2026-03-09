@@ -168,15 +168,21 @@ export function ChatListContent({
               variant="ghost"
               size="sm"
               className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => e.stopPropagation()}
             >
               <MoreVertical size={14} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
+          <DropdownMenuContent
+            align="end"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+          >
             <DropdownMenuItem
               onSelect={(e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 handleRenameStart(session);
               }}
             >
@@ -184,7 +190,10 @@ export function ChatListContent({
               {t('chat_list.rename_chat')}
             </DropdownMenuItem>
             <DropdownMenuItem
-              onSelect={() => onDeleteChat(session.id)}
+              onSelect={(e) => {
+                e.stopPropagation();
+                onDeleteChat(session.id);
+              }}
               className="text-destructive focus:text-destructive"
             >
               <Trash2 size={14} className="mr-2" />
