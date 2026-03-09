@@ -27,6 +27,7 @@ const CHANNELS = {
   GET_WORKING_DIR: 'levante/fs:getWorkingDir',
   READ_DIR: 'levante/fs:readDir',
   READ_FILE: 'levante/fs:readFile',
+  SEARCH_FILES: 'levante/fs:searchFiles',
 } as const;
 
 export function setupFileSystemHandlers(_getMainWindow: () => BrowserWindow | null): void {
@@ -80,6 +81,25 @@ export function setupFileSystemHandlers(_getMainWindow: () => BrowserWindow | nu
       } catch (error) {
         logger.ipc.error('fs:readFile failed', {
           path: args.path,
+          error: error instanceof Error ? error.message : error,
+        });
+        return fail(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
+    CHANNELS.SEARCH_FILES,
+    async (_, args: { query: string; maxResults?: number; maxDepth?: number }) => {
+      try {
+        const data = await fileSystemService.searchFiles(args.query, {
+          maxResults: args.maxResults,
+          maxDepth: args.maxDepth,
+        });
+        return ok(data);
+      } catch (error) {
+        logger.ipc.error('fs:searchFiles failed', {
+          query: args.query,
           error: error instanceof Error ? error.message : error,
         });
         return fail(error);

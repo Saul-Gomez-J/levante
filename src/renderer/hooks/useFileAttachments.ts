@@ -270,6 +270,9 @@ export function useFileAttachments(options: UseFileAttachmentsOptions = {}): Use
     // Match AddContextMenu behavior: only disabled when streaming
     if (isStreaming) return;
 
+    // Ignore internal file-browser drags (handled by DropPlugin in editor)
+    if (e.dataTransfer.types.includes('application/levante-file')) return;
+
     if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
       setIsDragging(true);
     }
@@ -297,6 +300,9 @@ export function useFileAttachments(options: UseFileAttachmentsOptions = {}): Use
 
     // Match AddContextMenu behavior: only disabled when streaming
     if (isStreaming) return;
+
+    // Ignore internal file-browser drags (handled by DropPlugin in editor)
+    if (e.dataTransfer.types.includes('application/levante-file')) return;
 
     const files = Array.from(e.dataTransfer.files);
     if (files.length > 0) {

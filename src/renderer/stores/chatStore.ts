@@ -20,6 +20,8 @@ import { getRendererLogger } from '@/services/logger';
 
 const logger = getRendererLogger();
 
+export type PendingPromptMode = 'prefill' | 'autosend';
+
 interface ChatStore {
   // Session state
   currentSession: ChatSession | null;
@@ -29,6 +31,8 @@ interface ChatStore {
 
   // Deep link state
   pendingPrompt: string | null;
+  pendingPromptMode: PendingPromptMode | null;
+  skipNextHistoricalLoad: boolean;
 
   // Session actions
   refreshSessions: () => Promise<void>;
@@ -52,7 +56,8 @@ interface ChatStore {
   editMessage: (messageId: string, newContent: string) => Promise<boolean>;
 
   // Deep link actions
-  setPendingPrompt: (prompt: string | null) => void;
+  setPendingPrompt: (prompt: string | null, mode?: PendingPromptMode) => void;
+  setSkipNextHistoricalLoad: (skip: boolean) => void;
 
   // Utility
   setError: (error: string | null) => void;
@@ -68,12 +73,19 @@ export const useChatStore = create<ChatStore>()(
       loading: false,
       error: null,
       pendingPrompt: null,
+      pendingPromptMode: null,
+      skipNextHistoricalLoad: false,
 
       // Basic setters
       setError: (error) => set({ error }),
       setLoading: (loading) => set({ loading }),
       setCurrentSession: (session) => set({ currentSession: session }),
-      setPendingPrompt: (prompt) => set({ pendingPrompt: prompt }),
+      setPendingPrompt: (prompt, mode = 'prefill') =>
+        set({
+          pendingPrompt: prompt,
+          pendingPromptMode: prompt ? mode : null,
+        }),
+      setSkipNextHistoricalLoad: (skip) => set({ skipNextHistoricalLoad: skip }),
 
       // Session management
       refreshSessions: async () => {

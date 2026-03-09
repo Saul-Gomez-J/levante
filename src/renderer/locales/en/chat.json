@@ -184,6 +184,12 @@
     "title": "Auto-execution enabled",
     "description": "Tools will run automatically without approval for this provider ({{provider}})"
   },
+  "file_mentions": {
+    "autocomplete_placeholder": "Type to search files...",
+    "no_results": "No files found",
+    "drop_to_reference": "Drop file to reference",
+    "max_mentions_reached": "Maximum {{count}} file mentions per message"
+  },
   "background_tasks": {
     "title": "Background Tasks",
     "running_count": "{{count}} running",

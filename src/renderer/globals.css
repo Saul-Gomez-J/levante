@@ -346,4 +346,9 @@
   .announcement-content .btn-link {
     @apply text-primary underline-offset-4 hover:underline cursor-pointer;
   }
+
+  /* Lexical prompt input paragraph - no margins */
+  .prompt-input-paragraph {
+    margin: 0;
+  }
 }

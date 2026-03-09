@@ -184,6 +184,12 @@
     "title": "Ejecución automática habilitada",
     "description": "Las herramientas se ejecutarán automáticamente sin aprobación para este proveedor ({{provider}})"
   },
+  "file_mentions": {
+    "autocomplete_placeholder": "Escribe para buscar archivos...",
+    "no_results": "No se encontraron archivos",
+    "drop_to_reference": "Suelta el archivo para referenciarlo",
+    "max_mentions_reached": "Maximo {{count}} menciones de archivo por mensaje"
+  },
   "background_tasks": {
     "title": "Tareas en Background",
     "running_count": "{{count}} ejecutándose",

@@ -935,6 +935,19 @@ export interface LevanteAPI {
       error?: string;
     }>;
     getPdfUrl: (path: string) => string;
+    searchFiles: (
+      query: string,
+      options?: { maxResults?: number; maxDepth?: number }
+    ) => Promise<{
+      success: boolean;
+      data?: Array<{
+        name: string;
+        path: string;
+        relativePath: string;
+        extension: string;
+      }>;
+      error?: string;
+    }>;
   };
 
   // Anthropic OAuth API (Claude Max/Pro subscription)

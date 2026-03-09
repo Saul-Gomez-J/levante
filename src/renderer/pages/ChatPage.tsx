@@ -41,6 +41,7 @@ import { useToolAutoApproval } from '@/hooks/useToolAutoApproval';
 import { SidePanel } from '@/components/chat/SidePanel';
 import { WebPreviewToast } from '@/components/chat/WebPreviewToast';
 import { useWebPreview } from '@/hooks/useWebPreview';
+import type { FileMentionPayload } from '@/components/chat/lexical/FileMentionNode';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
@@ -62,6 +63,9 @@ const ChatPage = () => {
   const [pendingFirstAttachments, setPendingFirstAttachments] = useState<File[] | null>(null);
   const [pendingMessageAfterStop, setPendingMessageAfterStop] = useState<string | null>(null);
   const [pendingWidgetMessage, setPendingWidgetMessage] = useState<string | null>(null);
+  const [fileMentions, setFileMentions] = useState<FileMentionPayload[]>([]);
+  const [pendingMessageAfterStopMentions, setPendingMessageAfterStopMentions] = useState<FileMentionPayload[] | null>(null);
+  const [pendingFirstMentions, setPendingFirstMentions] = useState<FileMentionPayload[] | null>(null);
 
   // Project store (read-only for effectiveCwd / projectDescription)
   const projects = useProjectStore((state) => state.projects);
@@ -95,7 +99,10 @@ const ChatPage = () => {
   const loadHistoricalMessages = useChatStore((state) => state.loadHistoricalMessages);
   const updateSessionModel = useChatStore((state) => state.updateSessionModel);
   const pendingPrompt = useChatStore((state) => state.pendingPrompt);
+  const pendingPromptMode = useChatStore((state) => state.pendingPromptMode);
   const setPendingPrompt = useChatStore((state) => state.setPendingPrompt);
+  const skipNextHistoricalLoad = useChatStore((state) => state.skipNextHistoricalLoad);
+  const setSkipNextHistoricalLoad = useChatStore((state) => state.setSkipNextHistoricalLoad);
 
   // Track previous session ID to detect changes
   const previousSessionIdRef = useRef<string | null>(null);
@@ -104,18 +111,14 @@ const ChatPage = () => {
   const justCreatedSessionRef = useRef(false);
   const [sessionCwdOverrides, setSessionCwdOverrides] = useState<Record<string, string>>({});
 
-  const promptInputRef = useRef<HTMLTextAreaElement>(null);
+  const editorFocusRef = useRef<(() => void) | null>(null);
 
   // Streaming context for mermaid processing
   const { triggerMermaidProcessing } = useStreamingContext();
 
   const focusPromptInput = useCallback(() => {
-    if (!promptInputRef.current) {
-      return;
-    }
-
     requestAnimationFrame(() => {
-      promptInputRef.current?.focus();
+      editorFocusRef.current?.();
     });
   }, []);
 
@@ -230,6 +233,41 @@ const ChatPage = () => {
   }, [currentSessionCwdOverride, currentProject?.cwd, coworkModeCwd]);
 
   const effectiveCwd = resolvedCoworkCwd.cwd;
+
+  // ─── File mentions helpers ───────────────────────────────────────────
+  const dedupeMentionsByPath = useCallback((mentions: FileMentionPayload[]): FileMentionPayload[] => {
+    const seen = new Set<string>();
+    return mentions.filter((m) => {
+      if (seen.has(m.filePath)) return false;
+      seen.add(m.filePath);
+      return true;
+    });
+  }, []);
+
+  const formatMentionBlock = useCallback((mentions: FileMentionPayload[]): string => {
+    if (mentions.length === 0) return '';
+    const lines = mentions.map((m) => `- ${m.relativePath} -> ${m.filePath}`);
+    return `[Archivos referenciados por el usuario:]\n${lines.join('\n')}`;
+  }, []);
+
+  const prependMentionsToMessage = useCallback((messageText: string, mentions: FileMentionPayload[]): string => {
+    if (mentions.length === 0) return messageText;
+    const block = formatMentionBlock(mentions);
+    return messageText ? `${block}\n\n${messageText}` : block;
+  }, [formatMentionBlock]);
+
+  const buildFinalUserMessage = useCallback(({
+    input: rawInput,
+    resourceContext,
+    mentions,
+  }: {
+    input: string;
+    resourceContext: string;
+    mentions: FileMentionPayload[];
+  }): string => {
+    const base = resourceContext ? `${resourceContext}\n\n${rawInput}` : rawInput;
+    return prependMentionsToMessage(base, mentions);
+  }, [prependMentionsToMessage]);
 
   // Compute project description for system prompt injection
   const projectDescription = useMemo(
@@ -479,8 +517,12 @@ const ChatPage = () => {
   // Handle pending message after stop
   useEffect(() => {
     if (pendingMessageAfterStop && status !== 'streaming' && status !== 'submitted') {
-      const messageText = pendingMessageAfterStop;
+      const rawText = pendingMessageAfterStop;
+      const mentions = pendingMessageAfterStopMentions || [];
       setPendingMessageAfterStop(null);
+      setPendingMessageAfterStopMentions(null);
+
+      const messageText = prependMentionsToMessage(rawText, mentions);
 
       // Persist user message to database BEFORE sending to AI (to ensure correct order)
       const messageId = `user-${Date.now()}`;
@@ -504,7 +546,7 @@ const ChatPage = () => {
           logger.database.error('Failed to persist message after stop', { error: err });
         });
     }
-  }, [pendingMessageAfterStop, status, sendMessageAI, persistMessage]);
+  }, [pendingMessageAfterStop, pendingMessageAfterStopMentions, status, sendMessageAI, persistMessage, prependMentionsToMessage]);
 
   // Handle messages sent from fullscreen widgets
   useEffect(() => {
@@ -616,10 +658,21 @@ const ChatPage = () => {
     // Update ref
     previousSessionIdRef.current = currentSessionId;
 
-    // Clear attachments, MCP resources, and auto-approvals when changing sessions
+    // Clear attachments, MCP resources, auto-approvals, and file mentions when changing sessions
     clearAttachments();
     clearResources();
     clearAutoApprovals();
+    setFileMentions([]);
+    setPendingFirstMentions(null);
+    setPendingMessageAfterStopMentions(null);
+
+    // If external flow marked this transition, skip historical loading once
+    if (currentSessionId && skipNextHistoricalLoad) {
+      logger.core.info('Skipping historical load for externally-created session', { sessionId: currentSessionId });
+      setSkipNextHistoricalLoad(false);
+      focusPromptInput();
+      return;
+    }
 
     // If we just created this session, skip loading historical messages
     // (the messages are already in useChat state from sendMessageAI)
@@ -652,7 +705,7 @@ const ChatPage = () => {
       setMessages([]);
       focusPromptInput();
     }
-  }, [currentSession?.id, loadHistoricalMessages, setMessages, clearAttachments, clearResources, clearAutoApprovals, focusPromptInput]);
+  }, [currentSession?.id, skipNextHistoricalLoad, loadHistoricalMessages, setMessages, clearAttachments, clearResources, clearAutoApprovals, focusPromptInput, setSkipNextHistoricalLoad]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -669,7 +722,9 @@ const ChatPage = () => {
       // If there's input, we want to stop current stream and send the new message
       if (input.trim()) {
         setPendingMessageAfterStop(input);
+        setPendingMessageAfterStopMentions(dedupeMentionsByPath(fileMentions).slice(0, 10));
         setInput(''); // Clear input immediately
+        setFileMentions([]);
       }
 
       stop();
@@ -687,16 +742,22 @@ const ChatPage = () => {
         enableFileAttachment,
       });
 
-      // Build message text with MCP resource context if any
+      // Capture mentions snapshot
+      const mentionsToUse = dedupeMentionsByPath(fileMentions).slice(0, 10);
+
+      // Build message text with MCP resource context and file mentions
       const resourceContext = getContextString();
-      const messageText = resourceContext
-        ? `${resourceContext}\n\n${input}`
-        : input;
+      const messageText = buildFinalUserMessage({
+        input,
+        resourceContext,
+        mentions: mentionsToUse,
+      });
       const filesToAttach = [...attachedFiles];
       const resourcesToInclude = [...selectedResources];
 
       try {
         setInput('');
+        setFileMentions([]);
         clearAttachments(); // Clear attachments immediately
         clearResources(); // Clear MCP resources immediately
 
@@ -736,6 +797,7 @@ const ChatPage = () => {
           // Store message to send after re-render (when useChat has the correct ID)
           setPendingFirstMessage(messageText);
           setPendingFirstAttachments(filesToAttach.length > 0 ? filesToAttach : null);
+          // Mentions already baked into messageText, no separate pending needed
 
           // Don't send now - wait for component to re-render with new session ID
           return;
@@ -852,8 +914,9 @@ const ChatPage = () => {
         logger.core.error('Error in handleSubmit', {
           error: error instanceof Error ? error.message : error,
         });
-        // Restore files on error
+        // Restore files and mentions on error
         setAttachedFiles(filesToAttach);
+        setFileMentions(mentionsToUse);
       }
     }
   };
@@ -994,21 +1057,33 @@ const ChatPage = () => {
 
   // Handle pending prompt from deep link or project page
   useEffect(() => {
-    if (pendingPrompt) {
-      if (!currentSession) {
-        // No session yet (e.g. coming from ProjectPage): queue to auto-send when session is created
-        setPendingFirstMessage(pendingPrompt);
-      } else {
-        // Already in a session: just fill the input
-        setInput(pendingPrompt);
-      }
-      setPendingPrompt(null);
-      logger.core.info('Applied pending prompt', {
-        promptLength: pendingPrompt.length,
-        autoSubmit: !currentSession,
-      });
+    if (!pendingPrompt) {
+      return;
     }
-  }, [pendingPrompt, currentSession, setPendingPrompt]);
+
+    if (pendingPromptMode === 'autosend') {
+      if (!currentSession) {
+        // Wait for the session to exist before consuming the pending prompt
+        return;
+      }
+
+      setPendingFirstMessage(pendingPrompt);
+      setPendingPrompt(null);
+      logger.core.info('Applied pending prompt for autosend', {
+        promptLength: pendingPrompt.length,
+      });
+      return;
+    }
+
+    // prefill mode
+    setInput(pendingPrompt);
+    setPendingPrompt(null);
+    logger.core.info('Applied pending prompt', {
+      promptLength: pendingPrompt.length,
+      autoSubmit: false,
+      mode: pendingPromptMode ?? 'prefill',
+    });
+  }, [pendingPrompt, pendingPromptMode, currentSession, setPendingPrompt]);
 
   // Check if chat is empty
   const isChatEmpty = messages.length === 0 && status !== 'streaming';
@@ -1135,7 +1210,8 @@ const ChatPage = () => {
                     selectedPrompts={selectedPrompts}
                     onPromptSelected={selectPrompt}
                     onPromptRemove={removePrompt}
-                    inputRef={promptInputRef}
+                    editorFocusRef={editorFocusRef}
+                    onMentionsChange={setFileMentions}
                   />
                 </div>
               </div>
@@ -1207,7 +1283,8 @@ const ChatPage = () => {
                   selectedPrompts={selectedPrompts}
                   onPromptSelected={selectPrompt}
                   onPromptRemove={removePrompt}
-                  inputRef={promptInputRef}
+                  editorFocusRef={editorFocusRef}
+                  onMentionsChange={setFileMentions}
                 />
               </div>
             </>)
