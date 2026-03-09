@@ -104,6 +104,14 @@ export function SidebarSections({
           </SidebarMenu>
 
           <CollapsibleContent>
+            {onCreateProject && (
+              <button
+                className="w-full text-xs text-muted-foreground hover:text-foreground px-4 py-2 text-left"
+                onClick={onCreateProject}
+              >
+                + {t('chat_list.new_project')}
+              </button>
+            )}
             {projects.map((project) => (
               <div
                 key={project.id}
@@ -157,14 +165,6 @@ export function SidebarSections({
               </div>
             ))}
 
-            {projects.length === 0 && onCreateProject && (
-              <button
-                className="w-full text-xs text-muted-foreground hover:text-foreground px-4 py-2 text-left"
-                onClick={onCreateProject}
-              >
-                + {t('chat_list.new_project')}
-              </button>
-            )}
           </CollapsibleContent>
         </Collapsible>
 
