@@ -60,7 +60,7 @@ jobs:
             }
 
   build:
-    name: Build & Release - ${{ matrix.os }}
+    name: Build & Release - ${{ matrix.os }}${{ matrix.target && format(' ({0})', matrix.target) || '' }}
     runs-on: ${{ matrix.os }}
     needs: create-release
 
@@ -77,6 +77,10 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             arch: x64
+          - os: ubuntu-latest  # AppImage build
+            platform: linux
+            arch: x64
+            target: AppImage
           - os: windows-latest
             platform: win32
             arch: x64
@@ -115,6 +119,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # AppImage requires libfuse2 on Ubuntu runners
+      - name: Install FUSE (AppImage)
+        if: matrix.target == 'AppImage'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libfuse2
+
       # macOS specific: Import signing certificate
       - name: Import Apple certificate (macOS)
         if: matrix.platform == 'darwin'
@@ -142,6 +153,8 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Pass target so forge.config.js can conditionally include AppImage maker
+          FORGE_TARGET: ${{ matrix.target }}
         run: pnpm run make
 
       - name: Package & Publish (macOS)
@@ -163,6 +176,7 @@ jobs:
         if: matrix.platform == 'linux'
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          FORGE_TARGET: ${{ matrix.target }}
         run: pnpm run publish
 
       # Cleanup macOS keychain
