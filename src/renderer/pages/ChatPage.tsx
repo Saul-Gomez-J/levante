@@ -42,6 +42,7 @@ import { SidePanel } from '@/components/chat/SidePanel';
 import { WebPreviewToast } from '@/components/chat/WebPreviewToast';
 import { useWebPreview } from '@/hooks/useWebPreview';
 import type { FileMentionPayload } from '@/components/chat/lexical/FileMentionNode';
+import { toast } from 'sonner';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
@@ -244,30 +245,15 @@ const ChatPage = () => {
     });
   }, []);
 
-  const formatMentionBlock = useCallback((mentions: FileMentionPayload[]): string => {
-    if (mentions.length === 0) return '';
-    const lines = mentions.map((m) => `- ${m.relativePath} -> ${m.filePath}`);
-    return `[Archivos referenciados por el usuario:]\n${lines.join('\n')}`;
-  }, []);
-
-  const prependMentionsToMessage = useCallback((messageText: string, mentions: FileMentionPayload[]): string => {
-    if (mentions.length === 0) return messageText;
-    const block = formatMentionBlock(mentions);
-    return messageText ? `${block}\n\n${messageText}` : block;
-  }, [formatMentionBlock]);
-
   const buildFinalUserMessage = useCallback(({
     input: rawInput,
     resourceContext,
-    mentions,
   }: {
     input: string;
     resourceContext: string;
-    mentions: FileMentionPayload[];
   }): string => {
-    const base = resourceContext ? `${resourceContext}\n\n${rawInput}` : rawInput;
-    return prependMentionsToMessage(base, mentions);
-  }, [prependMentionsToMessage]);
+    return resourceContext ? `${resourceContext}\n\n${rawInput}` : rawInput;
+  }, []);
 
   // Compute project description for system prompt injection
   const projectDescription = useMemo(
@@ -517,12 +503,9 @@ const ChatPage = () => {
   // Handle pending message after stop
   useEffect(() => {
     if (pendingMessageAfterStop && status !== 'streaming' && status !== 'submitted') {
-      const rawText = pendingMessageAfterStop;
-      const mentions = pendingMessageAfterStopMentions || [];
+      const messageText = pendingMessageAfterStop;
       setPendingMessageAfterStop(null);
       setPendingMessageAfterStopMentions(null);
-
-      const messageText = prependMentionsToMessage(rawText, mentions);
 
       // Persist user message to database BEFORE sending to AI (to ensure correct order)
       const messageId = `user-${Date.now()}`;
@@ -546,7 +529,7 @@ const ChatPage = () => {
           logger.database.error('Failed to persist message after stop', { error: err });
         });
     }
-  }, [pendingMessageAfterStop, pendingMessageAfterStopMentions, status, sendMessageAI, persistMessage, prependMentionsToMessage]);
+  }, [pendingMessageAfterStop, pendingMessageAfterStopMentions, status, sendMessageAI, persistMessage]);
 
   // Handle messages sent from fullscreen widgets
   useEffect(() => {
@@ -713,7 +696,10 @@ const ChatPage = () => {
     // Validate that a model is selected before sending
     if (!model || model.trim() === '') {
       logger.core.warn('Cannot send message: no model selected');
-      // Display error or warning to user - for now, just prevent submission
+      toast.warning(t('model_selector.required_title'), {
+        description: t('model_selector.required_description'),
+        id: 'chat-model-required',
+      });
       return;
     }
 
@@ -742,15 +728,11 @@ const ChatPage = () => {
         enableFileAttachment,
       });
 
-      // Capture mentions snapshot
-      const mentionsToUse = dedupeMentionsByPath(fileMentions).slice(0, 10);
-
-      // Build message text with MCP resource context and file mentions
+      // Build message text with MCP resource context (mentions already inline in input)
       const resourceContext = getContextString();
       const messageText = buildFinalUserMessage({
         input,
         resourceContext,
-        mentions: mentionsToUse,
       });
       const filesToAttach = [...attachedFiles];
       const resourcesToInclude = [...selectedResources];
@@ -914,9 +896,8 @@ const ChatPage = () => {
         logger.core.error('Error in handleSubmit', {
           error: error instanceof Error ? error.message : error,
         });
-        // Restore files and mentions on error
+        // Restore files on error
         setAttachedFiles(filesToAttach);
-        setFileMentions(mentionsToUse);
       }
     }
   };

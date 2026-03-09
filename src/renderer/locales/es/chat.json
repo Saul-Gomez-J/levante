@@ -14,6 +14,8 @@
     "loading": "Cargando...",
     "search_placeholder": "Buscar modelos...",
     "no_models_found": "No se encontraron modelos.",
+    "required_title": "Selecciona un modelo",
+    "required_description": "Elige un modelo antes de enviar tu mensaje",
     "context": "{{count}} contexto",
     "context_k": "{{count}}k contexto"
   },

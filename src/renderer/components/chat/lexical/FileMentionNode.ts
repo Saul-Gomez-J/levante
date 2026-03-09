@@ -95,7 +95,7 @@ export class FileMentionNode extends DecoratorNode<JSX.Element> {
   }
 
   getTextContent(): string {
-    return '@' + this.__relativePath;
+    return this.__relativePath + ' -> ' + this.__filePath;
   }
 
   getFileName(): string {
