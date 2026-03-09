@@ -29,6 +29,7 @@ export interface ChatListContentProps {
   searchQuery: string;
   projects?: Project[];
   selectedProjectId?: string;
+  selectedProjectName?: string;
   onProjectSelect?: (project: Project) => void;
   onCreateProject?: () => void;
   onEditProject?: (project: Project) => void;
@@ -45,6 +46,7 @@ export function ChatListContent({
   searchQuery,
   projects = [],
   selectedProjectId,
+  selectedProjectName,
   onProjectSelect,
   onCreateProject,
   onEditProject,
@@ -55,17 +57,21 @@ export function ChatListContent({
   const [editingTitle, setEditingTitle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const looseSessions = sessions.filter((s) => !s.project_id);
+  const isProjectScope = Boolean(selectedProjectId);
 
-  const filteredLooseSessions = !searchQuery.trim()
-    ? looseSessions
-    : looseSessions.filter(
+  const baseSessions = isProjectScope
+    ? sessions.filter((s) => s.project_id === selectedProjectId)
+    : sessions.filter((s) => !s.project_id);
+
+  const filteredSessions = !searchQuery.trim()
+    ? baseSessions
+    : baseSessions.filter(
         (s) =>
           s.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
           s.model.toLowerCase().includes(searchQuery.toLowerCase())
       );
 
-  const groupedSessions = filteredLooseSessions.reduce((groups, session) => {
+  const groupedSessions = filteredSessions.reduce((groups, session) => {
     const date = new Date(session.created_at);
     const today = new Date();
     const yesterday = new Date(today);
@@ -201,18 +207,29 @@ export function ChatListContent({
   return (
     <>
       <div className="pt-2">
-        {filteredLooseSessions.length > 0 ? (
+        {filteredSessions.length > 0 ? (
           <div>
-            {sortedGroupKeys.map((groupKey) => (
-              <div key={groupKey}>
+            {isProjectScope ? (
+              <div>
                 <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                  {t(`chat_list.groups.${groupKey}`)}
+                  {t('chat_list.project_history', { projectName: selectedProjectName || selectedProjectId })}
                 </div>
-                {groupedSessions[groupKey]
+                {filteredSessions
                   .sort((a, b) => b.updated_at - a.updated_at)
                   .map((session) => renderSession(session))}
               </div>
-            ))}
+            ) : (
+              sortedGroupKeys.map((groupKey) => (
+                <div key={groupKey}>
+                  <div className="px-4 py-2 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                    {t(`chat_list.groups.${groupKey}`)}
+                  </div>
+                  {groupedSessions[groupKey]
+                    .sort((a, b) => b.updated_at - a.updated_at)
+                    .map((session) => renderSession(session))}
+                </div>
+              ))
+            )}
           </div>
         ) : (
           <div className="p-4 text-center text-muted-foreground">

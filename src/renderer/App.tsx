@@ -667,6 +667,7 @@ function App() {
         false, // loading state
         projects,
         selectedProject?.id,
+        selectedProject?.name,
         handleProjectSelect,
         () => { setEditingProject(undefined); setProjectModalOpen(true); },
         (project: Project) => { setEditingProject(project); setProjectModalOpen(true); },

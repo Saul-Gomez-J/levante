@@ -48,6 +48,7 @@
     "loading": "Cargando chats...",
     "no_chats": "Aún no hay chats",
     "no_results": "No se encontraron chats",
+    "project_history": "{{projectName}}",
     "rename_chat": "Renombrar chat",
     "delete_chat": "Eliminar chat",
     "projects_section": "Proyectos",
