@@ -577,6 +577,7 @@ function App() {
             project={selectedProject}
             onSessionSelect={handleLoadSession}
             onNewSessionInProject={handleNewSessionInProject}
+            onDeleteSession={deleteSession}
           />
         ) : <ChatPage />
       case 'settings': return <SettingsPage />

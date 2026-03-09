@@ -1,16 +1,25 @@
 import { useState, useEffect } from 'react';
-import { FolderOpen, ArrowUp } from 'lucide-react';
+import { FolderOpen, ArrowUp, MoreVertical, Trash2 } from 'lucide-react';
 import { ChatSession, Project } from '../../types/database';
 import { modelService } from '@/services/modelService';
 import { ModelSearchableSelect } from '@/components/ai-elements/model-searchable-select';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { usePreference } from '@/hooks/usePreferences';
 import { usePlatformStore } from '@/stores/platformStore';
+import { useTranslation } from 'react-i18next';
 import type { Model } from '../../types/models';
 
 interface ProjectPageProps {
   project: Project;
   onSessionSelect: (sessionId: string) => void;
   onNewSessionInProject: (projectId: string, initialMessage?: string, modelId?: string) => void;
+  onDeleteSession: (sessionId: string) => Promise<boolean>;
 }
 
 function formatDate(timestamp: number): string {
@@ -22,7 +31,8 @@ function formatDate(timestamp: number): string {
   return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
 }
 
-export function ProjectPage({ project, onSessionSelect, onNewSessionInProject }: ProjectPageProps) {
+export function ProjectPage({ project, onSessionSelect, onNewSessionInProject, onDeleteSession }: ProjectPageProps) {
+  const { t } = useTranslation('chat');
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
@@ -71,6 +81,13 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject }:
     e.preventDefault();
     if (!input.trim() || !selectedModel) return;
     onNewSessionInProject(project.id, input.trim(), selectedModel);
+  };
+
+  const handleDeleteChat = async (sessionId: string) => {
+    const success = await onDeleteSession(sessionId);
+    if (success) {
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    }
   };
 
   return (
@@ -141,7 +158,7 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject }:
                 .map((session, index) => (
                   <div key={session.id}>
                     <div
-                      className="py-3 cursor-pointer hover:bg-accent/20 rounded-lg px-2 -mx-2 transition-colors"
+                      className="group py-3 cursor-pointer hover:bg-accent/20 rounded-lg px-2 -mx-2 transition-colors"
                       onClick={() => onSessionSelect(session.id)}
                     >
                       <div className="flex items-start justify-between gap-4">
@@ -153,8 +170,41 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject }:
                             {session.model}
                           </div>
                         </div>
-                        <div className="text-xs text-muted-foreground shrink-0 mt-0.5">
-                          {formatDate(session.updated_at)}
+                        <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                          <div className="text-xs text-muted-foreground">
+                            {formatDate(session.updated_at)}
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MoreVertical size={14} />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <DropdownMenuItem
+                                onPointerDown={(e) => e.stopPropagation()}
+                                onClick={(e) => e.stopPropagation()}
+                                onSelect={(e) => {
+                                  e.stopPropagation();
+                                  void handleDeleteChat(session.id);
+                                }}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Trash2 size={14} className="mr-2" />
+                                {t('chat_list.delete_chat')}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     </div>
