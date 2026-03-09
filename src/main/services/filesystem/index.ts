@@ -4,5 +4,7 @@ export type {
   FileContent,
   ReadDirOptions,
   ReadFileOptions,
+  FileSearchResult,
+  SearchFilesOptions,
 } from './fileSystemService';
 export { registerPdfProtocol } from './pdfProtocolService';

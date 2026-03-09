@@ -6,8 +6,9 @@
  */
 
 import fs from 'node:fs/promises';
-import { existsSync, realpathSync, statSync } from 'node:fs';
+import { existsSync, realpathSync, statSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import ignore, { type Ignore } from 'ignore';
 import { getLogger } from '../logging';
 
 const logger = getLogger();
@@ -40,6 +41,18 @@ export interface ReadDirOptions {
 export interface ReadFileOptions {
   maxSize?: number;
   encoding?: BufferEncoding;
+}
+
+export interface FileSearchResult {
+  name: string;
+  path: string;
+  relativePath: string;
+  extension: string;
+}
+
+export interface SearchFilesOptions {
+  maxResults?: number; // default 20
+  maxDepth?: number;   // default 10
 }
 
 const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
@@ -120,6 +133,8 @@ const LANGUAGE_MAP: Record<string, string> = {
 
 class FileSystemService {
   private workingDirectory: string | null = null;
+  private searchCache = new Map<string, { expiresAt: number; data: FileSearchResult[] }>();
+  private ignoreMatcherCache = new Map<string, Ignore>();
 
   setWorkingDirectory(dir: string): void {
     const resolved = path.resolve(dir);
@@ -136,6 +151,8 @@ class FileSystemService {
     }
 
     this.workingDirectory = real;
+    this.searchCache.clear();
+    this.ignoreMatcherCache.clear();
     logger.core.info('FileSystemService: working directory set', { dir: real });
   }
 
@@ -251,6 +268,127 @@ class FileSystemService {
       isBinary: false,
       isTruncated,
     };
+  }
+
+  async searchFiles(query: string, options?: SearchFilesOptions): Promise<FileSearchResult[]> {
+    const trimmedQuery = query.trim();
+    if (!trimmedQuery) return [];
+
+    if (!this.workingDirectory) {
+      throw new Error('No working directory configured');
+    }
+
+    const maxResults = options?.maxResults ?? 20;
+    const maxDepth = options?.maxDepth ?? 10;
+    const queryLower = trimmedQuery.toLowerCase();
+    const cacheKey = `${this.workingDirectory}|${queryLower}|${maxResults}|${maxDepth}`;
+
+    // Check cache
+    const cached = this.searchCache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+
+    // Get or create ignore matcher
+    const ig = this.getIgnoreMatcher(this.workingDirectory);
+
+    // Collect matching files
+    const candidates: Array<FileSearchResult & { score: number }> = [];
+    const collectLimit = maxResults * 3;
+
+    const walkDir = async (dir: string, depth: number): Promise<void> => {
+      if (depth > maxDepth || candidates.length >= collectLimit) return;
+
+      let dirents;
+      try {
+        dirents = await fs.readdir(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+
+      for (const dirent of dirents) {
+        if (candidates.length >= collectLimit) break;
+
+        const name = dirent.name;
+
+        // Skip hidden files
+        if (name.startsWith('.')) continue;
+
+        const fullPath = path.join(dir, name);
+        const relativePath = path.relative(this.workingDirectory!, fullPath);
+
+        // Skip ignored by .gitignore
+        if (ig.ignores(relativePath)) continue;
+
+        if (dirent.isDirectory()) {
+          if (IGNORED_DIRECTORIES.has(name)) continue;
+          await walkDir(fullPath, depth + 1);
+        } else {
+          if (IGNORED_FILES.has(name)) continue;
+
+          const nameLower = name.toLowerCase();
+          const relLower = relativePath.toLowerCase();
+
+          // Scoring
+          let score = 0;
+          if (nameLower === queryLower) {
+            score = 100; // exact filename match
+          } else if (nameLower.includes(queryLower)) {
+            score = 50; // filename includes
+          } else if (relLower.includes(queryLower)) {
+            score = 25; // relativePath includes
+          } else {
+            continue; // no match
+          }
+
+          const extension = path.extname(name).slice(1).toLowerCase();
+          candidates.push({
+            name,
+            path: fullPath,
+            relativePath,
+            extension,
+            score,
+          });
+        }
+      }
+    };
+
+    await walkDir(this.workingDirectory, 0);
+
+    // Sort by score descending, then by name
+    candidates.sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
+
+    const results: FileSearchResult[] = candidates.slice(0, maxResults).map(({ score, ...rest }) => rest);
+
+    // Cache with 30s TTL
+    this.searchCache.set(cacheKey, {
+      expiresAt: Date.now() + 30_000,
+      data: results,
+    });
+
+    return results;
+  }
+
+  private getIgnoreMatcher(workingDir: string): Ignore {
+    const cached = this.ignoreMatcherCache.get(workingDir);
+    if (cached) return cached;
+
+    const ig = ignore();
+    const gitignorePath = path.join(workingDir, '.gitignore');
+    try {
+      if (existsSync(gitignorePath)) {
+        const content = readFileSync(gitignorePath, 'utf-8');
+        ig.add(content);
+      }
+    } catch {
+      // ignore read errors
+    }
+
+    this.ignoreMatcherCache.set(workingDir, ig);
+    return ig;
   }
 
   resolveAndValidatePath(requestedPath: string): string {

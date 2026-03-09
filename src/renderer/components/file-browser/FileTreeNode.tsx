@@ -68,6 +68,19 @@ export function FileTreeNode({ entry, depth, isExpanded, isLoading, onClick }: F
       style={{ paddingLeft: `${depth * 12 + 8}px` }}
       onClick={() => onClick(entry)}
       title={entry.name}
+      draggable={entry.type === 'file'}
+      onDragStart={(e) => {
+        if (entry.type !== 'file') return;
+        e.dataTransfer.setData(
+          'application/levante-file',
+          JSON.stringify({
+            name: entry.name,
+            path: entry.path,
+            extension: entry.extension,
+          })
+        );
+        e.dataTransfer.effectAllowed = 'copy';
+      }}
     >
       {entry.type === 'directory' ? (
         isLoading ? (

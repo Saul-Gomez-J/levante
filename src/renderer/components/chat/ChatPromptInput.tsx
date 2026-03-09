@@ -1,10 +1,11 @@
 import {
   PromptInput,
   PromptInputSubmit,
-  PromptInputTextarea,
   PromptInputToolbar,
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input';
+import { PromptInputEditor } from '@/components/ai-elements/prompt-input-editor';
+import type { FileMentionPayload } from '@/components/chat/lexical/FileMentionNode';
 import { ModelSearchableSelect } from '@/components/ai-elements/model-searchable-select';
 import { ToolsMenu } from '@/components/chat/ToolsMenu';
 import { ContextPreview } from '@/components/chat/ContextPreview';
@@ -88,7 +89,8 @@ interface ChatPromptInputProps {
   selectedPrompts?: SelectedPrompt[];
   onPromptSelected?: (serverId: string, serverName: string, prompt: MCPPrompt, args?: Record<string, any>) => void;
   onPromptRemove?: (serverId: string, name: string) => void;
-  inputRef?: React.Ref<HTMLTextAreaElement>;
+  editorFocusRef?: React.MutableRefObject<(() => void) | null>;
+  onMentionsChange?: (mentions: FileMentionPayload[]) => void;
 }
 
 export function ChatPromptInput({
@@ -125,7 +127,8 @@ export function ChatPromptInput({
   selectedPrompts = [],
   onPromptSelected,
   onPromptRemove,
-  inputRef,
+  editorFocusRef,
+  onMentionsChange,
 }: ChatPromptInputProps) {
   const { t } = useTranslation('chat');
 
@@ -138,8 +141,8 @@ export function ChatPromptInput({
   // Check if we have any context to show
   const hasContext = attachedFiles.length > 0 || selectedResources.length > 0 || selectedPrompts.length > 0;
 
-  // Handle paste event to extract files from clipboard
-  const handlePaste = async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+  // Handle paste event to extract files from clipboard (native ClipboardEvent)
+  const handlePaste = async (e: ClipboardEvent) => {
     logger.core.debug('Paste event triggered', {
       hasOnFilesSelected: !!onFilesSelected,
       status,
@@ -230,14 +233,16 @@ export function ChatPromptInput({
       )}
 
       {/* Text Input */}
-      <PromptInputTextarea
-        ref={inputRef}
-        onChange={(e) => onInputChange(e.target.value)}
-        onPaste={handlePaste}
+      <PromptInputEditor
         value={input}
-        rows={1}
-        className="p-2 border-none"
+        onChange={onInputChange}
+        onPaste={handlePaste}
         placeholder={placeholder}
+        className="border-none"
+        focusRef={editorFocusRef}
+        coworkMode={coworkMode}
+        effectiveCwd={coworkMode ? coworkModeCwd : null}
+        onMentionsChange={onMentionsChange}
       />
 
       {/* Toolbar */}
