@@ -129,6 +129,10 @@ const filterAttachmentMarkers = (content: string): string => {
     .trim();
 };
 
+import { getRendererLogger } from '@/services/logger';
+
+const logger = getRendererLogger();
+
 export const Response = memo(
   ({ className, children, ...props }: ResponseProps) => {
     const [shouldProcessMermaid, setShouldProcessMermaid] = useState(false);
@@ -148,6 +152,86 @@ export const Response = memo(
       }
     }, [streamFinished, filteredChildren]);
 
+    const handleCodeBlockAction = async (e: React.MouseEvent<HTMLDivElement>) => {
+      const target = e.target as HTMLElement;
+
+      // Handle Copy Button
+      const copyButton = target.closest('[data-streamdown="code-block-copy-button"]') as HTMLButtonElement | null;
+      if (copyButton) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const codeBlockContainer = copyButton.closest('[data-streamdown="code-block"]');
+        const codeBlockBody = codeBlockContainer?.querySelector('[data-streamdown="code-block-body"]');
+
+        if (codeBlockBody) {
+          const codeElement = codeBlockBody.querySelector('code');
+          const textToCopy = codeElement ? codeElement.textContent || '' : (codeBlockBody as HTMLElement).innerText || '';
+
+          try {
+            await navigator.clipboard.writeText(textToCopy);
+
+            // Visual feedback & animation
+            const originalHTML = copyButton.innerHTML;
+            copyButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green-500"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
+            copyButton.style.transform = 'scale(1.2)';
+
+            setTimeout(() => {
+              if (document.body.contains(copyButton)) {
+                copyButton.innerHTML = originalHTML;
+                copyButton.style.transform = 'scale(1)';
+              }
+            }, 2000);
+          } catch (err) {
+            logger.core.error('Failed to copy code block', { error: err });
+          }
+        }
+        return;
+      }
+
+      // Handle Download Button
+      const downloadButton = target.closest('[data-streamdown="code-block-download-button"]') as HTMLButtonElement | null;
+      if (downloadButton) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const codeBlockContainer = downloadButton.closest('[data-streamdown="code-block"]');
+        const codeBlockBody = codeBlockContainer?.querySelector('[data-streamdown="code-block-body"]');
+        const header = codeBlockContainer?.querySelector('[data-streamdown="code-block-header"]');
+
+        if (codeBlockBody) {
+          const codeElement = codeBlockBody.querySelector('code');
+          const textToDownload = codeElement ? codeElement.textContent || '' : (codeBlockBody as HTMLElement).innerText || '';
+          const langSpan = header?.querySelector('span');
+          const language = langSpan?.textContent?.trim() || 'txt';
+
+          try {
+            const blob = new Blob([textToDownload], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `code-snippet.${language}`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            // Visual feedback & animation
+            downloadButton.style.transform = 'scale(1.2)';
+            downloadButton.classList.add('text-primary');
+            setTimeout(() => {
+              if (document.body.contains(downloadButton)) {
+                downloadButton.style.transform = 'scale(1)';
+                downloadButton.classList.remove('text-primary');
+              }
+            }, 300);
+          } catch (err) {
+            logger.core.error('Failed to download code block', { error: err });
+          }
+        }
+      }
+    };
+
     // Don't render anything if content is only attachment markers
     if (typeof filteredChildren === 'string' && !filteredChildren) {
       return null;
@@ -155,19 +239,21 @@ export const Response = memo(
 
     if (typeof filteredChildren !== 'string') {
       return (
-        <Streamdown
-          className={cn(
-            'w-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
-            className
-          )}
-          components={listComponents}
-          remarkPlugins={[remarkGfm, remarkMath]}
-          rehypePlugins={[rehypeKatex]}
-          shikiTheme={shikiTheme}
-          {...props}
-        >
-          {filteredChildren}
-        </Streamdown>
+        <div onClickCapture={handleCodeBlockAction} className="w-full">
+          <Streamdown
+            className={cn(
+              'w-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
+              className
+            )}
+            components={listComponents}
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeKatex]}
+            shikiTheme={shikiTheme}
+            {...props}
+          >
+            {filteredChildren}
+          </Streamdown>
+        </div>
       );
     }
 
@@ -180,7 +266,7 @@ export const Response = memo(
 
       if (parts.length > 1 || (parts.length === 1 && parts[0].type === 'mermaid')) {
         return (
-          <div className={cn('w-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0', className)}>
+          <div onClickCapture={handleCodeBlockAction} className={cn('w-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0', className)}>
             {parts.map((part, index) => (
               part.type === 'mermaid' ? (
                 <MermaidCodeBlock key={`mermaid-${index}`}>
@@ -207,19 +293,21 @@ export const Response = memo(
 
     // Default: show regular Streamdown content
     return (
-      <Streamdown
-        className={cn(
-          'w-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
-          className
-        )}
-        components={listComponents}
-        remarkPlugins={[remarkGfm, remarkMath]}
-        rehypePlugins={[rehypeKatex]}
-        shikiTheme={shikiTheme}
-        {...props}
-      >
-        {filteredChildren}
-      </Streamdown>
+      <div onClickCapture={handleCodeBlockAction} className="w-full">
+        <Streamdown
+          className={cn(
+            'w-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0',
+            className
+          )}
+          components={listComponents}
+          remarkPlugins={[remarkGfm, remarkMath]}
+          rehypePlugins={[rehypeKatex]}
+          shikiTheme={shikiTheme}
+          {...props}
+        >
+          {filteredChildren}
+        </Streamdown>
+      </div>
     );
   }
 );

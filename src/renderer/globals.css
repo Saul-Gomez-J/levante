@@ -351,4 +351,22 @@
   .prompt-input-paragraph {
     margin: 0;
   }
+
+  /* Fix streamdown code block buttons clickability */
+  [data-streamdown="code-block"] {
+    position: relative;
+    z-index: 1;
+  }
+  
+  [data-streamdown="code-block"] > .sticky {
+    z-index: 50 !important;
+  }
+  
+  [data-streamdown="code-block-actions"], 
+  [data-streamdown="code-block-copy-button"], 
+  [data-streamdown="code-block-download-button"] {
+    pointer-events: auto !important;
+    position: relative !important;
+    z-index: 51 !important;
+  }
 }
