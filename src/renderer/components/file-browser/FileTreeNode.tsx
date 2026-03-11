@@ -20,7 +20,7 @@ interface FileTreeNodeProps {
   onClick: (entry: DirectoryEntry) => void;
 }
 
-function getFileIcon(entry: DirectoryEntry) {
+export function getFileIcon(entry: DirectoryEntry) {
   if (entry.type === 'directory') {
     return <Folder className="h-3.5 w-3.5 shrink-0 text-blue-400" />;
   }

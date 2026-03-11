@@ -87,12 +87,14 @@
     "file_browser": {
       "tab_chats": "Chats",
       "tab_files": "Archivos",
-      "search_files_placeholder": "Filtrar archivos...",
+      "search_files_placeholder": "Buscar archivos...",
       "show_hidden": "Mostrar archivos ocultos",
       "hide_hidden": "Ocultar archivos ocultos",
       "refresh": "Actualizar",
       "empty_directory": "Directorio vacío",
-      "read_dir_error": "No se pudo leer el directorio"
+      "read_dir_error": "No se pudo leer el directorio",
+      "searching": "Buscando...",
+      "no_search_results": "No se encontraron archivos"
     }
   },
   "tools_menu": {

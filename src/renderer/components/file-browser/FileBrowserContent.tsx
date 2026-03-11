@@ -1,14 +1,21 @@
-import { useEffect, useMemo } from 'react';
-import { RefreshCw, Eye, EyeOff, FolderOpen } from 'lucide-react';
+import { useEffect, useMemo, useState, useRef } from 'react';
+import { RefreshCw, Eye, EyeOff, FolderOpen, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFileBrowserStore, type DirectoryEntry } from '@/stores/fileBrowserStore';
 import { useSidePanelStore } from '@/stores/sidePanelStore';
-import { FileTreeNode } from './FileTreeNode';
+import { FileTreeNode, getFileIcon } from './FileTreeNode';
 import { useTranslation } from 'react-i18next';
 
 interface FileBrowserContentProps {
   searchQuery: string;
   cwd: string;
+}
+
+interface FileSearchResult {
+  name: string;
+  path: string;
+  relativePath: string;
+  extension: string;
 }
 
 function isEntryVisible(
@@ -112,9 +119,65 @@ export function FileBrowserContent({ searchQuery, cwd }: FileBrowserContentProps
     setShowHidden,
   } = useFileBrowserStore();
 
+  // Backend search state
+  const [searchResults, setSearchResults] = useState<FileSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
+
   useEffect(() => {
     void initialize(cwd);
   }, [cwd, initialize]);
+
+  // Debounced backend search
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+
+    if (!trimmed || trimmed.length < 2) {
+      setSearchResults([]);
+      setIsSearching(false);
+      setSearchError(null);
+      return;
+    }
+
+    setIsSearching(true);
+    setSearchError(null);
+
+    debounceRef.current = setTimeout(async () => {
+      const currentRequestId = ++requestIdRef.current;
+      try {
+        const result = await window.levante.fs.searchFiles(trimmed, { maxResults: 30 });
+        if (currentRequestId !== requestIdRef.current) return;
+
+        if (result.success && result.data) {
+          setSearchResults(result.data);
+        } else {
+          setSearchError(result.error ?? 'Search failed');
+          setSearchResults([]);
+        }
+      } catch (err) {
+        if (currentRequestId !== requestIdRef.current) return;
+        setSearchError(err instanceof Error ? err.message : 'Search failed');
+        setSearchResults([]);
+      } finally {
+        if (currentRequestId === requestIdRef.current) {
+          setIsSearching(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [searchQuery]);
 
   const handleItemClick = (entry: DirectoryEntry) => {
     if (entry.type === 'directory') {
@@ -127,6 +190,7 @@ export function FileBrowserContent({ searchQuery, cwd }: FileBrowserContentProps
 
   const rootBasename = getBasename(cwd);
   const rootEntries = entries.get(cwd) ?? [];
+  const isSearchMode = searchQuery.trim().length >= 2;
 
   return (
     <div className="flex flex-col">
@@ -169,22 +233,75 @@ export function FileBrowserContent({ searchQuery, cwd }: FileBrowserContentProps
         </div>
       )}
 
-      {rootEntries.length === 0 && !isLoadingDir ? (
-        <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-          {t('chat_list.file_browser.empty_directory')}
+      {isSearchMode ? (
+        <div className="py-1">
+          {isSearching && searchResults.length === 0 ? (
+            <div className="flex items-center justify-center gap-2 px-3 py-4 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              {t('chat_list.file_browser.searching')}
+            </div>
+          ) : searchError ? (
+            <div className="px-3 py-2 text-xs text-destructive">
+              {searchError}
+            </div>
+          ) : searchResults.length === 0 && !isSearching ? (
+            <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+              {t('chat_list.file_browser.no_search_results')}
+            </div>
+          ) : (
+            <div>
+              {isSearching && (
+                <div className="flex items-center gap-1.5 px-3 py-1 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                </div>
+              )}
+              {searchResults.map((result) => (
+                <button
+                  key={result.path}
+                  className="flex items-center gap-1.5 py-[3px] px-3 w-full text-left cursor-pointer hover:bg-accent/50 rounded-sm text-sm transition-colors"
+                  onClick={() => void openFileTab(result.path)}
+                  title={result.relativePath}
+                >
+                  {getFileIcon({
+                    name: result.name,
+                    path: result.path,
+                    type: 'file',
+                    size: 0,
+                    extension: result.extension,
+                    modifiedAt: 0,
+                    isHidden: false,
+                  })}
+                  <div className="flex flex-col min-w-0 flex-1">
+                    <span className="truncate text-[13px]">{result.name}</span>
+                    <span className="truncate text-[10px] text-muted-foreground">
+                      {result.relativePath}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       ) : (
-        <div className="py-1">
-          <FileTree
-            entries={rootEntries}
-            allEntries={entries}
-            expandedDirs={expandedDirs}
-            depth={0}
-            isLoadingDir={isLoadingDir}
-            onItemClick={handleItemClick}
-            filterQuery={searchQuery}
-          />
-        </div>
+        <>
+          {rootEntries.length === 0 && !isLoadingDir ? (
+            <div className="px-3 py-4 text-xs text-muted-foreground text-center">
+              {t('chat_list.file_browser.empty_directory')}
+            </div>
+          ) : (
+            <div className="py-1">
+              <FileTree
+                entries={rootEntries}
+                allEntries={entries}
+                expandedDirs={expandedDirs}
+                depth={0}
+                isLoadingDir={isLoadingDir}
+                onItemClick={handleItemClick}
+                filterQuery=""
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -201,7 +201,9 @@ export function SidebarSections({
             ) : (
               <SidebarMenuButton onClick={() => setSearchOpen(true)}>
                 <Search className="w-4 h-4" />
-                {t('chat_list.search_placeholder')}
+                {activeSection === 'chats'
+                  ? t('chat_list.search_placeholder')
+                  : t('chat_list.file_browser.search_files_placeholder')}
               </SidebarMenuButton>
             )}
           </SidebarMenuItem>
