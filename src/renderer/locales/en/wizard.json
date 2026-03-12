@@ -174,5 +174,8 @@
   },
   "steps": {
     "step": "Step {{current}} of {{total}}"
+  },
+  "navigation": {
+    "start_using_levante": "Start Using Levante"
   }
 }
