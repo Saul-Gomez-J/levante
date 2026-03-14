@@ -23,7 +23,7 @@ export async function fetchOpenAIModels(apiKey: string): Promise<Model[]> {
         id: model.id,
         name: model.id,
         provider: 'openai',
-        contextLength: getContextLength(model.id),
+        contextLength: 0,
         capabilities: getCapabilities(model.id),
         isAvailable: true,
         userDefined: false,
@@ -35,13 +35,6 @@ export async function fetchOpenAIModels(apiKey: string): Promise<Model[]> {
     });
     throw error;
   }
-}
-
-function getContextLength(modelId: string): number {
-  if (modelId.includes('gpt-4')) return 128000;
-  if (modelId.includes('gpt-3.5-turbo-16k')) return 16000;
-  if (modelId.includes('gpt-3.5')) return 4000;
-  return 4000;
 }
 
 function getCapabilities(modelId: string): string[] {

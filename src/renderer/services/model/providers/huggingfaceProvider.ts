@@ -145,16 +145,7 @@ function getContextLength(model: any): number {
   if (model.config?.max_position_embeddings) return model.config.max_position_embeddings;
   if (model.config?.model_max_length) return model.config.model_max_length;
 
-  // Fallback based on model ID patterns
-  const modelId = model.id.toLowerCase();
-
-  if (modelId.includes('llama-3.3') || modelId.includes('llama-3.1')) return 128000;
-  if (modelId.includes('qwen2.5')) return 128000;
-  if (modelId.includes('mistral')) return 32768;
-  if (modelId.includes('gemma-2')) return 8192;
-
-  // Default fallback
-  return 8192;
+  return 0;
 }
 
 function normalizeModalities(value: unknown): string[] {

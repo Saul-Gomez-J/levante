@@ -220,5 +220,20 @@
       "failed": "fallida",
       "killed": "terminada"
     }
+  },
+  "context_usage": {
+    "compact": "Compactar",
+    "compacting": "Compactando...",
+    "tokens": "tokens",
+    "tokens_used": "Tokens usados",
+    "precision": "Precisión",
+    "precision_real": "Real",
+    "precision_estimated": "Estimado",
+    "tokens_available": "Tokens disponibles",
+    "used_ratio": "Usado/Disponible",
+    "tokens_remaining": "Tokens restantes",
+    "context_unknown": "Context window desconocida para este modelo/proveedor",
+    "compact_success": "Conversación compactada",
+    "compact_error": "No se pudo compactar"
   }
 }

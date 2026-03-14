@@ -28,7 +28,7 @@ export async function fetchGatewayModels(
       id: model.id,
       name: model.id,
       provider: 'vercel-gateway',
-      contextLength: getModelContextLength(model.id),
+      contextLength: 0,
       capabilities: ['text'],
       isAvailable: true,
       userDefined: false,
@@ -41,20 +41,6 @@ export async function fetchGatewayModels(
     });
     throw error;
   }
-}
-
-/**
- * Get context length based on model ID patterns
- */
-function getModelContextLength(modelId: string): number {
-  if (modelId.includes('claude')) {
-    if (modelId.includes('sonnet') || modelId.includes('opus')) return 200000;
-    if (modelId.includes('haiku')) return 100000;
-  }
-  if (modelId.includes('gpt-4')) return 128000;
-  if (modelId.includes('gpt-3.5')) return 16000;
-  if (modelId.includes('gemini')) return 32000;
-  return 4000; // Default fallback
 }
 
 /**

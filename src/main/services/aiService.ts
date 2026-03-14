@@ -103,6 +103,11 @@ export interface ChatStreamChunk {
     dataUrl: string;
     filename: string;
   };
+  tokenUsage?: {
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+  };
 }
 
 type RendererAttachmentPayload = {
@@ -1738,6 +1743,18 @@ export class AIService {
           partTypes: responseParts.map((p: any) => p.type),
         });
         yield { parts: responseParts };
+      }
+
+      // Emit token usage before done
+      const finalUsage = await (result as any).usage;
+      if (finalUsage) {
+        yield {
+          tokenUsage: {
+            inputTokens: finalUsage.inputTokens || 0,
+            outputTokens: finalUsage.outputTokens || 0,
+            totalTokens: finalUsage.totalTokens || 0,
+          },
+        };
       }
 
       yield { done: true };

@@ -32,6 +32,12 @@ export interface ChatRequest {
   };
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+}
+
 export interface ChatStreamChunk {
   delta?: string;
   done?: boolean;
@@ -71,6 +77,7 @@ export interface ChatStreamChunk {
     dataUrl: string;
     filename: string;
   };
+  tokenUsage?: TokenUsage;
 }
 
 // MCP Types for preload
@@ -215,3 +222,26 @@ export type {
 };
 
 export type { Announcement, AnnouncementCategory, LastSeenAnnouncements } from '../../types/announcement';
+
+// Context Budget types
+export interface ContextBudgetEstimateInput {
+  model: string;
+  enableMCP: boolean;
+  webSearch: boolean;
+  projectDescription?: string;
+  projectContext?: { projectId?: string };
+  codeMode?: {
+    enabled: boolean;
+    cwd?: string;
+    tools?: Record<string, boolean>;
+  };
+}
+
+export interface ContextBudgetEstimate {
+  systemPromptTokens: number;
+  toolsTokens: number;
+  skillsTokens: number;
+  providerSlackTokens: number;
+  staticOverheadTokens: number;
+  toolCount: number;
+}

@@ -210,7 +210,7 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
           id: raw.id,
           name: raw.name || raw.id,
           provider: 'levante-platform',
-          contextLength: raw.context_length || raw.contextLength || 128000,
+          contextLength: raw.context_length || raw.contextLength || 0,
           pricing: raw.pricing
             ? {
                 input: parseFloat(raw.pricing.prompt || raw.pricing.input || '0'),

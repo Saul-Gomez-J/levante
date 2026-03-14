@@ -69,6 +69,8 @@ import { skillsApi } from "./api/skills";
 import { platformApi } from "./api/platform";
 import { anthropicOAuthApi } from "./api/anthropicOAuth";
 import { filesystemApi } from "./api/filesystem";
+import { compactionApi } from "./api/compaction";
+import { contextBudgetApi } from "./api/contextBudget";
 
 // Re-export types for backwards compatibility
 export type {
@@ -962,6 +964,27 @@ export interface LevanteAPI {
     disconnect: () => Promise<{ success: boolean; error?: string }>;
   };
 
+  // Compaction API
+  compaction: {
+    compact: (input: {
+      sessionId: string;
+      model: string;
+    }) => Promise<{
+      success: boolean;
+      summaryMessageId?: string;
+      error?: string;
+    }>;
+  };
+
+  // Context Budget API
+  contextBudget: {
+    estimate: (input: import('./types').ContextBudgetEstimateInput) => Promise<{
+      success: boolean;
+      data?: import('./types').ContextBudgetEstimate;
+      error?: string;
+    }>;
+  };
+
   // Skills API
   skills: {
     getCatalog: () => Promise<import('../types/skills').IPCResult<import('../types/skills').SkillsCatalogResponse>>;
@@ -1048,6 +1071,12 @@ const api: LevanteAPI = {
 
   // Projects API
   projects: projectsApi,
+
+  // Compaction API
+  compaction: compactionApi,
+
+  // Context Budget API
+  contextBudget: contextBudgetApi,
 
   // Skills API
   skills: skillsApi,

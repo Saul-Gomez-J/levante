@@ -37,6 +37,8 @@ import { setupSkillsHandlers } from "../ipc/skillsHandlers";
 import { setupPlatformHandlers } from "../ipc/platformHandlers";
 import { setupAnthropicOAuthHandlers } from "../ipc/anthropicOAuthHandlers";
 import { setupFileSystemHandlers } from "../ipc/fileSystemHandlers";
+import { setupCompactionHandlers } from "../ipc/compactionHandlers";
+import { setupContextBudgetHandlers } from "../ipc/contextBudgetHandlers";
 import { registerPdfProtocol } from "../services/filesystem/pdfProtocolService";
 
 const logger = getLogger();
@@ -139,6 +141,8 @@ export async function registerIPCHandlers(getMainWindow: () => BrowserWindow | n
 
   // App-level handlers
   setupChatHandlers();
+  setupCompactionHandlers();
+  setupContextBudgetHandlers();
   setupAppHandlers(getMainWindow);
   setupOAuthHandlers();
   setupWidgetHandlers();

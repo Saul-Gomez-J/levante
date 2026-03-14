@@ -20,7 +20,7 @@ export async function fetchXAIModels(apiKey: string): Promise<Model[]> {
       id: model.id,
       name: model.id,
       provider: 'xai',
-      contextLength: getContextLength(model.id),
+      contextLength: model.context_window || 0,
       capabilities: getCapabilities(model.id),
       isAvailable: true,
       userDefined: false,
@@ -32,12 +32,6 @@ export async function fetchXAIModels(apiKey: string): Promise<Model[]> {
     });
     throw error;
   }
-}
-
-function getContextLength(modelId: string): number {
-  if (modelId.includes('grok-beta')) return 131072;
-  if (modelId.includes('grok-vision')) return 8192;
-  return 131072;
 }
 
 function getCapabilities(modelId: string): string[] {

@@ -20,7 +20,7 @@ export async function fetchOpenRouterModels(apiKey?: string): Promise<Model[]> {
       id: model.id,
       name: model.name || model.id,
       provider: 'openrouter',
-      contextLength: model.context_length || 4000,
+      contextLength: model.context_length || 0,
       pricing: model.pricing ? {
         input: parseFloat(model.pricing.prompt) * 1000000, // Convert to per million tokens
         output: parseFloat(model.pricing.completion) * 1000000

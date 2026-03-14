@@ -43,12 +43,113 @@ import { WebPreviewToast } from '@/components/chat/WebPreviewToast';
 import { useWebPreview } from '@/hooks/useWebPreview';
 import type { FileMentionPayload } from '@/components/chat/lexical/FileMentionNode';
 import { toast } from 'sonner';
+import { ContextUsageIndicator, type ContextUsageData } from '@/components/chat/ContextUsageIndicator';
+import type { TokenUsage, ContextBudgetEstimate } from '../../preload/types';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
+import type { UIMessage } from '@ai-sdk/react';
 import { createElectronChatTransport } from '@/transports/ElectronChatTransport';
 
 const logger = getRendererLogger();
+
+const COMPACTION_MARKER = '[COMPACTION_SUMMARY]';
+const CHARS_PER_TOKEN = 4;
+
+function extractTextFromMessage(message: UIMessage): string {
+  if (!Array.isArray(message.parts)) return '';
+  return message.parts
+    .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
+    .map((p: any) => p.text)
+    .join('\n')
+    .trim();
+}
+
+function getActiveContextMessages(messages: UIMessage[]): UIMessage[] {
+  let index = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role !== 'system') continue;
+    const text = extractTextFromMessage(msg);
+    if (text.startsWith(COMPACTION_MARKER)) {
+      index = i;
+      break;
+    }
+  }
+  return index >= 0 ? messages.slice(index) : messages;
+}
+
+function estimateTokens(text: string): number {
+  return Math.max(0, Math.round((text || '').length / CHARS_PER_TOKEN));
+}
+
+const RESPONSE_RESERVE_TOKENS = 2000;
+
+function calculateContextUsage(
+  messages: UIMessage[],
+  contextLength: number,
+  overheadInfo?: {
+    staticOverheadTokens: number;
+    overheadEMA: number | null;
+    toolCount: number;
+  } | null
+): ContextUsageData | null {
+  if (!messages.length) return null;
+
+  const scoped = getActiveContextMessages(messages);
+  if (!scoped.length) return null;
+
+  const estimatedAll = scoped.reduce((sum, msg) => sum + estimateTokens(extractTextFromMessage(msg)), 0);
+
+  let activeMessageTokens = estimatedAll;
+  let isEstimate = true;
+
+  // Use real usage data when available for more accurate message token count
+  let latestRealIndex = -1;
+  let latestReal = 0;
+  scoped.forEach((msg, idx) => {
+    const usage = (msg as any).tokenUsage as TokenUsage | undefined;
+    if (usage && typeof usage.totalTokens === 'number' && usage.totalTokens > 0) {
+      latestRealIndex = idx;
+      latestReal = usage.totalTokens;
+    }
+  });
+
+  if (latestRealIndex >= 0) {
+    const tailEstimate = scoped
+      .slice(latestRealIndex + 1)
+      .reduce((sum, msg) => sum + estimateTokens(extractTextFromMessage(msg)), 0);
+    activeMessageTokens = Math.max(0, latestReal + tailEstimate);
+    isEstimate = tailEstimate > 0;
+  }
+
+  // Include overhead (system prompt + tools + skills + provider slack)
+  let effectiveOverhead = 0;
+  if (overheadInfo) {
+    effectiveOverhead =
+      overheadInfo.overheadEMA !== null
+        ? Math.round(overheadInfo.overheadEMA)
+        : overheadInfo.staticOverheadTokens;
+    isEstimate = isEstimate || overheadInfo.overheadEMA === null;
+  }
+
+  const used = activeMessageTokens + effectiveOverhead + RESPONSE_RESERVE_TOKENS;
+  const percentage =
+    contextLength > 0
+      ? Math.min(100, Math.max(0, Math.round((used / contextLength) * 100)))
+      : 0;
+
+  return {
+    used,
+    contextLength,
+    percentage,
+    isEstimate,
+    activeMessageTokens,
+    overheadTokens: effectiveOverhead,
+    responseReserveTokens: RESPONSE_RESERVE_TOKENS,
+    isLearnedOverhead: overheadInfo?.overheadEMA !== null && overheadInfo?.overheadEMA !== undefined,
+  };
+}
 
 const ChatPage = () => {
   const { t } = useTranslation('chat');
@@ -67,6 +168,7 @@ const ChatPage = () => {
   const [fileMentions, setFileMentions] = useState<FileMentionPayload[]>([]);
   const [pendingMessageAfterStopMentions, setPendingMessageAfterStopMentions] = useState<FileMentionPayload[] | null>(null);
   const [pendingFirstMentions, setPendingFirstMentions] = useState<FileMentionPayload[] | null>(null);
+  const [isCompacting, setIsCompacting] = useState(false);
 
   // Project store (read-only for effectiveCwd / projectDescription)
   const projects = useProjectStore((state) => state.projects);
@@ -92,6 +194,10 @@ const ChatPage = () => {
   } = useToolAutoApproval();
 
   // Chat store
+  const contextBudget = useChatStore((state) => state.contextBudget);
+  const setStaticOverhead = useChatStore((state) => state.setStaticOverhead);
+  const updateLearnedOverhead = useChatStore((state) => state.updateLearnedOverhead);
+  const recalculateContextBudget = useChatStore((state) => state.recalculateContextBudget);
   const currentSession = useChatStore((state) => state.currentSession);
   const persistMessage = useChatStore((state) => state.persistMessage);
   const editMessage = useChatStore((state) => state.editMessage); // ← NEW
@@ -290,6 +396,46 @@ const ChatPage = () => {
   // Web preview hook — activa la suscripción a eventos de detección de puertos
   useWebPreview();
 
+  // Request context budget estimate when session/model/mode change
+  useEffect(() => {
+    if (!model) return;
+
+    const fetchEstimate = async () => {
+      try {
+        const result = await window.levante.contextBudget.estimate({
+          model,
+          enableMCP: enableMCP ?? true,
+          webSearch: false,
+          projectDescription,
+          projectContext: currentSession?.project_id
+            ? { projectId: currentSession.project_id }
+            : undefined,
+          codeMode:
+            coworkMode && effectiveCwd
+              ? { enabled: true, cwd: effectiveCwd }
+              : undefined,
+        });
+
+        if (result.success && result.data) {
+          setStaticOverhead({
+            staticOverheadTokens: result.data.staticOverheadTokens,
+            toolCount: result.data.toolCount,
+          });
+          logger.aiSdk.debug('Context budget estimate received', {
+            staticOverheadTokens: result.data.staticOverheadTokens,
+            toolCount: result.data.toolCount,
+          });
+        }
+      } catch (error) {
+        logger.aiSdk.warn('Failed to fetch context budget estimate', {
+          error: error instanceof Error ? error.message : error,
+        });
+      }
+    };
+
+    fetchEstimate();
+  }, [model, enableMCP, coworkMode, effectiveCwd, projectDescription, currentSession?.project_id, setStaticOverhead]);
+
   // Create transport with current configuration
   const transport = useMemo(
     () =>
@@ -455,7 +601,25 @@ const ChatPage = () => {
           attachments: messageWithAttachments.attachments,
         });
 
-        const persistResult = await persistMessage(messageWithAttachments);
+        const tokenUsage = transport.consumeLastTokenUsage();
+
+        // Consume learned overhead from transport and update EMA
+        const learnedOverhead = transport.consumeLastLearnedOverheadTokens();
+        if (learnedOverhead !== null) {
+          updateLearnedOverhead(learnedOverhead);
+          logger.aiSdk.debug('Learned overhead applied to EMA', { learnedOverhead });
+        }
+
+        const persistResult = await persistMessage(messageWithAttachments, tokenUsage);
+
+        // Update the message in useChat state with token usage
+        if (tokenUsage) {
+          setMessages((prevMessages) =>
+            prevMessages.map((m) =>
+              m.id === message.id ? ({ ...m, tokenUsage } as any) : m
+            )
+          );
+        }
 
         // Update the message in useChat state to include attachments and generated content
         if (generatedAttachments.length > 0) {
@@ -499,6 +663,54 @@ const ChatPage = () => {
       triggerMermaidProcessing();
     },
   });
+
+  // Context usage calculation (includes overhead from system prompt + tools + skills)
+  const contextUsage = useMemo(() => {
+    const contextLength = currentModelInfo?.contextLength || 0;
+    const overheadInfo = contextBudget
+      ? {
+          staticOverheadTokens: contextBudget.staticOverheadTokens,
+          overheadEMA: contextBudget.overheadEMA,
+          toolCount: contextBudget.toolCount ?? 0,
+        }
+      : null;
+    return calculateContextUsage(messages as UIMessage[], contextLength, overheadInfo);
+  }, [messages, currentModelInfo?.contextLength, contextBudget]);
+
+  // Compaction handler
+  const handleCompactConversation = useCallback(async () => {
+    if (!currentSession) return;
+    if (isCompacting) return;
+    if (status === 'streaming' || status === 'submitted') return;
+
+    setIsCompacting(true);
+    try {
+      const result = await window.levante.compaction.compact({
+        sessionId: currentSession.id,
+        model: model || currentSession.model,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Compaction failed');
+      }
+
+      const historical = await loadHistoricalMessages(currentSession.id);
+      setMessages(historical);
+
+      toast.success(t('context_usage.compact_success'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('context_usage.compact_error'));
+    } finally {
+      setIsCompacting(false);
+    }
+  }, [
+    currentSession,
+    isCompacting,
+    status,
+    model,
+    loadHistoricalMessages,
+    setMessages,
+  ]);
 
   // Handle pending message after stop
   useEffect(() => {
@@ -1177,7 +1389,7 @@ const ChatPage = () => {
                     availableModels={filteredAvailableModels}
                     groupedModelsByProvider={groupedModelsByProvider || undefined}
                     modelsLoading={modelsLoading}
-                    status={status}
+                    status={isCompacting ? 'submitted' : status}
                     modelTaskType={modelTaskType}
                     currentModelInfo={currentModelInfo}
                     attachedFiles={attachedFiles}
@@ -1230,6 +1442,20 @@ const ChatPage = () => {
               </Conversation>
               {/* Input */}
               <div className="bg-transparent px-2">
+                <div className="max-w-3xl mx-auto w-full">
+                  <ContextUsageIndicator
+                    usage={contextUsage}
+                    onCompact={handleCompactConversation}
+                    compactDisabled={
+                      isCompacting ||
+                      status === 'streaming' ||
+                      status === 'submitted' ||
+                      !currentSession ||
+                      messages.length < 2
+                    }
+                    isCompacting={isCompacting}
+                  />
+                </div>
                 <ChatPromptInput
                   input={input}
                   onInputChange={setInput}
@@ -1250,7 +1476,7 @@ const ChatPage = () => {
                   availableModels={filteredAvailableModels}
                   groupedModelsByProvider={groupedModelsByProvider || undefined}
                   modelsLoading={modelsLoading}
-                  status={status}
+                  status={isCompacting ? 'submitted' : status}
                   modelTaskType={modelTaskType}
                   currentModelInfo={currentModelInfo}
                   attachedFiles={attachedFiles}
