@@ -52,6 +52,12 @@ export class OAuthRedirectServer {
         const finalConfig = { ...this.DEFAULT_CONFIG, ...config };
 
         try {
+            // Si hay un server anterior corriendo (flujo interrumpido), pararlo primero
+            if (this.server) {
+                this.logger.oauth.warn('Previous redirect server still running, stopping it before restart');
+                await this.stop();
+            }
+
             // Verificar si el puerto está disponible
             const isAvailable = await this.isPortAvailable(finalConfig.port);
 
