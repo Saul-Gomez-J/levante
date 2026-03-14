@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { getLogger } from './logging';
 import { directoryService } from './directoryService';
+import { envConfig } from './envConfig';
 import type {
   SkillDescriptor,
   SkillBundleResponse,
@@ -18,7 +19,7 @@ import type {
 
 const logger = getLogger();
 
-const SERVICES_HOST = 'http://localhost:5180';
+const SERVICES_HOST = envConfig.servicesHost;
 const CATALOG_ENDPOINT = '/api/skills.json';
 const BUNDLE_ENDPOINT = (skillId: string) => {
   if (skillId.includes('/')) {

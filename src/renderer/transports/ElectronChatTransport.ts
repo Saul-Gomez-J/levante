@@ -4,7 +4,7 @@ import type {
   UIMessage,
   UIMessageChunk,
 } from "ai";
-import type { ChatRequest, ChatStreamChunk } from "../../preload/types";
+import type { ChatRequest, ChatStreamChunk, TokenUsage } from "../../preload/types";
 import { logger } from "@/services/logger";
 import { ChunkBatcher } from "@/utils/chunkBatcher";
 
@@ -28,6 +28,11 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
     null;
   /** Category of the last streaming error, if any */
   public lastErrorCategory: string | undefined = undefined;
+  private lastTokenUsage: TokenUsage | null = null;
+  private lastRequestMessageTokens: number | null = null;
+  private lastLearnedOverheadTokens: number | null = null;
+  private static readonly COMPACTION_MARKER = '[COMPACTION_SUMMARY]';
+  private static readonly CHARS_PER_TOKEN = 4;
 
   constructor(
     private defaultOptions: {
@@ -39,6 +44,65 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       projectId?: string | null;
     } = {}
   ) {}
+
+  consumeLastTokenUsage(): TokenUsage | null {
+    const usage = this.lastTokenUsage;
+    this.lastTokenUsage = null;
+    return usage;
+  }
+
+  consumeLastLearnedOverheadTokens(): number | null {
+    const val = this.lastLearnedOverheadTokens;
+    this.lastLearnedOverheadTokens = null;
+    return val;
+  }
+
+  consumeLastRequestMessageTokens(): number | null {
+    const val = this.lastRequestMessageTokens;
+    this.lastRequestMessageTokens = null;
+    return val;
+  }
+
+  private extractText(message: UIMessage): string {
+    if (!message.parts || !Array.isArray(message.parts)) return '';
+    return message.parts
+      .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
+      .map((p: any) => p.text)
+      .join('\n')
+      .trim();
+  }
+
+  private buildContextMessages(messages: UIMessage[]): UIMessage[] {
+    let compactionIndex = -1;
+
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role !== 'system') continue;
+
+      const text = this.extractText(msg);
+      if (text.startsWith(ElectronChatTransport.COMPACTION_MARKER)) {
+        compactionIndex = i;
+        break;
+      }
+    }
+
+    const scoped = compactionIndex >= 0 ? messages.slice(compactionIndex) : messages;
+
+    return scoped.map((msg) => {
+      if (msg.role !== 'system') return msg;
+
+      const text = this.extractText(msg);
+      if (!text.startsWith(ElectronChatTransport.COMPACTION_MARKER)) return msg;
+
+      const clean = text.replace(ElectronChatTransport.COMPACTION_MARKER, '').trim();
+
+      return {
+        ...msg,
+        role: 'assistant',
+        parts: [{ type: 'text', text: clean } as any],
+      } as UIMessage;
+    });
+  }
 
   /**
    * Sends messages to the chat API via Electron IPC and returns a streaming response.
@@ -118,10 +182,13 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       logger.aiSdk.debug("Transport no attachments to inject");
     }
 
+    // Build context messages (filter by compaction marker)
+    const contextMessages = this.buildContextMessages(messagesWithAttachments);
+
     // Create Electron IPC request
     // Only send codeMode when both coworkMode is enabled AND a valid CWD is selected
     const request: ChatRequest = {
-      messages: messagesWithAttachments,
+      messages: contextMessages,
       model,
       enableMCP,
       ...(coworkMode && coworkModeCwd && {
@@ -142,10 +209,17 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
       hasCodeMode: !!(coworkMode && coworkModeCwd),
     });
 
-    // Reset text part tracking and error state for new stream
+    // Estimate tokens of messages being sent (for learned overhead calculation)
+    const requestMsgTokens = contextMessages.reduce((sum, msg) => {
+      return sum + Math.max(0, Math.round(this.extractText(msg).length / ElectronChatTransport.CHARS_PER_TOKEN));
+    }, 0);
+    this.lastRequestMessageTokens = requestMsgTokens;
+
+    // Reset text part tracking, error state and token usage for new stream
     this.hasStartedTextPart = false;
     this.currentTextPartId = `text-${Date.now()}`;
     this.lastErrorCategory = undefined;
+    this.lastTokenUsage = null;
 
     // Create a ReadableStream that bridges Electron IPC with AI SDK
     return new ReadableStream<UIMessageChunk>({
@@ -201,6 +275,23 @@ export class ElectronChatTransport implements ChatTransport<UIMessage> {
             }
 
             try {
+              // Capture token usage before converting chunks
+              if (chunk.tokenUsage) {
+                this.lastTokenUsage = chunk.tokenUsage;
+
+                // Compute learned overhead from real usage
+                if (chunk.tokenUsage.inputTokens > 0 && this.lastRequestMessageTokens !== null) {
+                  const learned = Math.max(0, chunk.tokenUsage.inputTokens - this.lastRequestMessageTokens);
+                  this.lastLearnedOverheadTokens = learned;
+                  logger.aiSdk.debug('Transport: learned overhead computed', {
+                    inputTokens: chunk.tokenUsage.inputTokens,
+                    requestMessageTokens: this.lastRequestMessageTokens,
+                    learnedOverhead: learned,
+                  });
+                }
+                return;
+              }
+
               // Convert Electron chunk to AI SDK UIMessageChunk format using generator
               // Generator avoids intermediate array allocations
               for (const uiChunk of this.convertChunkToUIMessageChunks(chunk)) {

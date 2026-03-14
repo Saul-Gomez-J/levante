@@ -16,11 +16,26 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { ChatSession, Message, CreateMessageInput, SessionType } from '../../types/database';
 import type { UIMessage } from 'ai';
+import type { TokenUsage } from '../../preload/types';
 import { getRendererLogger } from '@/services/logger';
 
 const logger = getRendererLogger();
 
 export type PendingPromptMode = 'prefill' | 'autosend';
+
+export interface ContextBudgetState {
+  activeMessageTokens: number;
+  staticOverheadTokens: number;
+  overheadEMA: number | null;
+  responseReserveTokens: number;
+  usedForNextTurn: number;
+  percentage: number;
+  isEstimate: boolean;
+  toolCount?: number;
+}
+
+const RESPONSE_RESERVE_TOKENS = 2000;
+const EMA_ALPHA = 0.35;
 
 interface ChatStore {
   // Session state
@@ -51,13 +66,19 @@ interface ChatStore {
 
   // Message persistence (called by useChat onFinish callback)
   // Returns generated content if attachments were converted to text markers
-  persistMessage: (message: UIMessage) => Promise<{ generatedContent?: string } | void>;
+  persistMessage: (message: UIMessage, tokenUsage?: TokenUsage | null) => Promise<{ generatedContent?: string } | void>;
   loadHistoricalMessages: (sessionId: string) => Promise<UIMessage[]>;
   editMessage: (messageId: string, newContent: string) => Promise<boolean>;
 
   // Deep link actions
   setPendingPrompt: (prompt: string | null, mode?: PendingPromptMode) => void;
   setSkipNextHistoricalLoad: (skip: boolean) => void;
+
+  // Context budget
+  contextBudget: ContextBudgetState | null;
+  setStaticOverhead: (estimate: { staticOverheadTokens: number; toolCount: number }) => void;
+  updateLearnedOverhead: (learned: number) => void;
+  recalculateContextBudget: (activeMessageTokens: number, contextLength: number) => void;
 
   // Utility
   setError: (error: string | null) => void;
@@ -75,6 +96,7 @@ export const useChatStore = create<ChatStore>()(
       pendingPrompt: null,
       pendingPromptMode: null,
       skipNextHistoricalLoad: false,
+      contextBudget: null,
 
       // Basic setters
       setError: (error) => set({ error }),
@@ -86,6 +108,67 @@ export const useChatStore = create<ChatStore>()(
           pendingPromptMode: prompt ? mode : null,
         }),
       setSkipNextHistoricalLoad: (skip) => set({ skipNextHistoricalLoad: skip }),
+
+      // Context budget actions
+      setStaticOverhead: (estimate) => {
+        const current = get().contextBudget;
+        set({
+          contextBudget: {
+            activeMessageTokens: current?.activeMessageTokens ?? 0,
+            staticOverheadTokens: estimate.staticOverheadTokens,
+            overheadEMA: current?.overheadEMA ?? null,
+            responseReserveTokens: RESPONSE_RESERVE_TOKENS,
+            usedForNextTurn: current?.usedForNextTurn ?? 0,
+            percentage: current?.percentage ?? 0,
+            isEstimate: current?.isEstimate ?? true,
+            toolCount: estimate.toolCount,
+          },
+        });
+      },
+
+      updateLearnedOverhead: (learned) => {
+        const current = get().contextBudget;
+        if (!current) return;
+
+        const newEMA =
+          current.overheadEMA !== null
+            ? EMA_ALPHA * learned + (1 - EMA_ALPHA) * current.overheadEMA
+            : learned;
+
+        set({
+          contextBudget: {
+            ...current,
+            overheadEMA: newEMA,
+          },
+        });
+      },
+
+      recalculateContextBudget: (activeMessageTokens, contextLength) => {
+        const current = get().contextBudget;
+        if (!current) return;
+
+        const effectiveOverhead =
+          current.overheadEMA !== null
+            ? Math.round(current.overheadEMA)
+            : current.staticOverheadTokens;
+
+        const usedForNextTurn =
+          activeMessageTokens + effectiveOverhead + current.responseReserveTokens;
+
+        const percentage = contextLength > 0
+          ? Math.min(100, Math.max(0, Math.round((usedForNextTurn / contextLength) * 100)))
+          : 0;
+
+        set({
+          contextBudget: {
+            ...current,
+            activeMessageTokens,
+            usedForNextTurn,
+            percentage,
+            isEstimate: current.overheadEMA === null,
+          },
+        });
+      },
 
       // Session management
       refreshSessions: async () => {
@@ -362,7 +445,7 @@ export const useChatStore = create<ChatStore>()(
       },
 
       // Message persistence
-      persistMessage: async (message: UIMessage): Promise<{ generatedContent?: string } | void> => {
+      persistMessage: async (message: UIMessage, tokenUsage?: TokenUsage | null): Promise<{ generatedContent?: string } | void> => {
         const { currentSession } = get();
 
         if (!currentSession) {
@@ -471,6 +554,9 @@ export const useChatStore = create<ChatStore>()(
           tool_calls: toolCallsData,
           attachments: attachments,
           reasoningText: reasoningData,
+          input_tokens: tokenUsage?.inputTokens ?? null,
+          output_tokens: tokenUsage?.outputTokens ?? null,
+          total_tokens: tokenUsage?.totalTokens ?? null,
         };
 
           const result = await window.levante.db.messages.create(input);
@@ -650,11 +736,21 @@ export const useChatStore = create<ChatStore>()(
               }
             }
 
+            const persistedTokenUsage =
+              typeof dbMsg.total_tokens === 'number' && dbMsg.total_tokens > 0
+                ? {
+                    inputTokens: dbMsg.input_tokens || 0,
+                    outputTokens: dbMsg.output_tokens || 0,
+                    totalTokens: dbMsg.total_tokens || 0,
+                  }
+                : undefined;
+
             const finalMessage = {
               id: dbMsg.id,
               role: dbMsg.role,
               parts,
               attachments, // Add attachments to UIMessage
+              tokenUsage: persistedTokenUsage,
             } as UIMessage;
 
             // Debug: Log final message structure

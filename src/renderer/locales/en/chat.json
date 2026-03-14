@@ -221,5 +221,20 @@
       "failed": "failed",
       "killed": "killed"
     }
+  },
+  "context_usage": {
+    "compact": "Compact",
+    "compacting": "Compacting...",
+    "tokens": "tokens",
+    "tokens_used": "Tokens used",
+    "precision": "Precision",
+    "precision_real": "Real",
+    "precision_estimated": "Estimated",
+    "tokens_available": "Tokens available",
+    "used_ratio": "Used/Available",
+    "tokens_remaining": "Tokens remaining",
+    "context_unknown": "Context window unknown for this model/provider",
+    "compact_success": "Conversation compacted",
+    "compact_error": "Could not compact"
   }
 }

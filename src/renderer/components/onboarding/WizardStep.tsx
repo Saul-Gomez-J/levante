@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -16,6 +17,7 @@ interface WizardStepProps {
   backDisabled?: boolean;
   children: ReactNode;
   showProgress?: boolean;
+  showNextChevron?: boolean;
 }
 
 export function WizardStep({
@@ -23,12 +25,16 @@ export function WizardStep({
   totalSteps,
   onNext,
   onBack,
-  nextLabel = 'Next',
+  nextLabel,
   nextDisabled = false,
   backDisabled = false,
   children,
   showProgress = true,
+  showNextChevron = true,
 }: WizardStepProps) {
+  const { t } = useTranslation('common');
+  const displayNextLabel = nextLabel ?? t('actions.next');
+  const backLabel = t('actions.back');
   return (
     <div className="relative flex min-h-screen items-center justify-center p-4 overflow-y-auto">
       {/* Background Video */}
@@ -94,12 +100,12 @@ export function WizardStep({
             className="gap-2"
           >
             <ChevronLeft className="h-4 w-4" />
-            Back
+            {backLabel}
           </Button>
 
           <Button onClick={onNext} disabled={nextDisabled} className="gap-2">
-            {nextLabel}
-            {nextLabel === 'Next' && <ChevronRight className="h-4 w-4" />}
+            {displayNextLabel}
+            {showNextChevron && <ChevronRight className="h-4 w-4" />}
           </Button>
         </CardFooter>
       </Card>

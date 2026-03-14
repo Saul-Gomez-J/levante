@@ -743,7 +743,7 @@ class ModelServiceImpl {
                 taskType: m.taskType,
                 userDefined: false,
                 isAvailable: true,
-                contextLength: 0,
+                contextLength: m.contextLength,
                 capabilities: []
               }));
 

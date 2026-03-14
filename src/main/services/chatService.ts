@@ -274,20 +274,29 @@ export class ChatService {
         tool_calls: input.tool_calls ? JSON.stringify(input.tool_calls) : null,
         attachments: attachmentsString,
         reasoningText: reasoningString,
+        input_tokens: input.input_tokens ?? null,
+        output_tokens: input.output_tokens ?? null,
+        total_tokens: input.total_tokens ?? null,
         created_at: now
       };
 
-      // Try to upsert with reasoning column first (new schema)
-      // If it fails, retry without reasoning column (old schema)
+      // Try to upsert with reasoning + token columns first (new schema)
+      // If it fails, retry without those columns (old schema)
       try {
         await databaseService.execute(
-          `INSERT INTO messages (id, session_id, role, content, tool_calls, attachments, reasoning, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `INSERT INTO messages (
+             id, session_id, role, content, tool_calls, attachments, reasoning,
+             input_tokens, output_tokens, total_tokens, created_at
+           )
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(id) DO UPDATE SET
              content = excluded.content,
              tool_calls = excluded.tool_calls,
              attachments = excluded.attachments,
-             reasoning = excluded.reasoning`,
+             reasoning = excluded.reasoning,
+             input_tokens = excluded.input_tokens,
+             output_tokens = excluded.output_tokens,
+             total_tokens = excluded.total_tokens`,
           [
             message.id as InValue,
             message.session_id as InValue,
@@ -296,14 +305,16 @@ export class ChatService {
             message.tool_calls as InValue,
             message.attachments as InValue,
             message.reasoningText as InValue,
-            message.created_at as InValue
+            (message.input_tokens ?? null) as InValue,
+            (message.output_tokens ?? null) as InValue,
+            (message.total_tokens ?? null) as InValue,
+            message.created_at as InValue,
           ]
         );
       } catch (error: any) {
-        // If error is about missing column, retry without reasoning
-        if (error?.message?.includes('no such column: reasoning') ||
-          error?.message?.includes('table messages has no column named reasoning')) {
-          this.logger.database.warn('Reasoning column not found, upserting without it (migration pending)', {
+        // If error is about missing column, retry without reasoning/token columns
+        if (error?.message?.includes('no such column')) {
+          this.logger.database.warn('New columns not found, upserting with legacy schema (migration pending)', {
             messageId: id
           });
           await databaseService.execute(
@@ -384,6 +395,9 @@ export class ChatService {
         created_at: row[5] as number,
         attachments: (row[6] as string) || null,
         reasoningText: (row[7] as string) || null,
+        input_tokens: (row[8] as number) ?? null,
+        output_tokens: (row[9] as number) ?? null,
+        total_tokens: (row[10] as number) ?? null,
       }));
 
       const paginatedResult: PaginatedResult<Message> = {
@@ -428,7 +442,7 @@ export class ChatService {
 
       // Column order from PRAGMA table_info(messages):
       // 0: id, 1: session_id, 2: role, 3: content, 4: tool_calls,
-      // 5: created_at, 6: attachments, 7: reasoning
+      // 5: created_at, 6: attachments, 7: reasoning, 8: input_tokens, 9: output_tokens, 10: total_tokens
       const messages: Message[] = result.rows.map(row => ({
         id: row[0] as string,
         session_id: row[1] as string,
@@ -438,6 +452,9 @@ export class ChatService {
         created_at: row[5] as number,
         attachments: (row[6] as string) || null,
         reasoningText: (row[7] as string) || null,
+        input_tokens: (row[8] as number) ?? null,
+        output_tokens: (row[9] as number) ?? null,
+        total_tokens: (row[10] as number) ?? null,
       }));
 
       this.logger.database.debug('Search completed', { found: messages.length, query: searchQuery });
@@ -574,6 +591,9 @@ export class ChatService {
         created_at: row[5] as number,
         attachments: (row[6] as string) || null,
         reasoningText: (row[7] as string) || null,
+        input_tokens: (row[8] as number) ?? null,
+        output_tokens: (row[9] as number) ?? null,
+        total_tokens: (row[10] as number) ?? null,
       };
 
       return { data: message, success: true };
@@ -586,6 +606,55 @@ export class ChatService {
         data: null,
         success: false,
         error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
+  }
+
+  async getMessagesForContext(sessionId: string): Promise<DatabaseResult<Message[]>> {
+    try {
+      const result = await this.getMessages({
+        session_id: sessionId,
+        limit: 10000,
+        offset: 0,
+      });
+
+      if (!result.success || !result.data) {
+        return {
+          data: [],
+          success: false,
+          error: result.error || 'Failed to load messages for context',
+        };
+      }
+
+      const messages = result.data.items;
+      let compactionIndex = -1;
+
+      for (let i = messages.length - 1; i >= 0; i--) {
+        const m = messages[i];
+        if (
+          m.role === 'system' &&
+          typeof m.content === 'string' &&
+          m.content.startsWith('[COMPACTION_SUMMARY]')
+        ) {
+          compactionIndex = i;
+          break;
+        }
+      }
+
+      return {
+        data: compactionIndex >= 0 ? messages.slice(compactionIndex) : messages,
+        success: true,
+      };
+    } catch (error) {
+      this.logger.database.error('Failed to get messages for context', {
+        sessionId,
+        error: error instanceof Error ? error.message : error,
+      });
+
+      return {
+        data: [],
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
   }

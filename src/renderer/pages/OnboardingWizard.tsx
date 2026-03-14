@@ -47,7 +47,7 @@ interface OnboardingWizardProps {
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   const { updateProvider, setActiveProvider, syncProviderModels, providers } = useModelStore();
   const { appMode, isAuthenticated: isPlatformConnected, setStandaloneMode } = usePlatformStore();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const userChangedLanguageRef = useRef(false);
 
   // Language step state
@@ -509,9 +509,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
 
   const getNextButtonLabel = () => {
     if (currentStep === totalSteps) {
-      return 'Start Using Levante';
+      return t('wizard:navigation.start_using_levante');
     }
-    return 'Next';
+    return t('common:actions.next');
   };
 
   const isNextDisabled = () => {
@@ -538,6 +538,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
       onBack={handleBack}
       nextLabel={getNextButtonLabel()}
       nextDisabled={isNextDisabled()}
+      showNextChevron={currentStep !== totalSteps}
     >
       {currentStepName === 'welcome' && (
         <WelcomeStep

@@ -202,7 +202,9 @@ export const ModelList = ({
           </div>
         </div>
       <div className="text-sm text-muted-foreground space-y-1">
-        <p>{t('model_info.context_length', { length: model.contextLength.toLocaleString() })}</p>
+        {model.contextLength > 0 && (
+          <p>{t('model_info.context_length', { length: model.contextLength.toLocaleString() })}</p>
+        )}
         {model.pricing && (
           <p>
             {t('model_info.pricing', { input: model.pricing.input, output: model.pricing.output })}
