@@ -186,6 +186,50 @@ export class DirectoryService {
   }
 
   /**
+   * Sanitize a project name into a safe directory name
+   */
+  private sanitizeProjectName(name: string): string {
+    return name
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9áéíóúñü\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .substring(0, 50)
+      || 'project';
+  }
+
+  /**
+   * Ensure a project directory exists inside ~/levante/projects/
+   * Returns the full absolute path to the project directory.
+   * If the name already exists, appends a numeric suffix.
+   */
+  async ensureProjectDir(projectName: string): Promise<string> {
+    const projectsBase = path.join(this.baseDir, 'projects');
+    await fs.mkdir(projectsBase, { recursive: true });
+
+    const dirName = this.sanitizeProjectName(projectName);
+    let projectPath = path.join(projectsBase, dirName);
+
+    // Avoid collisions: append -2, -3, etc. if needed
+    let suffix = 1;
+    while (true) {
+      try {
+        await fs.access(projectPath);
+        suffix++;
+        projectPath = path.join(projectsBase, `${dirName}-${suffix}`);
+      } catch {
+        break;
+      }
+    }
+
+    await fs.mkdir(projectPath, { recursive: true });
+    this.logger.core.info('Project directory created', { projectName, projectPath });
+    return projectPath;
+  }
+
+  /**
    * Common file paths used by the application
    */
   static readonly FILES = {

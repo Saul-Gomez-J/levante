@@ -153,27 +153,34 @@ export function SidebarSections({
                           variant="ghost"
                           size="sm"
                           className="opacity-0 group-hover:opacity-100 transition-opacity h-5 w-5 p-0 shrink-0"
+                          onPointerDown={(e) => e.stopPropagation()}
                           onClick={(e) => e.stopPropagation()}
                         >
                           <MoreVertical size={12} />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                      <DropdownMenuContent
+                        align="end"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         {onEditProject && (
-                          <DropdownMenuItem onSelect={() => onEditProject(project)}>
+                          <DropdownMenuItem onSelect={(e) => { e.stopPropagation(); onEditProject(project); }}>
                             <Pencil size={14} className="mr-2" />
                             {t('chat_list.edit_project')}
                           </DropdownMenuItem>
                         )}
                         {onDeleteProject && (
                           <DropdownMenuItem
-                            onSelect={() =>
+                            onSelect={(e) => {
+                              e.stopPropagation();
                               onDeleteProject(
                                 project.id,
                                 project.name,
-                                sessions.filter((s) => s.project_id === project.id).length
-                              )
-                            }
+                                sessions.filter((s) => s.project_id === project.id).length,
+                                project.cwd,
+                              );
+                            }}
                             className="text-destructive focus:text-destructive"
                           >
                             <Trash2 size={14} className="mr-2" />

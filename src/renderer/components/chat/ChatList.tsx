@@ -19,7 +19,7 @@ interface ChatListProps {
   onProjectSelect?: (project: Project) => void;
   onCreateProject?: () => void;
   onEditProject?: (project: Project) => void;
-  onDeleteProject?: (projectId: string, projectName: string, sessionCount: number) => void;
+  onDeleteProject?: (projectId: string, projectName: string, sessionCount: number, cwd?: string | null) => void;
 }
 
 export function ChatList({

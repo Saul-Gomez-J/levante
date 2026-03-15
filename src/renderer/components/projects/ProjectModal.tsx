@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FolderOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,18 @@ import {
 } from '@/components/ui/dialog';
 import type { Project, CreateProjectInput, UpdateProjectInput } from '../../../types/database';
 
+function sanitizeProjectName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9áéíóúñü\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .substring(0, 50)
+    || 'project';
+}
+
 interface ProjectModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -27,8 +39,15 @@ export function ProjectModal({ open, onOpenChange, project, onSave }: ProjectMod
 
   const [name, setName] = useState('');
   const [cwd, setCwd] = useState('');
+  const [useCustomCwd, setUseCustomCwd] = useState(false);
   const [description, setDescription] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Preview of the auto-generated path
+  const autoPath = useMemo(() => {
+    const safeName = sanitizeProjectName(name);
+    return `~/levante/projects/${safeName}/`;
+  }, [name]);
 
   // Reset form when modal opens/closes or project changes
   useEffect(() => {
@@ -36,8 +55,9 @@ export function ProjectModal({ open, onOpenChange, project, onSave }: ProjectMod
       setName(project?.name ?? '');
       setCwd(project?.cwd ?? '');
       setDescription(project?.description ?? '');
+      setUseCustomCwd(isEditing && !!project?.cwd);
     }
-  }, [open, project]);
+  }, [open, project, isEditing]);
 
   const handleSelectDirectory = async () => {
     const result = await window.levante.cowork.selectWorkingDirectory({
@@ -57,13 +77,14 @@ export function ProjectModal({ open, onOpenChange, project, onSave }: ProjectMod
         await onSave({
           id: project.id,
           name: name.trim(),
-          cwd: cwd.trim() || null,
+          cwd: (useCustomCwd ? cwd.trim() : null) || null,
           description: description.trim() || null,
         } as UpdateProjectInput);
       } else {
+        const customCwd = useCustomCwd ? cwd.trim() : undefined;
         await onSave({
           name: name.trim(),
-          cwd: cwd.trim() || undefined,
+          cwd: customCwd || undefined,
           description: description.trim() || undefined,
         } as CreateProjectInput);
       }
@@ -103,23 +124,50 @@ export function ProjectModal({ open, onOpenChange, project, onSave }: ProjectMod
           {/* CWD */}
           <div className="space-y-1">
             <Label>{t('chat_list.project_modal.cwd_label')}</Label>
-            <div className="flex gap-2">
-              <Input
-                value={cwd}
-                onChange={(e) => setCwd(e.target.value)}
-                placeholder={t('chat_list.project_modal.cwd_placeholder')}
-                className="flex-1"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleSelectDirectory}
-                className="shrink-0"
-              >
-                <FolderOpen size={14} />
-              </Button>
-            </div>
+            {!useCustomCwd ? (
+              <div>
+                <div className="flex items-center gap-2 rounded-md border border-border bg-muted/50 px-3 py-2">
+                  <FolderOpen size={14} className="shrink-0 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground truncate">
+                    {name.trim() ? autoPath : t('chat_list.project_modal.cwd_auto_preview')}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setUseCustomCwd(true)}
+                  className="mt-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+                >
+                  {t('chat_list.project_modal.cwd_use_custom')}
+                </button>
+              </div>
+            ) : (
+              <div>
+                <div className="flex gap-2">
+                  <Input
+                    value={cwd}
+                    onChange={(e) => setCwd(e.target.value)}
+                    placeholder={t('chat_list.project_modal.cwd_placeholder')}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleSelectDirectory}
+                    className="shrink-0"
+                  >
+                    <FolderOpen size={14} />
+                  </Button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setUseCustomCwd(false); setCwd(''); }}
+                  className="mt-1 text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground transition-colors"
+                >
+                  {t('chat_list.project_modal.cwd_use_auto')}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Description */}
