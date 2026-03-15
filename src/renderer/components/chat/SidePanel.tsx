@@ -25,12 +25,14 @@ export function SidePanel() {
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) ?? tabs[0];
 
-  // Keep legacy behavior for server preview: hide left sidebar while server tab is active.
+  // Hide left sidebar only on the transition from closed → open (not on every render).
+  const wasPanelOpen = useRef(false);
   useEffect(() => {
-    if (isPanelOpen && activeTab?.type === 'server') {
+    if (isPanelOpen && !wasPanelOpen.current) {
       setSidebarOpen(false);
     }
-  }, [isPanelOpen, activeTab, setSidebarOpen]);
+    wasPanelOpen.current = isPanelOpen;
+  }, [isPanelOpen, setSidebarOpen]);
 
   const [width, setWidth] = useState(DEFAULT_PANEL_WIDTH);
   const [iframeKey, setIframeKey] = useState(0);
