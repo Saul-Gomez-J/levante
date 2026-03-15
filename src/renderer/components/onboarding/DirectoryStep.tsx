@@ -99,24 +99,6 @@ export function DirectoryStep({
           </div>
         </div>
 
-        <div className="space-y-3">
-          <h3 className="font-semibold text-sm">{t('directory.why_title')}</h3>
-          <ul className="space-y-2 text-sm text-muted-foreground">
-            <li className="flex items-start gap-2">
-              <span className="text-primary">•</span>
-              <span>{t('directory.reasons.easy_access')}</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-primary">•</span>
-              <span>{t('directory.reasons.simple_backup')}</span>
-            </li>
-            <li className="flex items-start gap-2">
-              <span className="text-primary">•</span>
-              <span>{t('directory.reasons.portable')}</span>
-            </li>
-          </ul>
-        </div>
-
         <Alert>
           <Info className="h-4 w-4" />
           <AlertDescription dangerouslySetInnerHTML={{ __html: t('directory.privacy_guarantee') }} />

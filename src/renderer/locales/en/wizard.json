@@ -9,7 +9,7 @@
   },
   "welcome": {
     "title": "Welcome to Levante",
-    "subtitle": "Your Personal, Secure, and Free AI Assistant",
+    "subtitle": "Your Personal and Secure AI Assistant",
     "description": "Levante brings AI closer to everyone—not just technical users. We focus on:",
     "features": {
       "privacy": {
@@ -112,6 +112,19 @@
       "sign_in": "Sign in with OpenRouter",
       "waiting": "Waiting for authorization...",
       "connect_message": "Connect your account securely with one click"
+    },
+    "anthropic_oauth": {
+      "auth_method": "Authentication Method",
+      "api_key_tab": "API Key",
+      "claude_tab": "Claude Max/Pro",
+      "connect_description": "Connect your Claude Max or Claude Pro subscription to use it without an API key.",
+      "connect_button": "Connect Claude Subscription",
+      "paste_code": "Paste the authorization code or URL from the browser",
+      "paste_placeholder": "Paste code, URL or query string...",
+      "connect": "Connect",
+      "connected": "Connected",
+      "token_expired": "(token expired)",
+      "disconnect": "Disconnect"
     }
   },
   "modeSelection": {

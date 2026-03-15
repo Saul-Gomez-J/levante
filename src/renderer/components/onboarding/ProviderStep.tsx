@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -30,6 +30,7 @@ interface ProviderStepProps {
   onValidate: () => void;
   onModelSelect: (modelId: string) => void;
   onOAuthSuccess?: (apiKey: string) => void;
+  onAnthropicOAuthSuccess?: () => void;
 }
 
 const PROVIDERS = [
@@ -91,12 +92,79 @@ export function ProviderStep({
   onValidate,
   onModelSelect,
   onOAuthSuccess,
+  onAnthropicOAuthSuccess,
 }: ProviderStepProps) {
   const { t, i18n } = useTranslation('wizard');
   const provider = PROVIDERS.find((p) => p.id === selectedProvider);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   const [modelSearchQuery, setModelSearchQuery] = useState('');
   const [showAllModels, setShowAllModels] = useState(false);
+
+  // Anthropic OAuth state
+  const [anthropicAuthMode, setAnthropicAuthMode] = useState<'api-key' | 'oauth'>('api-key');
+  const [oauthCode, setOauthCode] = useState('');
+  const [oauthStatus, setOauthStatus] = useState<{
+    isConnected: boolean;
+    isExpired: boolean;
+    expiresAt?: number;
+  } | null>(null);
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const [oauthError, setOauthError] = useState('');
+
+  // Load Anthropic OAuth status when mode switches to oauth
+  useEffect(() => {
+    if (selectedProvider === 'anthropic' && anthropicAuthMode === 'oauth') {
+      window.levante.anthropicOAuth.status().then((result) => {
+        if (result.success && result.data) {
+          setOauthStatus(result.data);
+        }
+      });
+    }
+  }, [selectedProvider, anthropicAuthMode]);
+
+  // Reset anthropic auth mode when provider changes
+  useEffect(() => {
+    setAnthropicAuthMode('api-key');
+    setOauthStatus(null);
+    setOauthError('');
+    setOauthCode('');
+  }, [selectedProvider]);
+
+  const handleAnthropicStartOAuth = async () => {
+    setOauthLoading(true);
+    setOauthError('');
+    const result = await window.levante.anthropicOAuth.start('max');
+    setOauthLoading(false);
+    if (!result.success) {
+      setOauthError(result.error || 'Failed to start authorization');
+    }
+  };
+
+  const handleAnthropicExchangeCode = async () => {
+    if (!oauthCode.trim()) return;
+    setOauthLoading(true);
+    setOauthError('');
+    const result = await window.levante.anthropicOAuth.exchange(oauthCode.trim());
+    setOauthLoading(false);
+    if (result.success) {
+      setOauthCode('');
+      const statusResult = await window.levante.anthropicOAuth.status();
+      if (statusResult.success && statusResult.data) {
+        setOauthStatus(statusResult.data);
+      }
+      onAnthropicOAuthSuccess?.();
+    } else {
+      setOauthError(result.error || 'Failed to exchange code');
+    }
+  };
+
+  const handleAnthropicDisconnect = async () => {
+    setOauthLoading(true);
+    setOauthError('');
+    await window.levante.anthropicOAuth.disconnect();
+    setOauthStatus(null);
+    setOauthLoading(false);
+  };
 
   // OAuth hook for OpenRouter
   const { isAuthenticating, initiateOAuthFlow } = useOpenRouterOAuth({
@@ -268,10 +336,165 @@ export function ProviderStep({
               </Collapsible>
             )}
 
-            {/* Other Providers: Direct API Key and Connection Test */}
-            {selectedProvider !== 'openrouter' && (
+            {/* Anthropic Provider: API Key + Claude Subscription toggle */}
+            {selectedProvider === 'anthropic' && (
               <>
-                {/* API Key Field - Primary for non-OpenRouter */}
+                {/* Auth mode toggle */}
+                <div className="space-y-2">
+                  <Label>{t('provider.anthropic_oauth.auth_method')}</Label>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={anthropicAuthMode === 'api-key' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => { setAnthropicAuthMode('api-key'); setOauthError(''); }}
+                      type="button"
+                    >
+                      {t('provider.anthropic_oauth.api_key_tab')}
+                    </Button>
+                    <Button
+                      variant={anthropicAuthMode === 'oauth' ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => { setAnthropicAuthMode('oauth'); setOauthError(''); }}
+                      type="button"
+                    >
+                      {t('provider.anthropic_oauth.claude_tab')}
+                    </Button>
+                  </div>
+                </div>
+
+                {anthropicAuthMode === 'api-key' ? (
+                  <>
+                    {/* API Key mode */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="apiKey">{t('provider.api_key')}</Label>
+                        <a
+                          href="https://console.anthropic.com"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary hover:underline flex items-center gap-1"
+                        >
+                          {t('provider.get_api_key')}
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                      <Input
+                        id="apiKey"
+                        type="password"
+                        placeholder={t('provider.enter_api_key')}
+                        value={apiKey}
+                        onChange={(e) => onApiKeyChange(e.target.value)}
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                    <div className="pt-2">
+                      <Button
+                        onClick={onValidate}
+                        disabled={validationStatus === 'validating' || !canValidate()}
+                        className="w-full"
+                        variant={validationStatus === 'valid' ? 'default' : 'outline'}
+                      >
+                        {validationStatus === 'validating' ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            {t('provider.testing_connection')}
+                          </>
+                        ) : validationStatus === 'valid' ? (
+                          <>
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            {t('provider.connection_verified')}
+                          </>
+                        ) : (
+                          t('provider.test_connection')
+                        )}
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  /* OAuth mode - Claude Max/Pro subscription */
+                  <div className="space-y-4">
+                    {oauthStatus?.isConnected ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <CheckCircle2 className="h-4 w-4 text-green-600" />
+                          <span className="text-green-600 font-medium">
+                            {t('provider.anthropic_oauth.connected')}
+                          </span>
+                          {oauthStatus.isExpired && (
+                            <span className="text-amber-600 text-xs">
+                              {t('provider.anthropic_oauth.token_expired')}
+                            </span>
+                          )}
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleAnthropicDisconnect}
+                          disabled={oauthLoading}
+                          type="button"
+                        >
+                          {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                          {t('provider.anthropic_oauth.disconnect')}
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <p className="text-sm text-muted-foreground">
+                          {t('provider.anthropic_oauth.connect_description')}
+                        </p>
+                        <Button
+                          onClick={handleAnthropicStartOAuth}
+                          disabled={oauthLoading}
+                          className="w-full"
+                          type="button"
+                        >
+                          {oauthLoading ? (
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          ) : (
+                            <ExternalLink className="w-4 h-4 mr-2" />
+                          )}
+                          {t('provider.anthropic_oauth.connect_button')}
+                        </Button>
+                        <div className="space-y-2">
+                          <Label htmlFor="anthropic-oauth-code">
+                            {t('provider.anthropic_oauth.paste_code')}
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="anthropic-oauth-code"
+                              type="text"
+                              placeholder={t('provider.anthropic_oauth.paste_placeholder')}
+                              value={oauthCode}
+                              onChange={(e) => setOauthCode(e.target.value)}
+                            />
+                            <Button
+                              onClick={handleAnthropicExchangeCode}
+                              disabled={oauthLoading || !oauthCode.trim()}
+                              type="button"
+                            >
+                              {oauthLoading ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                t('provider.anthropic_oauth.connect')
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {oauthError && (
+                      <p className="text-xs text-red-500">{oauthError}</p>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* Other Providers (non-OpenRouter, non-Anthropic): Direct API Key and Connection Test */}
+            {selectedProvider !== 'openrouter' && selectedProvider !== 'anthropic' && (
+              <>
+                {/* API Key Field - Primary for other providers */}
                 {showApiKeyField && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
