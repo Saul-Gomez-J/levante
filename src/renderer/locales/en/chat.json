@@ -67,6 +67,9 @@
       "name_placeholder": "My project...",
       "cwd_label": "Working directory (CWD)",
       "cwd_placeholder": "Select a directory...",
+      "cwd_auto_preview": "~/levante/projects/...",
+      "cwd_use_custom": "Use another folder",
+      "cwd_use_auto": "Use auto-generated folder",
       "description_label": "Description / Instructions",
       "description_placeholder": "Context that will be injected into the system prompt...",
       "save": "Save",
@@ -75,6 +78,7 @@
     "delete_project_confirm": {
       "title": "Delete project",
       "description": "Deleting \"{{name}}\" will permanently delete its {{count}} conversations and all their history. This action cannot be undone.",
+      "description_auto_cwd": "Deleting \"{{name}}\" will permanently delete its {{count}} conversations, all their history, and the auto-created project folder ({{cwd}}). This action cannot be undone.",
       "confirm": "Delete",
       "cancel": "Cancel"
     },

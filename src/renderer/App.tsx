@@ -47,6 +47,7 @@ function App() {
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
   const [developerMode, setDeveloperMode] = useState(false)
   const { i18n, t: tModels } = useTranslation('models')
+  const { t: tChat } = useTranslation('chat')
 
   // Listen for MCP events (tools/list_changed, etc.)
   useMCPEvents()
@@ -310,6 +311,8 @@ function App() {
     id: string;
     name: string;
     count: number;
+    isAutoCwd: boolean;
+    cwd?: string | null;
   } | null>(null)
 
   // Load projects on mount
@@ -678,8 +681,9 @@ function App() {
         handleProjectSelect,
         () => { setEditingProject(undefined); setProjectModalOpen(true); },
         (project: Project) => { setEditingProject(project); setProjectModalOpen(true); },
-        (projectId: string, projectName: string, sessionCount: number) => {
-          setDeleteConfirmProject({ id: projectId, name: projectName, count: sessionCount });
+        (projectId: string, projectName: string, sessionCount: number, cwd?: string | null) => {
+          const isAutoCwd = !!cwd && cwd.includes('/levante/projects/');
+          setDeleteConfirmProject({ id: projectId, name: projectName, count: sessionCount, isAutoCwd, cwd });
         },
         Boolean(coworkMode),
         effectiveSidebarCwd,
@@ -752,15 +756,23 @@ function App() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete project</AlertDialogTitle>
+            <AlertDialogTitle>{tChat('chat_list.delete_project_confirm.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Deleting &ldquo;{deleteConfirmProject?.name}&rdquo; will permanently delete its{' '}
-              {deleteConfirmProject?.count} conversations and all their history. This action
-              cannot be undone.
+              {deleteConfirmProject?.isAutoCwd
+                ? tChat('chat_list.delete_project_confirm.description_auto_cwd', {
+                    name: deleteConfirmProject?.name,
+                    count: deleteConfirmProject?.count,
+                    cwd: deleteConfirmProject?.cwd,
+                  })
+                : tChat('chat_list.delete_project_confirm.description', {
+                    name: deleteConfirmProject?.name,
+                    count: deleteConfirmProject?.count,
+                  })
+              }
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tChat('chat_list.delete_project_confirm.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (deleteConfirmProject) {
@@ -769,7 +781,7 @@ function App() {
                 }
               }}
             >
-              Delete
+              {tChat('chat_list.delete_project_confirm.confirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

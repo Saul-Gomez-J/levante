@@ -67,6 +67,9 @@
       "name_placeholder": "Mi proyecto...",
       "cwd_label": "Directorio de trabajo (CWD)",
       "cwd_placeholder": "Seleccionar un directorio...",
+      "cwd_auto_preview": "~/levante/projects/...",
+      "cwd_use_custom": "Utilizar otra carpeta",
+      "cwd_use_auto": "Usar carpeta auto-generada",
       "description_label": "Descripción / Instrucciones",
       "description_placeholder": "Contexto que se inyectará en el system prompt...",
       "save": "Guardar",
@@ -75,6 +78,7 @@
     "delete_project_confirm": {
       "title": "Eliminar proyecto",
       "description": "Eliminar \"{{name}}\" eliminará permanentemente sus {{count}} conversaciones y todo su historial. Esta acción no se puede deshacer.",
+      "description_auto_cwd": "Eliminar \"{{name}}\" eliminará permanentemente sus {{count}} conversaciones, todo su historial y la carpeta auto-creada del proyecto ({{cwd}}). Esta acción no se puede deshacer.",
       "confirm": "Eliminar",
       "cancel": "Cancelar"
     },
