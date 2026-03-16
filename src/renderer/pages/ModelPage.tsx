@@ -18,9 +18,8 @@ import {
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, CheckCircle, XCircle, RefreshCw, Search, Plus, Zap, LogOut } from 'lucide-react';
+import { Loader2, CheckCircle, XCircle, RefreshCw, Search, Plus } from 'lucide-react';
 import { useModelStore } from '@/stores/modelStore';
-import { usePlatformStore } from '@/stores/platformStore';
 import type { ProviderConfig } from '../../types/models';
 import { useTranslation } from 'react-i18next';
 import { OpenRouterConfig, GatewayConfig, LocalConfig, CloudConfig, AnthropicConfig } from './ModelPage/ProviderConfigs';
@@ -46,18 +45,6 @@ const ModelPage = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddDialog, setShowAddDialog] = useState(false);
-
-  // Platform login
-  const platformLogin = usePlatformStore((s) => s.login);
-  const platformLoading = usePlatformStore((s) => s.isLoading);
-  const platformError = usePlatformStore((s) => s.error);
-  const platformIsAuthenticated = usePlatformStore((s) => s.isAuthenticated);
-  const platformUser = usePlatformStore((s) => s.user);
-  const platformLogout = usePlatformStore((s) => s.logout);
-
-  const handlePlatformLogin = async () => {
-    await platformLogin();
-  };
 
   useEffect(() => {
     initialize();
@@ -140,60 +127,6 @@ const ModelPage = () => {
             <AlertDescription>{success}</AlertDescription>
           </Alert>
         )}
-
-        {/* Levante Platform Login */}
-        <Card className="border-2 border-primary/30 bg-gradient-to-r from-primary/5 to-transparent">
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
-                  <Zap className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="font-medium text-sm">{t('platform.title', 'Levante Platform')}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {platformIsAuthenticated && platformUser
-                      ? t('platform.signed_in_as', 'Signed in as {{email}}', { email: platformUser.email })
-                      : t('platform.sign_in_description', 'Sign in to access AI models without configuring API keys')}
-                  </p>
-                </div>
-              </div>
-              {platformIsAuthenticated ? (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={platformLogout}
-                >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  {t('platform.log_out', 'Log out')}
-                </Button>
-              ) : (
-                <Button
-                  size="sm"
-                  onClick={handlePlatformLogin}
-                  disabled={platformLoading}
-                >
-                  {platformLoading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      {t('platform.signing_in', 'Signing in...')}
-                    </>
-                  ) : (
-                    t('platform.sign_in', 'Sign in')
-                  )}
-                </Button>
-              )}
-            </div>
-            {platformError && (
-              <div className="mt-3">
-                <Alert variant="destructive" className="py-2">
-                  <XCircle className="h-4 w-4" />
-                  <AlertDescription className="text-xs">{platformError}</AlertDescription>
-                </Alert>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Provider Selection & Configuration Section */}
         <Card className="border border-border">
