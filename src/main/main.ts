@@ -3,6 +3,7 @@
 import fixPath from "fix-path";
 fixPath();
 
+import electronSquirrelStartup from "electron-squirrel-startup";
 import { app, BrowserWindow, protocol } from "electron";
 import { join } from "path";
 import { config } from "dotenv";
@@ -20,6 +21,12 @@ import { initializeServices, registerIPCHandlers } from "./lifecycle/initializat
 import { createMainWindow } from "./lifecycle/window";
 import { registerAppEvents, setupDeepLinkHandling } from "./lifecycle/events";
 import { setupLogViewerHandlers } from "./ipc/logViewerHandlers";
+
+// Handle Squirrel.Windows events before any app initialization code runs.
+// Do not use process.exit() here; the standard integration is app.quit().
+if (electronSquirrelStartup) {
+  app.quit();
+}
 
 // Load environment variables
 config({ path: join(__dirname, "../../.env.local") });

@@ -189,6 +189,9 @@ importers:
       dotenv:
         specifier: ^17.3.1
         version: 17.3.1
+      electron-squirrel-startup:
+        specifier: ^1.0.1
+        version: 1.0.1
       electron-store:
         specifier: ^11.0.2
         version: 11.0.2
@@ -4300,6 +4303,9 @@ packages:
     engines: {node: '>= 10.0.0'}
     os: [darwin, linux]
     hasBin: true
+
+  electron-squirrel-startup@1.0.1:
+    resolution: {integrity: sha512-sTfFIHGku+7PsHLJ7v0dRcZNkALrV+YEozINTW8X1nM//e5O3L+rfYuvSW00lmGHnYmUjARZulD8F2V8ISI9RA==}
 
   electron-store@11.0.2:
     resolution: {integrity: sha512-4VkNRdN+BImL2KcCi41WvAYbh6zLX5AUTi4so68yPqiItjbgTjqpEnGAqasgnG+lB6GuAyUltKwVopp6Uv+gwQ==}
@@ -12807,6 +12813,12 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
     optional: true
+
+  electron-squirrel-startup@1.0.1:
+    dependencies:
+      debug: 2.6.9
+    transitivePeerDependencies:
+      - supports-color
 
   electron-store@11.0.2:
     dependencies:

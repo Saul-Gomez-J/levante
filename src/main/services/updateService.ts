@@ -17,6 +17,14 @@ class UpdateService {
   private autoUpdateInitialized = false;
 
   /**
+   * Squirrel.Windows launches the app with this flag immediately after install.
+   * During that first run we should avoid autoUpdater activity.
+   */
+  private isSquirrelFirstRun(): boolean {
+    return process.platform === 'win32' && process.argv.includes('--squirrel-firstrun');
+  }
+
+  /**
    * Check if the current version is a pre-release (beta, alpha, rc)
    */
   private isBetaVersion(): boolean {
@@ -96,6 +104,11 @@ class UpdateService {
    * Sets up background update checks using update-electron-app or autoUpdater
    */
   initialize(): void {
+    if (this.isSquirrelFirstRun()) {
+      logger.core.info('Skipping auto-update initialization during Squirrel first run');
+      return;
+    }
+
     // Log initialization attempt with environment details
     logger.core.info('Initializing auto-update system', {
       nodeEnv: process.env.NODE_ENV,
@@ -271,6 +284,11 @@ class UpdateService {
    * Downloads and installs updates automatically, then prompts to restart
    */
   async checkForUpdates(): Promise<void> {
+    if (this.isSquirrelFirstRun()) {
+      logger.core.info('Skipping manual update check during Squirrel first run');
+      return;
+    }
+
     if (this.updateCheckInProgress) {
       logger.core.info('Update check already in progress');
       return;

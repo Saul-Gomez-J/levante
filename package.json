@@ -85,6 +85,7 @@
     "date-fns": "^4.1.0",
     "diff": "^8.0.3",
     "dotenv": "^17.3.1",
+    "electron-squirrel-startup": "^1.0.1",
     "electron-store": "^11.0.2",
     "embla-carousel-react": "^8.6.0",
     "fix-path": "^5.0.0",
