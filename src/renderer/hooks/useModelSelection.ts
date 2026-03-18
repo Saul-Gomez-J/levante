@@ -127,10 +127,8 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
           // Standalone mode: use modelService with multi-provider support
           await modelService.initialize();
 
-          const [models, grouped] = await Promise.all([
-            modelService.getAvailableModels(),
-            modelService.getAllProvidersWithSelectedModels()
-          ]);
+          const models = await modelService.getAvailableModels();
+          const grouped = await modelService.getAllProvidersWithSelectedModels();
 
           setAvailableModels(models);
           setGroupedModelsByProvider(grouped);
