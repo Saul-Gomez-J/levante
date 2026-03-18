@@ -21,6 +21,8 @@ export interface Model {
   taskType?: InferenceTask; // Inference task type (defaults to 'chat')
   inferenceProvider?: string; // HuggingFace Inference API provider slug (e.g., 'featherless-ai', 'novita', 'fireworks-ai')
 
+  zeroDataRetention?: boolean; // Whether provider guarantees zero data retention (private inference)
+
   // Classification fields (computed and cached during model sync)
   category?: ModelCategory; // Computed category based on taskType, capabilities, and model ID
   computedCapabilities?: ModelCapabilities; // Computed capabilities based on category and metadata

@@ -17,7 +17,8 @@
     "required_title": "Selecciona un modelo",
     "required_description": "Elige un modelo antes de enviar tu mensaje",
     "context": "{{count}} contexto",
-    "context_k": "{{count}}k contexto"
+    "context_k": "{{count}}k contexto",
+    "private_badge": "Privado"
   },
   "message": {
     "user": "Tú",

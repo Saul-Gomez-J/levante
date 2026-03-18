@@ -220,6 +220,7 @@ export const usePlatformStore = create<PlatformState>((set, get) => ({
           description: raw.description,
           category: raw.category,
           capabilities: raw.capabilities || [],
+          zeroDataRetention: raw.zero_data_retention ?? false,
           isAvailable: true,
           userDefined: false,
         }));
