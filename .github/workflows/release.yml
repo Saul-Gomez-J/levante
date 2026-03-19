@@ -158,6 +158,7 @@ jobs:
         run: pnpm run make
 
       - name: Upload artifacts to release
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
