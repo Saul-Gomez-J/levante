@@ -163,3 +163,21 @@ jobs:
       - name: Cleanup keychain (macOS)
         if: matrix.platform == 'darwin' && always()
         run: security delete-keychain temp.keychain || true
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_TOKEN }}
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              draft: false
+            });
+            console.log(`Published release ${{ needs.create-release.outputs.tag_name }}`);

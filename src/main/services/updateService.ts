@@ -115,7 +115,10 @@ class UpdateService {
             logger.core.info('Using beta auto-update path (autoUpdater API)');
             this.initializeBetaUpdates();
           } else {
-            logger.core.info('Using stable auto-update path (update-electron-app)');
+            logger.core.info('Using stable auto-update path (update-electron-app)', {
+              arch: process.arch,
+              feedUrl: `https://update.electronjs.org/${this.repo}/darwin-${process.arch}/${app.getVersion()}`
+            });
             const { updateElectronApp } = require('update-electron-app');
             updateElectronApp({
               repo: this.repo,
@@ -426,7 +429,11 @@ class UpdateService {
   }
 
   private async checkForUpdatesMacOS(): Promise<void> {
-    logger.core.info('Triggering manual update check via autoUpdater');
+    const feedUrl = `https://update.electronjs.org/levante-hub/levante/darwin-${process.arch}/${app.getVersion()}`;
+    logger.core.info('Triggering manual update check via autoUpdater', {
+      arch: process.arch,
+      feedUrl
+    });
 
     const updateNotAvailableHandler = async () => {
       const latestVersion = await this.getLatestRemoteVersion();

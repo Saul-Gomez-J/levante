@@ -217,7 +217,6 @@ module.exports = {
       name: '@electron-forge/maker-dmg',
       config: {
         format: 'ULFO',
-        name: 'Levante',
         icon: './resources/icons/icon.icns',
         contents: (opts) => {
           return [
