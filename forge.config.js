@@ -320,22 +320,6 @@ module.exports = {
     ),
   ],
 
-  publishers: [
-    {
-      name: '@electron-forge/publisher-github',
-      config: {
-        repository: {
-          owner: 'levante-hub',
-          name: 'levante'
-        },
-        draft: true,
-        prerelease: false,
-        // GitHub token will be provided via GITHUB_TOKEN env variable
-        // This is automatically available in GitHub Actions
-      }
-    }
-  ],
-
   plugins: [
     // Removido auto-unpack-natives porque ASAR está desactivado
     {

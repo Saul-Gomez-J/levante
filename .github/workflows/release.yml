@@ -157,28 +157,12 @@ jobs:
           FORGE_TARGET: ${{ matrix.target }}
         run: pnpm run make
 
-      - name: Package & Publish (macOS)
-        if: matrix.platform == 'darwin'
+      - name: Upload artifacts to release
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: pnpm run publish
-
-      - name: Package & Publish (Windows)
-        if: matrix.platform == 'win32'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: pnpm run publish
-
-      - name: Package & Publish (Linux)
-        if: matrix.platform == 'linux'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          FORGE_TARGET: ${{ matrix.target }}
-        run: pnpm run publish
+        run: |
+          find out/make -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.exe" -o -name "*.blockmap" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) \
+            -exec gh release upload ${{ needs.create-release.outputs.tag_name }} {} --clobber \;
 
       # Cleanup macOS keychain
       - name: Cleanup keychain (macOS)
