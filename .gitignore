@@ -26,6 +26,7 @@ dev-levante.db
 # Claude Code configuration
 .mcp.json
 .claude/
+!.claude/skills/*
 
 
 # TypeScript build info
