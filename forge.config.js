@@ -217,7 +217,6 @@ module.exports = {
       name: '@electron-forge/maker-dmg',
       config: {
         format: 'ULFO',
-        name: 'Levante',
         icon: './resources/icons/icon.icns',
         contents: (opts) => {
           return [
@@ -330,6 +329,7 @@ module.exports = {
         },
         draft: true,
         prerelease: false,
+        force: true,
         // GitHub token will be provided via GITHUB_TOKEN env variable
         // This is automatically available in GitHub Actions
       }

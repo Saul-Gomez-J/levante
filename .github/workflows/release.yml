@@ -147,16 +147,6 @@ jobs:
           # Cleanup
           rm certificate.p12
 
-      - name: Build and package application
-        env:
-          # Notarization env vars for osxNotarize in forge.config.js
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Pass target so forge.config.js can conditionally include AppImage maker
-          FORGE_TARGET: ${{ matrix.target }}
-        run: pnpm run make
-
       - name: Package & Publish (macOS)
         if: matrix.platform == 'darwin'
         env:

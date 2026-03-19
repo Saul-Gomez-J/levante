@@ -143,15 +143,6 @@ jobs:
 
           rm certificate.p12
 
-      - name: Build and package application
-        env:
-          # Only set signing env vars if secrets exist, otherwise build unsigned
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          FORGE_TARGET: ${{ matrix.target }}
-        run: pnpm run make
-
       - name: Package & Publish Beta (macOS)
         if: matrix.platform == 'darwin'
         env:
