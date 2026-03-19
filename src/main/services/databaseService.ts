@@ -408,6 +408,15 @@ export class DatabaseService {
           // Recreate index if needed
           `CREATE INDEX IF NOT EXISTS idx_chat_sessions_project_id ON chat_sessions(project_id)`
         ]
+      },
+      {
+        version: 10,
+        name: 'Add token tracking to messages',
+        queries: [
+          `ALTER TABLE messages ADD COLUMN input_tokens INTEGER DEFAULT NULL`,
+          `ALTER TABLE messages ADD COLUMN output_tokens INTEGER DEFAULT NULL`,
+          `ALTER TABLE messages ADD COLUMN total_tokens INTEGER DEFAULT NULL`
+        ]
       }
     ];
   }

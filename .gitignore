@@ -4,7 +4,7 @@ node_modules
 dist
 dist-electron
 out
-release
+/release
 *.app
 *.dmg
 *.pkg
@@ -25,7 +25,8 @@ dev-levante.db
 
 # Claude Code configuration
 .mcp.json
-.claude/
+.claude/*
+!.claude/skills
 
 
 # TypeScript build info

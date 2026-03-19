@@ -24,7 +24,7 @@ export async function discoverLocalModels(endpoint: string): Promise<Model[]> {
       id: model.name,
       name: model.name,
       provider: 'local',
-      contextLength: model.details?.context_length || 4000,
+      contextLength: model.details?.context_length || 0,
       capabilities: ['text'],
       isAvailable: true,
       userDefined: false

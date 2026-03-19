@@ -68,6 +68,9 @@ import { projectsApi } from "./api/projects";
 import { skillsApi } from "./api/skills";
 import { platformApi } from "./api/platform";
 import { anthropicOAuthApi } from "./api/anthropicOAuth";
+import { filesystemApi } from "./api/filesystem";
+import { compactionApi } from "./api/compaction";
+import { contextBudgetApi } from "./api/contextBudget";
 
 // Re-export types for backwards compatibility
 export type {
@@ -897,6 +900,58 @@ export interface LevanteAPI {
     getOrgId: () => Promise<{ success: boolean; data?: string }>;
   };
 
+  // Filesystem API (File Browser - Fase 1)
+  fs: {
+    setWorkingDir: (path: string) => Promise<{ success: boolean; error?: string }>;
+    getWorkingDir: () => Promise<{ success: boolean; data?: string | null; error?: string }>;
+    readDir: (
+      path: string,
+      options?: { showHidden?: boolean; sortBy?: 'name' | 'type' | 'modified' }
+    ) => Promise<{
+      success: boolean;
+      data?: Array<{
+        name: string;
+        path: string;
+        type: 'file' | 'directory' | 'symlink';
+        size: number;
+        extension: string;
+        modifiedAt: number;
+        isHidden: boolean;
+      }>;
+      error?: string;
+    }>;
+    readFile: (
+      path: string,
+      options?: { maxSize?: number; encoding?: string }
+    ) => Promise<{
+      success: boolean;
+      data?: {
+        path: string;
+        content: string;
+        encoding: string;
+        size: number;
+        language: string;
+        isBinary: boolean;
+        isTruncated: boolean;
+      };
+      error?: string;
+    }>;
+    getPdfUrl: (path: string) => string;
+    searchFiles: (
+      query: string,
+      options?: { maxResults?: number; maxDepth?: number }
+    ) => Promise<{
+      success: boolean;
+      data?: Array<{
+        name: string;
+        path: string;
+        relativePath: string;
+        extension: string;
+      }>;
+      error?: string;
+    }>;
+  };
+
   // Anthropic OAuth API (Claude Max/Pro subscription)
   anthropicOAuth: {
     start: (mode: 'max' | 'console') => Promise<{ success: boolean; authUrl?: string; error?: string }>;
@@ -907,6 +962,27 @@ export interface LevanteAPI {
       error?: string;
     }>;
     disconnect: () => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // Compaction API
+  compaction: {
+    compact: (input: {
+      sessionId: string;
+      model: string;
+    }) => Promise<{
+      success: boolean;
+      summaryMessageId?: string;
+      error?: string;
+    }>;
+  };
+
+  // Context Budget API
+  contextBudget: {
+    estimate: (input: import('./types').ContextBudgetEstimateInput) => Promise<{
+      success: boolean;
+      data?: import('./types').ContextBudgetEstimate;
+      error?: string;
+    }>;
   };
 
   // Skills API
@@ -996,6 +1072,12 @@ const api: LevanteAPI = {
   // Projects API
   projects: projectsApi,
 
+  // Compaction API
+  compaction: compactionApi,
+
+  // Context Budget API
+  contextBudget: contextBudgetApi,
+
   // Skills API
   skills: skillsApi,
 
@@ -1004,6 +1086,9 @@ const api: LevanteAPI = {
 
   // Anthropic OAuth API
   anthropicOAuth: anthropicOAuthApi,
+
+  // Filesystem API
+  fs: filesystemApi,
 };
 
 // Use `contextBridge` APIs to expose Electron APIs to

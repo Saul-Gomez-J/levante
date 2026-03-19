@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { WizardStep } from '@/components/onboarding/WizardStep';
 import { WelcomeStep } from '@/components/onboarding/WelcomeStep';
 import { ModeSelectionStep } from '@/components/onboarding/ModeSelectionStep';
-import { McpStep } from '@/components/onboarding/McpStep';
 import { ProviderStep } from '@/components/onboarding/ProviderStep';
 import { DirectoryStep } from '@/components/onboarding/DirectoryStep';
 import { CompletionStep } from '@/components/onboarding/CompletionStep';
@@ -14,12 +13,12 @@ import type { ProviderValidationConfig } from '../../types/wizard';
 
 /**
  * Wizard steps differ by mode:
- * - Platform: Welcome → ModeSelection → MCP → Directory → Completion (5 steps, skip ProviderStep)
- * - Standalone: Welcome → ModeSelection → Provider → MCP → Directory → Completion (6 steps)
- * - Before mode is chosen: TOTAL_STEPS = 5 (platform path, shorter)
+ * - Platform: Welcome → ModeSelection → Directory → Completion (4 steps, skip ProviderStep)
+ * - Standalone: Welcome → ModeSelection → Provider → Directory → Completion (5 steps)
+ * - Before mode is chosen: TOTAL_STEPS = 4 (platform path, shorter)
  */
-const PLATFORM_TOTAL_STEPS = 5;
-const STANDALONE_TOTAL_STEPS = 6;
+const PLATFORM_TOTAL_STEPS = 4;
+const STANDALONE_TOTAL_STEPS = 5;
 
 const PROVIDER_NAMES: Record<string, string> = {
   openrouter: 'OpenRouter',
@@ -47,7 +46,7 @@ interface OnboardingWizardProps {
 export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   const { updateProvider, setActiveProvider, syncProviderModels, providers } = useModelStore();
   const { appMode, isAuthenticated: isPlatformConnected, setStandaloneMode } = usePlatformStore();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const userChangedLanguageRef = useRef(false);
 
   // Language step state
@@ -140,22 +139,20 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
   /**
    * Get the logical step name for the current step number based on mode.
    *
-   * Platform flow:   1=Welcome, 2=ModeSelection, 3=MCP, 4=Directory, 5=Completion
-   * Standalone flow: 1=Welcome, 2=ModeSelection, 3=Provider, 4=MCP, 5=Directory, 6=Completion
+   * Platform flow:   1=Welcome, 2=ModeSelection, 3=Directory, 4=Completion
+   * Standalone flow: 1=Welcome, 2=ModeSelection, 3=Provider, 4=Directory, 5=Completion
    */
   const getStepName = (step: number): string => {
     if (step === 1) return 'welcome';
     if (step === 2) return 'modeSelection';
     if (chosenMode === 'standalone') {
       if (step === 3) return 'provider';
-      if (step === 4) return 'mcp';
-      if (step === 5) return 'directory';
-      if (step === 6) return 'completion';
-    } else {
-      // Platform mode (or mode not yet chosen)
-      if (step === 3) return 'mcp';
       if (step === 4) return 'directory';
       if (step === 5) return 'completion';
+    } else {
+      // Platform mode (or mode not yet chosen)
+      if (step === 3) return 'directory';
+      if (step === 4) return 'completion';
     }
     return 'unknown';
   };
@@ -472,6 +469,53 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
     }
   };
 
+  const handleAnthropicOAuthSuccess = async () => {
+    console.log('Anthropic OAuth success - configuring provider');
+
+    setValidationStatus('valid');
+    setValidationError('');
+
+    try {
+      // Update provider with OAuth auth mode (no API key)
+      await updateProvider('anthropic', { authMode: 'oauth', apiKey: undefined });
+
+      // Set as active provider
+      await setActiveProvider('anthropic');
+
+      // Sync models from provider
+      await syncProviderModels('anthropic');
+
+      // Poll for models
+      const maxAttempts = 10;
+      const pollInterval = 300;
+
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        const currentProviders = getModelStoreState().providers;
+        const provider = currentProviders.find((p: any) => p.id === 'anthropic');
+
+        if (provider?.models && provider.models.length > 0) {
+          const models = provider.models.filter((m: any) => m.isAvailable);
+          setAvailableModels(models);
+          console.log('Anthropic OAuth models loaded:', models.length);
+          return;
+        }
+
+        if (attempt < maxAttempts) {
+          await new Promise(resolve => setTimeout(resolve, pollInterval));
+        }
+      }
+
+      // Fallback
+      loadAvailableModels();
+    } catch (error) {
+      console.error('Anthropic OAuth configuration error:', error);
+      setValidationStatus('invalid');
+      setValidationError(
+        error instanceof Error ? error.message : 'Unknown error occurred'
+      );
+    }
+  };
+
   const handlePlatformLoginSuccess = () => {
     setChosenMode('platform');
     // Auto-advance past mode selection step
@@ -509,9 +553,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
 
   const getNextButtonLabel = () => {
     if (currentStep === totalSteps) {
-      return 'Start Using Levante';
+      return t('wizard:navigation.start_using_levante');
     }
-    return 'Next';
+    return t('common:actions.next');
   };
 
   const isNextDisabled = () => {
@@ -538,6 +582,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
       onBack={handleBack}
       nextLabel={getNextButtonLabel()}
       nextDisabled={isNextDisabled()}
+      showNextChevron={currentStep !== totalSteps}
     >
       {currentStepName === 'welcome' && (
         <WelcomeStep
@@ -568,9 +613,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
           onValidate={handleValidateProvider}
           onModelSelect={handleModelSelect}
           onOAuthSuccess={handleOAuthSuccess}
+          onAnthropicOAuthSuccess={handleAnthropicOAuthSuccess}
         />
       )}
-      {currentStepName === 'mcp' && <McpStep />}
       {currentStepName === 'directory' && (
         <DirectoryStep
           analyticsConsent={analyticsConsent}

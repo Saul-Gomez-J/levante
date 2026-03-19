@@ -87,6 +87,31 @@ export function ChatMessageItem({
     return textParts.map((p: any) => p.text).join('\n');
   }, [message.parts]);
 
+  const compactionSummary = useMemo(() => {
+    if (message.role !== 'system') return null;
+    const text = messageText.trim();
+    if (!text.startsWith('[COMPACTION_SUMMARY]')) return null;
+    return text.replace('[COMPACTION_SUMMARY]', '').trim();
+  }, [message.role, messageText]);
+
+  if (compactionSummary !== null) {
+    return (
+      <div className="my-6">
+        <div className="text-center text-xs text-muted-foreground mb-2">
+          --- Conversacion compactada ---
+        </div>
+        <Collapsible>
+          <CollapsibleTrigger className="text-xs underline text-muted-foreground hover:text-foreground">
+            Ver resumen de compactacion
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 p-3 rounded border bg-muted/30 text-sm whitespace-pre-wrap">
+            {compactionSummary}
+          </CollapsibleContent>
+        </Collapsible>
+      </div>
+    );
+  }
+
   const handleStartEdit = () => {
     setEditContent(messageText);
     setIsEditing(true);

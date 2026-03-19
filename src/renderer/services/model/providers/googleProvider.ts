@@ -25,7 +25,7 @@ export async function fetchGoogleModels(apiKey: string): Promise<Model[]> {
           id: modelId,
           name: modelId,
           provider: 'google',
-          contextLength: getContextLength(modelId),
+          contextLength: model.inputTokenLimit || 0,
           capabilities: getCapabilities(model),
           isAvailable: true,
           userDefined: false,
@@ -38,13 +38,6 @@ export async function fetchGoogleModels(apiKey: string): Promise<Model[]> {
     });
     throw error;
   }
-}
-
-function getContextLength(modelId: string): number {
-  if (modelId.includes('gemini-2')) return 1000000;
-  if (modelId.includes('gemini-1.5-pro')) return 2000000;
-  if (modelId.includes('gemini-1.5')) return 1000000;
-  return 32000;
 }
 
 function getCapabilities(model: any): string[] {

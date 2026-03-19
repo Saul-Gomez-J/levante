@@ -20,7 +20,7 @@ export async function fetchGroqModels(apiKey: string): Promise<Model[]> {
       id: model.id,
       name: model.id,
       provider: 'groq',
-      contextLength: getContextLength(model.id),
+      contextLength: model.context_window || 0,
       capabilities: ['text', 'tools'],
       isAvailable: true,
       userDefined: false,
@@ -34,9 +34,3 @@ export async function fetchGroqModels(apiKey: string): Promise<Model[]> {
   }
 }
 
-function getContextLength(modelId: string): number {
-  if (modelId.includes('llama-3.3-70b')) return 128000;
-  if (modelId.includes('llama-3.1')) return 128000;
-  if (modelId.includes('mixtral-8x7b')) return 32768;
-  return 8192;
-}

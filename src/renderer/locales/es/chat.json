@@ -14,8 +14,11 @@
     "loading": "Cargando...",
     "search_placeholder": "Buscar modelos...",
     "no_models_found": "No se encontraron modelos.",
+    "required_title": "Selecciona un modelo",
+    "required_description": "Elige un modelo antes de enviar tu mensaje",
     "context": "{{count}} contexto",
-    "context_k": "{{count}}k contexto"
+    "context_k": "{{count}}k contexto",
+    "private_badge": "Privado"
   },
   "message": {
     "user": "Tú",
@@ -32,6 +35,10 @@
     "greeting_default": "¿Qué tal tu día?",
     "default_user_name": "Usuario"
   },
+  "mode_tabs": {
+    "chat": "Chat",
+    "cowork": "Cowork"
+  },
   "actions": {
     "copy": "Copiar",
     "regenerate": "Regenerar",
@@ -44,6 +51,7 @@
     "loading": "Cargando chats...",
     "no_chats": "Aún no hay chats",
     "no_results": "No se encontraron chats",
+    "project_history": "{{projectName}}",
     "rename_chat": "Renombrar chat",
     "delete_chat": "Eliminar chat",
     "projects_section": "Proyectos",
@@ -52,6 +60,7 @@
     "new_conversation_in_project": "Nueva conversación",
     "edit_project": "Editar",
     "delete_project": "Eliminar",
+    "exit_project": "Todos los chats",
     "project_modal": {
       "title_create": "Nuevo Proyecto",
       "title_edit": "Editar Proyecto",
@@ -59,6 +68,9 @@
       "name_placeholder": "Mi proyecto...",
       "cwd_label": "Directorio de trabajo (CWD)",
       "cwd_placeholder": "Seleccionar un directorio...",
+      "cwd_auto_preview": "~/levante/projects/...",
+      "cwd_use_custom": "Utilizar otra carpeta",
+      "cwd_use_auto": "Usar carpeta auto-generada",
       "description_label": "Descripción / Instrucciones",
       "description_placeholder": "Contexto que se inyectará en el system prompt...",
       "save": "Guardar",
@@ -67,6 +79,7 @@
     "delete_project_confirm": {
       "title": "Eliminar proyecto",
       "description": "Eliminar \"{{name}}\" eliminará permanentemente sus {{count}} conversaciones y todo su historial. Esta acción no se puede deshacer.",
+      "description_auto_cwd": "Eliminar \"{{name}}\" eliminará permanentemente sus {{count}} conversaciones, todo su historial y la carpeta auto-creada del proyecto ({{cwd}}). Esta acción no se puede deshacer.",
       "confirm": "Eliminar",
       "cancel": "Cancelar"
     },
@@ -76,6 +89,18 @@
       "this_week": "Esta Semana",
       "this_month": "Este Mes",
       "older": "Más Antiguos"
+    },
+    "file_browser": {
+      "tab_chats": "Chats",
+      "tab_files": "Archivos",
+      "search_files_placeholder": "Buscar archivos...",
+      "show_hidden": "Mostrar archivos ocultos",
+      "hide_hidden": "Ocultar archivos ocultos",
+      "refresh": "Actualizar",
+      "empty_directory": "Directorio vacío",
+      "read_dir_error": "No se pudo leer el directorio",
+      "searching": "Buscando...",
+      "no_search_results": "No se encontraron archivos"
     }
   },
   "tools_menu": {
@@ -170,6 +195,12 @@
     "title": "Ejecución automática habilitada",
     "description": "Las herramientas se ejecutarán automáticamente sin aprobación para este proveedor ({{provider}})"
   },
+  "file_mentions": {
+    "autocomplete_placeholder": "Escribe para buscar archivos...",
+    "no_results": "No se encontraron archivos",
+    "drop_to_reference": "Suelta el archivo para referenciarlo",
+    "max_mentions_reached": "Maximo {{count}} menciones de archivo por mensaje"
+  },
   "background_tasks": {
     "title": "Tareas en Background",
     "running_count": "{{count}} ejecutándose",
@@ -195,5 +226,20 @@
       "failed": "fallida",
       "killed": "terminada"
     }
+  },
+  "context_usage": {
+    "compact": "Compactar",
+    "compacting": "Compactando...",
+    "tokens": "tokens",
+    "tokens_used": "Tokens usados",
+    "precision": "Precisión",
+    "precision_real": "Real",
+    "precision_estimated": "Estimado",
+    "tokens_available": "Tokens disponibles",
+    "used_ratio": "Usado/Disponible",
+    "tokens_remaining": "Tokens restantes",
+    "context_unknown": "Context window desconocida para este modelo/proveedor",
+    "compact_success": "Conversación compactada",
+    "compact_error": "No se pudo compactar"
   }
 }

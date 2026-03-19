@@ -14,8 +14,11 @@
     "loading": "Loading...",
     "search_placeholder": "Search models...",
     "no_models_found": "No models found.",
+    "required_title": "Select a model",
+    "required_description": "Choose a model before sending your message",
     "context": "{{count}} context",
-    "context_k": "{{count}}k context"
+    "context_k": "{{count}}k context",
+    "private_badge": "Private"
   },
   "message": {
     "user": "You",
@@ -32,6 +35,10 @@
     "greeting_default": "How's your day going?",
     "default_user_name": "User"
   },
+  "mode_tabs": {
+    "chat": "Chat",
+    "cowork": "Cowork"
+  },
   "actions": {
     "copy": "Copy",
     "regenerate": "Regenerate",
@@ -44,6 +51,7 @@
     "loading": "Loading chats...",
     "no_chats": "No chats yet",
     "no_results": "No chats found",
+    "project_history": "{{projectName}}",
     "rename_chat": "Rename chat",
     "delete_chat": "Delete chat",
     "projects_section": "Projects",
@@ -52,6 +60,7 @@
     "new_conversation_in_project": "New conversation",
     "edit_project": "Edit",
     "delete_project": "Delete",
+    "exit_project": "All chats",
     "project_modal": {
       "title_create": "New Project",
       "title_edit": "Edit Project",
@@ -59,6 +68,9 @@
       "name_placeholder": "My project...",
       "cwd_label": "Working directory (CWD)",
       "cwd_placeholder": "Select a directory...",
+      "cwd_auto_preview": "~/levante/projects/...",
+      "cwd_use_custom": "Use another folder",
+      "cwd_use_auto": "Use auto-generated folder",
       "description_label": "Description / Instructions",
       "description_placeholder": "Context that will be injected into the system prompt...",
       "save": "Save",
@@ -67,6 +79,7 @@
     "delete_project_confirm": {
       "title": "Delete project",
       "description": "Deleting \"{{name}}\" will permanently delete its {{count}} conversations and all their history. This action cannot be undone.",
+      "description_auto_cwd": "Deleting \"{{name}}\" will permanently delete its {{count}} conversations, all their history, and the auto-created project folder ({{cwd}}). This action cannot be undone.",
       "confirm": "Delete",
       "cancel": "Cancel"
     },
@@ -76,6 +89,18 @@
       "this_week": "This Week",
       "this_month": "This Month",
       "older": "Older"
+    },
+    "file_browser": {
+      "tab_chats": "Chats",
+      "tab_files": "Files",
+      "search_files_placeholder": "Search files...",
+      "show_hidden": "Show hidden files",
+      "hide_hidden": "Hide hidden files",
+      "refresh": "Refresh",
+      "empty_directory": "Empty directory",
+      "read_dir_error": "Failed to read directory",
+      "searching": "Searching...",
+      "no_search_results": "No files found"
     }
   },
   "tools_menu": {
@@ -170,6 +195,12 @@
     "title": "Auto-execution enabled",
     "description": "Tools will run automatically without approval for this provider ({{provider}})"
   },
+  "file_mentions": {
+    "autocomplete_placeholder": "Type to search files...",
+    "no_results": "No files found",
+    "drop_to_reference": "Drop file to reference",
+    "max_mentions_reached": "Maximum {{count}} file mentions per message"
+  },
   "background_tasks": {
     "title": "Background Tasks",
     "running_count": "{{count}} running",
@@ -195,5 +226,20 @@
       "failed": "failed",
       "killed": "killed"
     }
+  },
+  "context_usage": {
+    "compact": "Compact",
+    "compacting": "Compacting...",
+    "tokens": "tokens",
+    "tokens_used": "Tokens used",
+    "precision": "Precision",
+    "precision_real": "Real",
+    "precision_estimated": "Estimated",
+    "tokens_available": "Tokens available",
+    "used_ratio": "Used/Available",
+    "tokens_remaining": "Tokens remaining",
+    "context_unknown": "Context window unknown for this model/provider",
+    "compact_success": "Conversation compacted",
+    "compact_error": "Could not compact"
   }
 }

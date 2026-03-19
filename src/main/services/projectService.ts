@@ -1,5 +1,9 @@
+import * as fs from 'fs/promises';
+import * as path from 'path';
+import * as os from 'os';
 import { InValue } from '@libsql/client';
 import { databaseService } from './databaseService';
+import { directoryService } from './directoryService';
 import { getLogger } from './logging';
 import {
   Project,
@@ -31,10 +35,24 @@ class ProjectService {
   async createProject(input: CreateProjectInput): Promise<DatabaseResult<Project>> {
     const id = this.generateId();
     const now = Date.now();
+
+    // Auto-create project directory if no CWD provided
+    let cwd = input.cwd ?? null;
+    if (!cwd) {
+      try {
+        cwd = await directoryService.ensureProjectDir(input.name);
+        this.logger.database.info('Auto-created project directory', { projectId: id, cwd });
+      } catch (error) {
+        this.logger.database.error('Failed to auto-create project directory', {
+          error: error instanceof Error ? error.message : error,
+        });
+      }
+    }
+
     const project: Project = {
       id,
       name: input.name,
-      cwd: input.cwd ?? null,
+      cwd,
       description: input.description ?? null,
       created_at: now,
       updated_at: now,
@@ -146,8 +164,33 @@ class ProjectService {
 
   async deleteProject(id: string): Promise<DatabaseResult<boolean>> {
     try {
+      const projectResult = await this.getProject(id);
+      const project = projectResult.data;
+
       await databaseService.execute('DELETE FROM projects WHERE id = ?', [id as InValue]);
       this.logger.database.info('Project deleted', { projectId: id });
+
+      // Remove folder if it's inside ~/levante/projects/ (auto-created)
+      if (project?.cwd) {
+        try {
+          const projectsBase = path.join(os.homedir(), 'levante', 'projects');
+          const resolved = path.resolve(project.cwd);
+          if (resolved.startsWith(projectsBase + path.sep)) {
+            await fs.rm(resolved, { recursive: true, force: true });
+            this.logger.database.info('Auto-created project directory removed', {
+              projectId: id,
+              cwd: resolved,
+            });
+          }
+        } catch (fsError) {
+          this.logger.database.error('Failed to remove project directory', {
+            projectId: id,
+            cwd: project.cwd,
+            error: fsError instanceof Error ? fsError.message : fsError,
+          });
+        }
+      }
+
       return { data: true, success: true };
     } catch (error) {
       this.logger.database.error('Failed to delete project', {

@@ -1,5 +1,15 @@
 const path = require('path');
 const fs = require('fs-extra');
+const { execSync } = require('child_process');
+
+const hasRpmbuild = (() => {
+  try {
+    execSync('which rpmbuild', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 module.exports = {
   hooks: {
@@ -67,12 +77,28 @@ module.exports = {
         }
       }
 
-      // Copiar update-electron-app y sus dependencias
+      // Copiar update-electron-app y sus dependencias (macOS)
       console.log('  ✓ Finding update-electron-app dependencies...');
       const updateAppDeps = await getAllDependencies('update-electron-app');
 
       for (const dep of updateAppDeps) {
         if (allDeps.has(dep)) continue; // Ya copiado
+
+        const srcPath = path.join(projectNodeModules, dep);
+        const destPath = path.join(packageNodeModules, dep);
+
+        if (await fs.pathExists(srcPath)) {
+          console.log(`    - ${dep}`);
+          await fs.copy(srcPath, destPath, { overwrite: true, dereference: true });
+        }
+      }
+
+      // Copiar electron-updater y sus dependencias (Windows NSIS)
+      console.log('  ✓ Finding electron-updater dependencies...');
+      const electronUpdaterDeps = await getAllDependencies('electron-updater');
+
+      for (const dep of electronUpdaterDeps) {
+        if (allDeps.has(dep) || updateAppDeps.has(dep)) continue; // Ya copiado
 
         const srcPath = path.join(projectNodeModules, dep);
         const destPath = path.join(packageNodeModules, dep);
@@ -213,14 +239,19 @@ module.exports = {
     },
     // Windows makers
     {
-      name: '@electron-forge/maker-squirrel',
+      name: '@felixrieseberg/electron-forge-maker-nsis',
       config: {
-        name: 'Levante',
-        setupIcon: './resources/icons/icon.ico'
-        // loadingGif is optional, can be added later if needed
-        // Code signing will be added in Phase 2
+        oneClick: false,
+        perMachine: false,
+        allowToChangeInstallationDirectory: true,
+        installerIcon: './resources/icons/icon.ico',
+        uninstallerIcon: './resources/icons/icon.ico',
+        // Disable electron-builder's own publish — Electron Forge handles publishing.
+        // publish: 'never' is ignored by this maker; getAppBuilderConfig is the correct way.
+        getAppBuilderConfig: async () => ({ publish: null }),
+        // Code signing will be added in a future phase
         // certificateFile: './cert.pfx',
-        // certificatePassword: process.env.WINDOWS_CERTIFICATE_PASSWORD
+        // certificatePassword: process.env.WIN_CSC_KEY_PASSWORD,
       }
     },
     {
@@ -254,6 +285,7 @@ module.exports = {
             config: {
               options: {
                 name: 'levante',
+                bin: 'Levante',
                 productName: 'Levante',
                 genericName: 'AI Chat Application',
                 description: 'A friendly, private desktop chat app with AI and MCP integration',
@@ -264,11 +296,12 @@ module.exports = {
               }
             }
           },
-          {
+          ...(hasRpmbuild ? [{
             name: '@electron-forge/maker-rpm',
             config: {
               options: {
                 name: 'levante',
+                bin: 'Levante',
                 productName: 'Levante',
                 genericName: 'AI Chat Application',
                 description: 'A friendly, private desktop chat app with AI and MCP integration',
@@ -277,7 +310,7 @@ module.exports = {
                 icon: './resources/icons/icon.png'
               }
             }
-          },
+          }] : []),
           {
             name: '@electron-forge/maker-zip',
             platforms: ['linux'],

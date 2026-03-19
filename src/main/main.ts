@@ -3,7 +3,7 @@
 import fixPath from "fix-path";
 fixPath();
 
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, protocol } from "electron";
 import { join } from "path";
 import { config } from "dotenv";
 import { initializeLogger } from "./services/logging";
@@ -24,6 +24,25 @@ import { setupLogViewerHandlers } from "./ipc/logViewerHandlers";
 // Load environment variables
 config({ path: join(__dirname, "../../.env.local") });
 config({ path: join(__dirname, "../../.env") });
+
+// Set app.name before app.whenReady() so safeStorage (Chromium keychain)
+// registers the entry as "Levante Safe Storage" instead of "Chromium Safe Storage",
+// preventing repeated keychain password prompts.
+app.name = "Levante";
+
+// Register levante-fs scheme as privileged (must be before app.whenReady)
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "levante-fs",
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true,
+    },
+  },
+]);
 
 // Initialize logger
 initializeLogger();

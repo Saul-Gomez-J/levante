@@ -24,7 +24,7 @@ export async function fetchAnthropicModels(params: {
         id: model.id,
         name: model.display_name || model.id,
         provider: "anthropic",
-        contextLength: 200000, // All Claude models have 200k context
+        contextLength: 0,
         capabilities: ["text", "vision", "tools"],
         isAvailable: true,
         userDefined: false,

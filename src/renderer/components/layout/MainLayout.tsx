@@ -13,7 +13,7 @@ import {
   SidebarTrigger,
   useSidebar
 } from '@/components/ui/sidebar'
-import { MessageSquare, Settings, User, Bot, Store, Plus, PanelLeftClose, PanelLeft, FileText, LogOut } from 'lucide-react'
+import { MessageSquare, Settings, User, Bot, Store, Plus, PanelLeftClose, PanelLeft, FileText, LogOut, Loader2, Zap } from 'lucide-react'
 import { getRendererLogger } from '@/services/logger'
 import { Button } from '@/components/ui/button'
 import { useTranslation } from 'react-i18next'
@@ -41,6 +41,9 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
   const appMode = usePlatformStore((s) => s.appMode)
   const platformUser = usePlatformStore((s) => s.user)
   const platformLogout = usePlatformStore((s) => s.logout)
+  const platformLogin = usePlatformStore((s) => s.login)
+  const platformLoading = usePlatformStore((s) => s.isLoading)
+  const platformIsAuthenticated = usePlatformStore((s) => s.isAuthenticated)
   const isPlatformMode = appMode === 'platform'
 
   const userInitials = platformUser?.email
@@ -72,6 +75,7 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
                 <SidebarTrigger className="h-7 w-7 shrink-0" />
               )}
             </div>
+
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -101,38 +105,38 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
             <SidebarMenuButton
               onClick={() => onPageChange?.('store')}
               isActive={currentPage === 'store'}
-              >
-                <Store className="w-4 h-4" />
-                {t('navigation.mcp')}
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-            {isPlatformMode ? (
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => onPageChange?.('account')}
-                  isActive={currentPage === 'account'}
-                >
-                  <User className="w-4 h-4" />
-                  {t('navigation.account')}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ) : (
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={() => onPageChange?.('model')}
-                  isActive={currentPage === 'model'}
-                >
-                  <Bot className="w-4 h-4" />
-                  {t('navigation.models')}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            )}
+            >
+              <Store className="w-4 h-4" />
+              {t('navigation.mcp')}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          {isPlatformMode ? (
             <SidebarMenuItem>
               <SidebarMenuButton
-                onClick={() => onPageChange?.('settings')}
-                isActive={currentPage === 'settings'}
+                onClick={() => onPageChange?.('account')}
+                isActive={currentPage === 'account'}
               >
-                <Settings className="w-4 h-4" />
+                <User className="w-4 h-4" />
+                {t('navigation.account')}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : (
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={() => onPageChange?.('model')}
+                isActive={currentPage === 'model'}
+              >
+                <Bot className="w-4 h-4" />
+                {t('navigation.models')}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              onClick={() => onPageChange?.('settings')}
+              isActive={currentPage === 'settings'}
+            >
+              <Settings className="w-4 h-4" />
               {t('navigation.settings')}
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -149,7 +153,7 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
           )}
         </SidebarMenu>
           <div className="border-t pt-2 px-2 space-y-1">
-            {isPlatformMode && platformUser?.email && (
+            {platformIsAuthenticated && platformUser?.email ? (
               <div className="flex items-center gap-2 px-1 py-1.5 rounded-md hover:bg-muted/50 group">
                 <div className="flex items-center justify-center w-7 h-7 rounded-full bg-primary/15 text-primary text-[11px] font-semibold shrink-0">
                   {userInitials}
@@ -167,21 +171,30 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
                   <LogOut className="w-3.5 h-3.5" />
                 </Button>
               </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                <Button
+                  className="flex-1"
+                  onClick={() => platformLogin()}
+                  disabled={platformLoading}
+                >
+                  {platformLoading
+                    ? t('platform.signing_in', 'Signing in...')
+                    : t('platform.sign_in', 'Sign in')}
+                </Button>
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => window.levante.openExternal('https://www.levanteapp.com/feedback')}
+                >
+                  {t('actions.feedback')}
+                </Button>
+              </div>
             )}
-            <Button
-              onClick={() => window.levante.openExternal('https://www.levanteapp.com/feedback')}
-              variant="outline"
-              className="w-full justify-start gap-2"
-            >
-              <MessageSquare className="w-4 h-4" />
-              <span className="flex-1 text-left">
-                {t('actions.feedback')} {version ? `v${version}` : ''}
-              </span>
-            </Button>
           </div>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className='rounded-l-2xl h-screen flex flex-col'>
+      <SidebarInset className='rounded-l-2xl h-screen flex flex-col overflow-hidden'>
         {/* Custom titlebar for macOS - draggable area with controls */}
         <header
           className="flex shrink-0 items-center h-12 px-2"

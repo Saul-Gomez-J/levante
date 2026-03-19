@@ -22,7 +22,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ToolsWarning } from '@/components/settings/ToolsWarning';
 import { SkillsPanel } from '@/components/chat/SkillsPanel';
-import type { Tool } from '@/types/mcp';
+import type { Tool, MCPConnectionStatus } from '@/types/mcp';
 
 interface ToolsMenuProps {
   enableMCP: boolean;
@@ -156,26 +156,6 @@ export function ToolsMenu({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-72">
-          {/* Cowork Mode Toggle */}
-          <div
-            className="flex items-center justify-between rounded-sm px-3 py-2 hover:bg-accent cursor-pointer"
-            onClick={() => onCoworkModeChange(!coworkMode)}
-          >
-            <div className="flex items-center gap-2">
-              <Code2 size={16} className="text-muted-foreground" />
-              <span className="text-sm">{t('tools_menu.cowork.label', 'Cowork')}</span>
-              {coworkMode && (
-                <Badge variant="secondary" className={cn("text-xs", coworkModeCwd ? "bg-blue-100 text-blue-700" : "bg-amber-100 text-amber-700")}>
-                  {t('tools_menu.cowork.active', 'active')}
-                </Badge>
-              )}
-            </div>
-            <Switch
-              checked={coworkMode}
-              onCheckedChange={onCoworkModeChange}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
           {/* Cowork Directory Selector - only show when cowork is enabled */}
           {coworkMode && (
             <div className="px-3 py-2 space-y-2">
@@ -352,7 +332,7 @@ export function ToolsMenu({
                           serverId={server.id}
                           serverName={server.name || server.id}
                           serverEnabled={server.enabled !== false}
-                          isConnected={connectionStatus[server.id] === 'connected'}
+                          connectionStatus={connectionStatus[server.id]}
                           onServerToggle={(enabled) => enabled ? enableServer(server.id) : disableServer(server.id)}
                           isExpanded={expandedServers[server.id] || false}
                           onToggleExpand={() => toggleServerExpansion(server.id)}
@@ -385,7 +365,7 @@ export function ToolsMenu({
                           serverId={server.id}
                           serverName={server.name || server.id}
                           serverEnabled={server.enabled !== false}
-                          isConnected={connectionStatus[server.id] === 'connected'}
+                          connectionStatus={connectionStatus[server.id]}
                           onServerToggle={(enabled) => enabled ? enableServer(server.id) : disableServer(server.id)}
                           isExpanded={expandedServers[server.id] || false}
                           onToggleExpand={() => toggleServerExpansion(server.id)}
@@ -423,7 +403,7 @@ interface ServerToolsSectionProps {
   serverId: string;
   serverName: string;
   serverEnabled: boolean;
-  isConnected: boolean;
+  connectionStatus: MCPConnectionStatus | undefined;
   onServerToggle: (enabled: boolean) => void;
   isExpanded: boolean;
   onToggleExpand: () => void;
@@ -439,7 +419,7 @@ interface ServerToolsSectionProps {
 function ServerToolsSection({
   serverName,
   serverEnabled,
-  isConnected,
+  connectionStatus,
   onServerToggle,
   isExpanded,
   onToggleExpand,
@@ -453,18 +433,20 @@ function ServerToolsSection({
 }: ServerToolsSectionProps) {
   const { t } = useTranslation('chat');
 
+  const isConnected = connectionStatus === 'connected';
+  const isConnecting = connectionStatus === 'connecting';
   const allEnabled = tools.length > 0 && enabledCount === tools.length;
   const someEnabled = enabledCount > 0 && enabledCount < tools.length;
 
   return (
     <Collapsible open={isExpanded && serverEnabled} onOpenChange={onToggleExpand}>
-      <div className={cn("border rounded-md", !serverEnabled && "opacity-60")}>
+      <div className={cn("border rounded-md", !serverEnabled && !isConnecting && "opacity-60")}>
         <div className="flex items-center justify-between p-2">
           {/* Left side - clickable to expand */}
           <CollapsibleTrigger asChild>
             <div className={cn(
               "flex items-center gap-2 flex-1 cursor-pointer hover:bg-accent rounded-md p-1 -m-1",
-              !serverEnabled && "cursor-default hover:bg-transparent"
+              !serverEnabled && !isConnecting && "cursor-default hover:bg-transparent"
             )}>
               {serverEnabled ? (
                 isExpanded ? (
@@ -475,15 +457,21 @@ function ServerToolsSection({
               ) : (
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               )}
-              <span className={cn("text-sm font-medium", !serverEnabled && "text-muted-foreground")}>
+              <span className={cn("text-sm font-medium", !serverEnabled && !isConnecting && "text-muted-foreground")}>
                 {serverName}
               </span>
+              {isConnecting && (
+                <Badge variant="outline" className="text-xs">
+                  <RefreshCw className="h-3 w-3 animate-spin mr-1" />
+                  {t('tools_menu.connecting', 'connecting...')}
+                </Badge>
+              )}
               {serverEnabled && isConnected && (
                 <Badge variant="secondary" className="text-xs">
                   {enabledCount}/{tools.length}
                 </Badge>
               )}
-              {!serverEnabled && (
+              {!serverEnabled && !isConnecting && (
                 <Badge variant="outline" className="text-xs text-muted-foreground">
                   {t('tools_menu.disabled', 'disabled')}
                 </Badge>
@@ -507,6 +495,7 @@ function ServerToolsSection({
             <Switch
               checked={serverEnabled}
               onCheckedChange={onServerToggle}
+              disabled={isConnecting}
               className="scale-75"
             />
           </div>

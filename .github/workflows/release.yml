@@ -170,6 +170,7 @@ jobs:
         if: matrix.platform == 'win32'
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
         run: pnpm run publish
 
       - name: Package & Publish (Linux)

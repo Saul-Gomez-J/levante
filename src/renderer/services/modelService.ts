@@ -27,20 +27,55 @@ class ModelServiceImpl {
   // This prevents losing models from inactive providers when saving
   private syncedProvidersInSession = new Set<string>();
 
+  private initializationPromise: Promise<void> | null = null;
+  private syncPromises = new Map<string, Promise<Model[]>>();
+  private saveProvidersQueue: Promise<void> = Promise.resolve();
+
   // Initialize with default providers and load from storage
   async initialize(): Promise<void> {
-    // Prevent double initialization from React StrictMode
     if (this.isInitialized) {
       return;
     }
 
+    if (this.initializationPromise) {
+      return this.initializationPromise;
+    }
+
+    this.initializationPromise = this._doInitialize()
+      .finally(() => {
+        this.initializationPromise = null;
+      });
+
+    return this.initializationPromise;
+  }
+
+  private async _doInitialize(): Promise<void> {
     try {
-      // Load providers from electron store
       const providersResult = await window.levante.preferences.get('providers');
       const activeProviderResult = await window.levante.preferences.get('activeProvider');
 
       this.providers = (providersResult.success && providersResult.data) ? providersResult.data : [];
       this.activeProviderId = (activeProviderResult.success && activeProviderResult.data) ? activeProviderResult.data : null;
+
+      // Rehydrate isSelected from selectedModelIds as early as possible.
+      // Important: an empty array is a valid persisted state.
+      this.providers.forEach(provider => {
+        if (provider.modelSource !== 'dynamic') {
+          return;
+        }
+
+        if (!Array.isArray(provider.selectedModelIds)) {
+          return;
+        }
+
+        const selectedIds = new Set(provider.selectedModelIds);
+
+        provider.models.forEach(model => {
+          if (model.isSelected === undefined) {
+            model.isSelected = selectedIds.has(model.id);
+          }
+        });
+      });
 
       // Migrate old 'cloud' provider to new cloud providers
       const migrationResult = await migrateCloudProvider(this.providers);
@@ -522,6 +557,21 @@ class ModelServiceImpl {
 
   // Sync provider models
   async syncProviderModels(providerId: string): Promise<Model[]> {
+    const existing = this.syncPromises.get(providerId);
+    if (existing) {
+      return existing;
+    }
+
+    const promise = this._doSyncProviderModels(providerId)
+      .finally(() => {
+        this.syncPromises.delete(providerId);
+      });
+
+    this.syncPromises.set(providerId, promise);
+    return promise;
+  }
+
+  private async _doSyncProviderModels(providerId: string): Promise<Model[]> {
     const provider = this.providers.find(p => p.id === providerId);
     if (!provider) throw new Error('Provider not found');
 
@@ -622,16 +672,16 @@ class ModelServiceImpl {
       }
 
       // Restore selections from saved IDs or existing models
-      const selectedIds = new Set(provider.selectedModelIds || []);
+      const hasPersistedSelectionState = Array.isArray(provider.selectedModelIds);
+      const selectedIds = new Set(provider.selectedModelIds ?? []);
 
-      // If we have saved selections, use those
-      if (provider.selectedModelIds && provider.selectedModelIds.length > 0) {
+      if (hasPersistedSelectionState) {
         models.forEach(model => {
           model.isSelected = selectedIds.has(model.id);
         });
       } else {
-        // No saved selections - preserve existing in-memory selections or default to false
-        const existingSelections: { [modelId: string]: boolean } = {};
+        // No persisted selection state yet: preserve in-memory flags if present.
+        const existingSelections: Record<string, boolean> = {};
         provider.models.forEach(m => {
           if (m.isSelected !== undefined) {
             existingSelections[m.id] = m.isSelected;
@@ -639,7 +689,6 @@ class ModelServiceImpl {
         });
 
         models.forEach(model => {
-          // Default to false for new models to avoid selecting hundreds automatically
           model.isSelected = existingSelections[model.id] ?? false;
         });
       }
@@ -717,6 +766,15 @@ class ModelServiceImpl {
 
   // Save providers to storage
   private async saveProviders(): Promise<void> {
+    const saveTask = this.saveProvidersQueue.then(() => this._saveProviders());
+
+    // Keep the queue alive even if one save fails.
+    this.saveProvidersQueue = saveTask.catch(() => {});
+
+    return saveTask;
+  }
+
+  private async _saveProviders(): Promise<void> {
     try {
       // For dynamic providers, save selected model IDs + minimal model data with classification
       // Only apply minimal save logic to providers that have been synced in this session
@@ -725,15 +783,19 @@ class ModelServiceImpl {
           // Only apply minimal save to providers synced in this session
           // This prevents losing models from inactive providers that haven't been synced
           if (this.syncedProvidersInSession.has(provider.id)) {
-            // Extract selected model IDs
-            const selectedModelIds = provider.models
-              .filter(m => m.isSelected === true)
-              .map(m => m.id);
+            // selectedModelIds is authoritative if the property exists, even if it is [].
+            const selectedModelIds = Array.isArray(provider.selectedModelIds)
+              ? provider.selectedModelIds
+              : provider.models
+                  .filter(m => m.isSelected === true)
+                  .map(m => m.id);
+
+            const selectedIdSet = new Set(selectedModelIds);
 
             // Save minimal model data for selected models (id + classification only)
             // This allows main process to access classification without full sync
             const selectedModelsMinimal = provider.models
-              .filter(m => m.isSelected === true && !m.userDefined)
+              .filter(m => !m.userDefined && selectedIdSet.has(m.id))
               .map(m => ({
                 id: m.id,
                 name: m.name,
@@ -743,7 +805,8 @@ class ModelServiceImpl {
                 taskType: m.taskType,
                 userDefined: false,
                 isAvailable: true,
-                contextLength: 0,
+                isSelected: true,
+                contextLength: m.contextLength,
                 capabilities: []
               }));
 
@@ -797,10 +860,10 @@ class ModelServiceImpl {
 
   // Update provider configuration
   async updateProvider(providerId: string, updates: Partial<ProviderConfig>): Promise<void> {
-    const providerIndex = this.providers.findIndex(p => p.id === providerId);
-    if (providerIndex === -1) throw new Error('Provider not found');
+    const provider = this.providers.find(p => p.id === providerId);
+    if (!provider) throw new Error('Provider not found');
 
-    this.providers[providerIndex] = { ...this.providers[providerIndex], ...updates };
+    Object.assign(provider, updates);
     await this.saveProviders();
   }
 

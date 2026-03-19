@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { MainLayout } from '@/components/layout/MainLayout'
 import ChatPage from '@/pages/ChatPage'
 import { ProjectPage } from '@/pages/ProjectPage'
@@ -20,6 +20,7 @@ import { logger } from '@/services/logger'
 import { modelService } from '@/services/modelService'
 import { setupMermaidValidationHandler } from '@/services/mermaidValidationService'
 import { useMCPEvents } from '@/hooks/useMCPEvents'
+import { usePreference } from '@/hooks/usePreferences'
 
 import { useTranslation } from 'react-i18next'
 import { toast, Toaster } from 'sonner'
@@ -46,9 +47,13 @@ function App() {
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
   const [developerMode, setDeveloperMode] = useState(false)
   const { i18n, t: tModels } = useTranslation('models')
+  const { t: tChat } = useTranslation('chat')
 
   // Listen for MCP events (tools/list_changed, etc.)
   useMCPEvents()
+
+  const [coworkMode] = usePreference('coworkMode')
+  const [coworkModeCwd] = usePreference('coworkModeCwd')
 
   // MCP Deep Link Modal state
   const [mcpModalOpen, setMcpModalOpen] = useState(false)
@@ -289,6 +294,7 @@ function App() {
   const deleteSession = useChatStore((state) => state.deleteSession)
   const updateSessionTitle = useChatStore((state) => state.updateSessionTitle)
   const setPendingPrompt = useChatStore((state) => state.setPendingPrompt)
+  const setSkipNextHistoricalLoad = useChatStore((state) => state.setSkipNextHistoricalLoad)
   const createSession = useChatStore((state) => state.createSession)
 
   // Project management
@@ -305,6 +311,8 @@ function App() {
     id: string;
     name: string;
     count: number;
+    isAutoCwd: boolean;
+    cwd?: string | null;
   } | null>(null)
 
   // Load projects on mount
@@ -325,26 +333,53 @@ function App() {
     setCurrentPage('project');
   };
 
-  const handleNewSessionInProject = (projectId: string, initialMessage?: string, modelId?: string) => {
+  const resolvePreferredModel = useCallback(async (preferredModelId?: string) => {
+    if (preferredModelId) {
+      return preferredModelId;
+    }
+
+    const models = await modelService.getAvailableModels();
+    const lastUsedResult = await window.levante.preferences.get('lastUsedModel');
+    const lastUsed = lastUsedResult.data as string | undefined;
+
+    if (lastUsed && models.some((m) => m.id === lastUsed)) {
+      return lastUsed;
+    }
+
+    return models[0]?.id;
+  }, []);
+
+  const handleNewSessionInProject = async (projectId: string, initialMessage?: string, modelId?: string) => {
     const project = projects.find((p) => p.id === projectId);
     if (project) setSelectedProject(project);
     setCurrentPage('chat');
+    startNewChat();
+
     if (initialMessage) {
-      setPendingPrompt(initialMessage);
+      setPendingPrompt(initialMessage, 'autosend');
+      setSkipNextHistoricalLoad(true);
     }
-    // We need a slight delay for the page to render before creating session
-    setTimeout(async () => {
-      let model = modelId;
-      if (!model) {
-        // Fallback: auto-detect model if none provided
-        const models = await modelService.getAvailableModels();
-        const lastUsedResult = await window.levante.preferences.get('lastUsedModel');
-        const lastUsed = lastUsedResult.data as string | undefined;
-        model = models.some(m => m.id === lastUsed) ? lastUsed : models[0]?.id;
+
+    try {
+      const resolvedModel = await resolvePreferredModel(modelId);
+      const createdSession = await createSession('New Chat', resolvedModel, 'chat', projectId);
+
+      if (!createdSession && initialMessage) {
+        setSkipNextHistoricalLoad(false);
+        setPendingPrompt(initialMessage, 'prefill');
       }
-      await createSession('New Chat', model, 'chat', projectId)
-    }, 50)
-  }
+    } catch (error) {
+      logger.core.error('Failed to create new session in project', {
+        projectId,
+        error: error instanceof Error ? error.message : error
+      });
+
+      if (initialMessage) {
+        setSkipNextHistoricalLoad(false);
+        setPendingPrompt(initialMessage, 'prefill');
+      }
+    }
+  };
 
   // Handle deep links
   useEffect(() => {
@@ -455,7 +490,7 @@ function App() {
 
           // Set the pending prompt in the store (ChatPage will pick it up)
           if (!autoSend && prompt) {
-            setPendingPrompt(prompt);
+            setPendingPrompt(prompt, 'prefill');
             toast.success('New chat created', {
               description: 'Your message has been pre-filled in the chat input',
               duration: 3000
@@ -469,40 +504,47 @@ function App() {
               duration: 3000
             });
 
-            // Wait a bit for the chat to be ready
-            setTimeout(async () => {
-              try {
-                // Get available models
-                const models = await modelService.getAvailableModels();
-                const defaultModel = models.length > 0 ? models[0].id : undefined;
+            try {
+              const resolvedModel = await resolvePreferredModel();
 
-                if (!defaultModel) {
-                  logger.core.error('No model available to send deep link message');
-                  toast.error('No model available', {
-                    description: 'Please select a model in the Model page first',
-                    duration: 5000
-                  });
-                  return;
-                }
-
-                logger.core.info('Setting pending prompt from deep link', {
-                  promptLength: prompt.length
-                });
-
-                // Set the pending prompt - ChatPage will handle sending the message
-                setPendingPrompt(prompt);
-
-                logger.core.info('Pending prompt set successfully from deep link');
-              } catch (error) {
-                logger.core.error('Failed to send message from deep link', {
-                  error: error instanceof Error ? error.message : error
-                });
-                toast.error('Failed to send message', {
-                  description: error instanceof Error ? error.message : 'An unknown error occurred',
+              if (!resolvedModel) {
+                logger.core.error('No model available to send deep link message');
+                toast.error('No model available', {
+                  description: 'Please select a model in the Model page first',
                   duration: 5000
                 });
+                return;
               }
-            }, 500);
+
+              setPendingPrompt(prompt, 'autosend');
+              setSkipNextHistoricalLoad(true);
+
+              const createdSession = await createSession('New Chat', resolvedModel, 'chat');
+              if (!createdSession) {
+                setSkipNextHistoricalLoad(false);
+                setPendingPrompt(prompt, 'prefill');
+                toast.error('Failed to send message', {
+                  description: 'Could not create a new chat session',
+                  duration: 5000
+                });
+                return;
+              }
+
+              logger.core.info('Pending prompt set successfully from deep link', {
+                promptLength: prompt.length,
+                sessionId: createdSession.id
+              });
+            } catch (error) {
+              setSkipNextHistoricalLoad(false);
+              setPendingPrompt(prompt, 'prefill');
+              logger.core.error('Failed to send message from deep link', {
+                error: error instanceof Error ? error.message : error
+              });
+              toast.error('Failed to send message', {
+                description: error instanceof Error ? error.message : 'An unknown error occurred',
+                duration: 5000
+              });
+            }
           }
         } else if (action.type === 'skill-install') {
           setCurrentPage('store')
@@ -541,7 +583,7 @@ function App() {
     });
 
     return cleanup;
-  }, [startNewChat, setPendingPrompt]);
+  }, [startNewChat, setPendingPrompt, createSession, setSkipNextHistoricalLoad, resolvePreferredModel]);
 
   const getPageTitle = (page: string) => {
     switch (page) {
@@ -573,6 +615,7 @@ function App() {
             project={selectedProject}
             onSessionSelect={handleLoadSession}
             onNewSessionInProject={handleNewSessionInProject}
+            onDeleteSession={deleteSession}
           />
         ) : <ChatPage />
       case 'settings': return <SettingsPage />
@@ -585,6 +628,12 @@ function App() {
       default: return <ChatPage />
     }
   }
+
+  // Handle exiting project scope back to all chats
+  const handleExitProject = () => {
+    setSelectedProject(null);
+    setCurrentPage('chat');
+  };
 
   // Handle new chat with navigation
   const handleNewChat = () => {
@@ -612,6 +661,8 @@ function App() {
     setCurrentPage('chat');
   };
 
+  const effectiveSidebarCwd = selectedProject?.cwd ?? coworkModeCwd ?? null
+
   // Get sidebar content for current page
   const getSidebarContent = () => {
     // Show ChatList sidebar in all pages
@@ -626,12 +677,17 @@ function App() {
         false, // loading state
         projects,
         selectedProject?.id,
+        selectedProject?.name,
         handleProjectSelect,
         () => { setEditingProject(undefined); setProjectModalOpen(true); },
         (project: Project) => { setEditingProject(project); setProjectModalOpen(true); },
-        (projectId: string, projectName: string, sessionCount: number) => {
-          setDeleteConfirmProject({ id: projectId, name: projectName, count: sessionCount });
-        }
+        (projectId: string, projectName: string, sessionCount: number, cwd?: string | null) => {
+          const isAutoCwd = !!cwd && cwd.includes('/levante/projects/');
+          setDeleteConfirmProject({ id: projectId, name: projectName, count: sessionCount, isAutoCwd, cwd });
+        },
+        Boolean(coworkMode),
+        effectiveSidebarCwd,
+        handleExitProject,
       );
     }
     return null;
@@ -700,15 +756,23 @@ function App() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete project</AlertDialogTitle>
+            <AlertDialogTitle>{tChat('chat_list.delete_project_confirm.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              Deleting &ldquo;{deleteConfirmProject?.name}&rdquo; will permanently delete its{' '}
-              {deleteConfirmProject?.count} conversations and all their history. This action
-              cannot be undone.
+              {deleteConfirmProject?.isAutoCwd
+                ? tChat('chat_list.delete_project_confirm.description_auto_cwd', {
+                    name: deleteConfirmProject?.name,
+                    count: deleteConfirmProject?.count,
+                    cwd: deleteConfirmProject?.cwd,
+                  })
+                : tChat('chat_list.delete_project_confirm.description', {
+                    name: deleteConfirmProject?.name,
+                    count: deleteConfirmProject?.count,
+                  })
+              }
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tChat('chat_list.delete_project_confirm.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (deleteConfirmProject) {
@@ -717,7 +781,7 @@ function App() {
                 }
               }}
             >
-              Delete
+              {tChat('chat_list.delete_project_confirm.confirm')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

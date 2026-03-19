@@ -1,5 +1,6 @@
 'use client';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -481,7 +482,14 @@ export const ModelSearchableSelect = ({
                         )}
                       />
                       <div className="flex flex-col flex-1">
-                        <span>{model.name}</span>
+                        <div className="flex items-center gap-1.5">
+                          <span>{model.name}</span>
+                          {model.zeroDataRetention && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium text-green-600 border-green-600/30">
+                              {t('model_selector.private_badge')}
+                            </Badge>
+                          )}
+                        </div>
                         {model.contextLength > 0 && (
                           <span className="text-xs text-muted-foreground">
                             {model.contextLength >= 1000

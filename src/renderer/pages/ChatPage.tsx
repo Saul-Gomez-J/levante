@@ -24,10 +24,11 @@ import { useChatStore } from '@/stores/chatStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { LEVANTE_PLATFORM_URL } from '@/lib/platformConstants';
 import { StreamingProvider, useStreamingContext } from '@/contexts/StreamingContext';
-import { ChatList } from '@/components/chat/ChatList';
+import { SidebarSections } from '@/components/sidebar/SidebarSections';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { ChatPromptInput } from '@/components/chat/ChatPromptInput';
 import { ChatMessageItem } from '@/components/chat/ChatMessageItem';
+import { ChatModeTabs } from '@/components/chat/ChatModeTabs';
 import { useTranslation } from 'react-i18next';
 import { BreathingLogo } from '@/components/ai-elements/breathing-logo';
 import { getRendererLogger } from '@/services/logger';
@@ -37,15 +38,118 @@ import { useFileAttachments } from '@/hooks/useFileAttachments';
 import { useModelSelection, isInferenceModel } from '@/hooks/useModelSelection';
 import { usePreference } from '@/hooks/usePreferences';
 import { useToolAutoApproval } from '@/hooks/useToolAutoApproval';
-import { WebPreviewPanel } from '@/components/chat/WebPreviewPanel';
+import { SidePanel } from '@/components/chat/SidePanel';
 import { WebPreviewToast } from '@/components/chat/WebPreviewToast';
 import { useWebPreview } from '@/hooks/useWebPreview';
+import type { FileMentionPayload } from '@/components/chat/lexical/FileMentionNode';
+import { toast } from 'sonner';
+import { ContextUsageIndicator, type ContextUsageData } from '@/components/chat/ContextUsageIndicator';
+import type { TokenUsage, ContextBudgetEstimate } from '../../preload/types';
 
 // AI SDK v5 imports
 import { useChat } from '@ai-sdk/react';
+import type { UIMessage } from '@ai-sdk/react';
 import { createElectronChatTransport } from '@/transports/ElectronChatTransport';
 
 const logger = getRendererLogger();
+
+const COMPACTION_MARKER = '[COMPACTION_SUMMARY]';
+const CHARS_PER_TOKEN = 4;
+
+function extractTextFromMessage(message: UIMessage): string {
+  if (!Array.isArray(message.parts)) return '';
+  return message.parts
+    .filter((p: any) => p?.type === 'text' && typeof p.text === 'string')
+    .map((p: any) => p.text)
+    .join('\n')
+    .trim();
+}
+
+function getActiveContextMessages(messages: UIMessage[]): UIMessage[] {
+  let index = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role !== 'system') continue;
+    const text = extractTextFromMessage(msg);
+    if (text.startsWith(COMPACTION_MARKER)) {
+      index = i;
+      break;
+    }
+  }
+  return index >= 0 ? messages.slice(index) : messages;
+}
+
+function estimateTokens(text: string): number {
+  return Math.max(0, Math.round((text || '').length / CHARS_PER_TOKEN));
+}
+
+const RESPONSE_RESERVE_TOKENS = 2000;
+
+function calculateContextUsage(
+  messages: UIMessage[],
+  contextLength: number,
+  overheadInfo?: {
+    staticOverheadTokens: number;
+    overheadEMA: number | null;
+    toolCount: number;
+  } | null
+): ContextUsageData | null {
+  if (!messages.length) return null;
+
+  const scoped = getActiveContextMessages(messages);
+  if (!scoped.length) return null;
+
+  const estimatedAll = scoped.reduce((sum, msg) => sum + estimateTokens(extractTextFromMessage(msg)), 0);
+
+  let activeMessageTokens = estimatedAll;
+  let isEstimate = true;
+
+  // Use real usage data when available for more accurate message token count
+  let latestRealIndex = -1;
+  let latestReal = 0;
+  scoped.forEach((msg, idx) => {
+    const usage = (msg as any).tokenUsage as TokenUsage | undefined;
+    if (usage && typeof usage.totalTokens === 'number' && usage.totalTokens > 0) {
+      latestRealIndex = idx;
+      latestReal = usage.totalTokens;
+    }
+  });
+
+  if (latestRealIndex >= 0) {
+    const tailEstimate = scoped
+      .slice(latestRealIndex + 1)
+      .reduce((sum, msg) => sum + estimateTokens(extractTextFromMessage(msg)), 0);
+    activeMessageTokens = Math.max(0, latestReal + tailEstimate);
+    isEstimate = tailEstimate > 0;
+  }
+
+  // Include overhead (system prompt + tools + skills + provider slack)
+  let effectiveOverhead = 0;
+  if (overheadInfo) {
+    effectiveOverhead =
+      overheadInfo.overheadEMA !== null
+        ? Math.round(overheadInfo.overheadEMA)
+        : overheadInfo.staticOverheadTokens;
+    isEstimate = isEstimate || overheadInfo.overheadEMA === null;
+  }
+
+  const used = activeMessageTokens + effectiveOverhead + RESPONSE_RESERVE_TOKENS;
+  const percentage =
+    contextLength > 0
+      ? Math.min(100, Math.max(0, Math.round((used / contextLength) * 100)))
+      : 0;
+
+  return {
+    used,
+    contextLength,
+    percentage,
+    isEstimate,
+    activeMessageTokens,
+    overheadTokens: effectiveOverhead,
+    responseReserveTokens: RESPONSE_RESERVE_TOKENS,
+    isLearnedOverhead: overheadInfo?.overheadEMA !== null && overheadInfo?.overheadEMA !== undefined,
+  };
+}
 
 const ChatPage = () => {
   const { t } = useTranslation('chat');
@@ -61,6 +165,10 @@ const ChatPage = () => {
   const [pendingFirstAttachments, setPendingFirstAttachments] = useState<File[] | null>(null);
   const [pendingMessageAfterStop, setPendingMessageAfterStop] = useState<string | null>(null);
   const [pendingWidgetMessage, setPendingWidgetMessage] = useState<string | null>(null);
+  const [fileMentions, setFileMentions] = useState<FileMentionPayload[]>([]);
+  const [pendingMessageAfterStopMentions, setPendingMessageAfterStopMentions] = useState<FileMentionPayload[] | null>(null);
+  const [pendingFirstMentions, setPendingFirstMentions] = useState<FileMentionPayload[] | null>(null);
+  const [isCompacting, setIsCompacting] = useState(false);
 
   // Project store (read-only for effectiveCwd / projectDescription)
   const projects = useProjectStore((state) => state.projects);
@@ -86,6 +194,10 @@ const ChatPage = () => {
   } = useToolAutoApproval();
 
   // Chat store
+  const contextBudget = useChatStore((state) => state.contextBudget);
+  const setStaticOverhead = useChatStore((state) => state.setStaticOverhead);
+  const updateLearnedOverhead = useChatStore((state) => state.updateLearnedOverhead);
+  const recalculateContextBudget = useChatStore((state) => state.recalculateContextBudget);
   const currentSession = useChatStore((state) => state.currentSession);
   const persistMessage = useChatStore((state) => state.persistMessage);
   const editMessage = useChatStore((state) => state.editMessage); // ← NEW
@@ -94,7 +206,10 @@ const ChatPage = () => {
   const loadHistoricalMessages = useChatStore((state) => state.loadHistoricalMessages);
   const updateSessionModel = useChatStore((state) => state.updateSessionModel);
   const pendingPrompt = useChatStore((state) => state.pendingPrompt);
+  const pendingPromptMode = useChatStore((state) => state.pendingPromptMode);
   const setPendingPrompt = useChatStore((state) => state.setPendingPrompt);
+  const skipNextHistoricalLoad = useChatStore((state) => state.skipNextHistoricalLoad);
+  const setSkipNextHistoricalLoad = useChatStore((state) => state.setSkipNextHistoricalLoad);
 
   // Track previous session ID to detect changes
   const previousSessionIdRef = useRef<string | null>(null);
@@ -103,18 +218,14 @@ const ChatPage = () => {
   const justCreatedSessionRef = useRef(false);
   const [sessionCwdOverrides, setSessionCwdOverrides] = useState<Record<string, string>>({});
 
-  const promptInputRef = useRef<HTMLTextAreaElement>(null);
+  const editorFocusRef = useRef<(() => void) | null>(null);
 
   // Streaming context for mermaid processing
   const { triggerMermaidProcessing } = useStreamingContext();
 
   const focusPromptInput = useCallback(() => {
-    if (!promptInputRef.current) {
-      return;
-    }
-
     requestAnimationFrame(() => {
-      promptInputRef.current?.focus();
+      editorFocusRef.current?.();
     });
   }, []);
 
@@ -230,6 +341,26 @@ const ChatPage = () => {
 
   const effectiveCwd = resolvedCoworkCwd.cwd;
 
+  // ─── File mentions helpers ───────────────────────────────────────────
+  const dedupeMentionsByPath = useCallback((mentions: FileMentionPayload[]): FileMentionPayload[] => {
+    const seen = new Set<string>();
+    return mentions.filter((m) => {
+      if (seen.has(m.filePath)) return false;
+      seen.add(m.filePath);
+      return true;
+    });
+  }, []);
+
+  const buildFinalUserMessage = useCallback(({
+    input: rawInput,
+    resourceContext,
+  }: {
+    input: string;
+    resourceContext: string;
+  }): string => {
+    return resourceContext ? `${resourceContext}\n\n${rawInput}` : rawInput;
+  }, []);
+
   // Compute project description for system prompt injection
   const projectDescription = useMemo(
     () => currentProject?.description ?? undefined,
@@ -264,6 +395,46 @@ const ChatPage = () => {
 
   // Web preview hook — activa la suscripción a eventos de detección de puertos
   useWebPreview();
+
+  // Request context budget estimate when session/model/mode change
+  useEffect(() => {
+    if (!model) return;
+
+    const fetchEstimate = async () => {
+      try {
+        const result = await window.levante.contextBudget.estimate({
+          model,
+          enableMCP: enableMCP ?? true,
+          webSearch: false,
+          projectDescription,
+          projectContext: currentSession?.project_id
+            ? { projectId: currentSession.project_id }
+            : undefined,
+          codeMode:
+            coworkMode && effectiveCwd
+              ? { enabled: true, cwd: effectiveCwd }
+              : undefined,
+        });
+
+        if (result.success && result.data) {
+          setStaticOverhead({
+            staticOverheadTokens: result.data.staticOverheadTokens,
+            toolCount: result.data.toolCount,
+          });
+          logger.aiSdk.debug('Context budget estimate received', {
+            staticOverheadTokens: result.data.staticOverheadTokens,
+            toolCount: result.data.toolCount,
+          });
+        }
+      } catch (error) {
+        logger.aiSdk.warn('Failed to fetch context budget estimate', {
+          error: error instanceof Error ? error.message : error,
+        });
+      }
+    };
+
+    fetchEstimate();
+  }, [model, enableMCP, coworkMode, effectiveCwd, projectDescription, currentSession?.project_id, setStaticOverhead]);
 
   // Create transport with current configuration
   const transport = useMemo(
@@ -430,7 +601,25 @@ const ChatPage = () => {
           attachments: messageWithAttachments.attachments,
         });
 
-        const persistResult = await persistMessage(messageWithAttachments);
+        const tokenUsage = transport.consumeLastTokenUsage();
+
+        // Consume learned overhead from transport and update EMA
+        const learnedOverhead = transport.consumeLastLearnedOverheadTokens();
+        if (learnedOverhead !== null) {
+          updateLearnedOverhead(learnedOverhead);
+          logger.aiSdk.debug('Learned overhead applied to EMA', { learnedOverhead });
+        }
+
+        const persistResult = await persistMessage(messageWithAttachments, tokenUsage);
+
+        // Update the message in useChat state with token usage
+        if (tokenUsage) {
+          setMessages((prevMessages) =>
+            prevMessages.map((m) =>
+              m.id === message.id ? ({ ...m, tokenUsage } as any) : m
+            )
+          );
+        }
 
         // Update the message in useChat state to include attachments and generated content
         if (generatedAttachments.length > 0) {
@@ -475,11 +664,60 @@ const ChatPage = () => {
     },
   });
 
+  // Context usage calculation (includes overhead from system prompt + tools + skills)
+  const contextUsage = useMemo(() => {
+    const contextLength = currentModelInfo?.contextLength || 0;
+    const overheadInfo = contextBudget
+      ? {
+          staticOverheadTokens: contextBudget.staticOverheadTokens,
+          overheadEMA: contextBudget.overheadEMA,
+          toolCount: contextBudget.toolCount ?? 0,
+        }
+      : null;
+    return calculateContextUsage(messages as UIMessage[], contextLength, overheadInfo);
+  }, [messages, currentModelInfo?.contextLength, contextBudget]);
+
+  // Compaction handler
+  const handleCompactConversation = useCallback(async () => {
+    if (!currentSession) return;
+    if (isCompacting) return;
+    if (status === 'streaming' || status === 'submitted') return;
+
+    setIsCompacting(true);
+    try {
+      const result = await window.levante.compaction.compact({
+        sessionId: currentSession.id,
+        model: model || currentSession.model,
+      });
+
+      if (!result.success) {
+        throw new Error(result.error || 'Compaction failed');
+      }
+
+      const historical = await loadHistoricalMessages(currentSession.id);
+      setMessages(historical);
+
+      toast.success(t('context_usage.compact_success'));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : t('context_usage.compact_error'));
+    } finally {
+      setIsCompacting(false);
+    }
+  }, [
+    currentSession,
+    isCompacting,
+    status,
+    model,
+    loadHistoricalMessages,
+    setMessages,
+  ]);
+
   // Handle pending message after stop
   useEffect(() => {
     if (pendingMessageAfterStop && status !== 'streaming' && status !== 'submitted') {
       const messageText = pendingMessageAfterStop;
       setPendingMessageAfterStop(null);
+      setPendingMessageAfterStopMentions(null);
 
       // Persist user message to database BEFORE sending to AI (to ensure correct order)
       const messageId = `user-${Date.now()}`;
@@ -503,7 +741,7 @@ const ChatPage = () => {
           logger.database.error('Failed to persist message after stop', { error: err });
         });
     }
-  }, [pendingMessageAfterStop, status, sendMessageAI, persistMessage]);
+  }, [pendingMessageAfterStop, pendingMessageAfterStopMentions, status, sendMessageAI, persistMessage]);
 
   // Handle messages sent from fullscreen widgets
   useEffect(() => {
@@ -615,10 +853,21 @@ const ChatPage = () => {
     // Update ref
     previousSessionIdRef.current = currentSessionId;
 
-    // Clear attachments, MCP resources, and auto-approvals when changing sessions
+    // Clear attachments, MCP resources, auto-approvals, and file mentions when changing sessions
     clearAttachments();
     clearResources();
     clearAutoApprovals();
+    setFileMentions([]);
+    setPendingFirstMentions(null);
+    setPendingMessageAfterStopMentions(null);
+
+    // If external flow marked this transition, skip historical loading once
+    if (currentSessionId && skipNextHistoricalLoad) {
+      logger.core.info('Skipping historical load for externally-created session', { sessionId: currentSessionId });
+      setSkipNextHistoricalLoad(false);
+      focusPromptInput();
+      return;
+    }
 
     // If we just created this session, skip loading historical messages
     // (the messages are already in useChat state from sendMessageAI)
@@ -651,7 +900,7 @@ const ChatPage = () => {
       setMessages([]);
       focusPromptInput();
     }
-  }, [currentSession?.id, loadHistoricalMessages, setMessages, clearAttachments, clearResources, clearAutoApprovals, focusPromptInput]);
+  }, [currentSession?.id, skipNextHistoricalLoad, loadHistoricalMessages, setMessages, clearAttachments, clearResources, clearAutoApprovals, focusPromptInput, setSkipNextHistoricalLoad]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -659,7 +908,10 @@ const ChatPage = () => {
     // Validate that a model is selected before sending
     if (!model || model.trim() === '') {
       logger.core.warn('Cannot send message: no model selected');
-      // Display error or warning to user - for now, just prevent submission
+      toast.warning(t('model_selector.required_title'), {
+        description: t('model_selector.required_description'),
+        id: 'chat-model-required',
+      });
       return;
     }
 
@@ -668,7 +920,9 @@ const ChatPage = () => {
       // If there's input, we want to stop current stream and send the new message
       if (input.trim()) {
         setPendingMessageAfterStop(input);
+        setPendingMessageAfterStopMentions(dedupeMentionsByPath(fileMentions).slice(0, 10));
         setInput(''); // Clear input immediately
+        setFileMentions([]);
       }
 
       stop();
@@ -686,16 +940,18 @@ const ChatPage = () => {
         enableFileAttachment,
       });
 
-      // Build message text with MCP resource context if any
+      // Build message text with MCP resource context (mentions already inline in input)
       const resourceContext = getContextString();
-      const messageText = resourceContext
-        ? `${resourceContext}\n\n${input}`
-        : input;
+      const messageText = buildFinalUserMessage({
+        input,
+        resourceContext,
+      });
       const filesToAttach = [...attachedFiles];
       const resourcesToInclude = [...selectedResources];
 
       try {
         setInput('');
+        setFileMentions([]);
         clearAttachments(); // Clear attachments immediately
         clearResources(); // Clear MCP resources immediately
 
@@ -735,6 +991,7 @@ const ChatPage = () => {
           // Store message to send after re-render (when useChat has the correct ID)
           setPendingFirstMessage(messageText);
           setPendingFirstAttachments(filesToAttach.length > 0 ? filesToAttach : null);
+          // Mentions already baked into messageText, no separate pending needed
 
           // Don't send now - wait for component to re-render with new session ID
           return;
@@ -993,21 +1250,33 @@ const ChatPage = () => {
 
   // Handle pending prompt from deep link or project page
   useEffect(() => {
-    if (pendingPrompt) {
-      if (!currentSession) {
-        // No session yet (e.g. coming from ProjectPage): queue to auto-send when session is created
-        setPendingFirstMessage(pendingPrompt);
-      } else {
-        // Already in a session: just fill the input
-        setInput(pendingPrompt);
-      }
-      setPendingPrompt(null);
-      logger.core.info('Applied pending prompt', {
-        promptLength: pendingPrompt.length,
-        autoSubmit: !currentSession,
-      });
+    if (!pendingPrompt) {
+      return;
     }
-  }, [pendingPrompt, currentSession, setPendingPrompt]);
+
+    if (pendingPromptMode === 'autosend') {
+      if (!currentSession) {
+        // Wait for the session to exist before consuming the pending prompt
+        return;
+      }
+
+      setPendingFirstMessage(pendingPrompt);
+      setPendingPrompt(null);
+      logger.core.info('Applied pending prompt for autosend', {
+        promptLength: pendingPrompt.length,
+      });
+      return;
+    }
+
+    // prefill mode
+    setInput(pendingPrompt);
+    setPendingPrompt(null);
+    logger.core.info('Applied pending prompt', {
+      promptLength: pendingPrompt.length,
+      autoSubmit: false,
+      mode: pendingPromptMode ?? 'prefill',
+    });
+  }, [pendingPrompt, pendingPromptMode, currentSession, setPendingPrompt]);
 
   // Check if chat is empty
   const isChatEmpty = messages.length === 0 && status !== 'streaming';
@@ -1089,6 +1358,11 @@ const ChatPage = () => {
               </div>
             );
           })()}
+          {/* Mode tabs: Chat / Cowork */}
+          <ChatModeTabs
+            coworkMode={coworkMode ?? false}
+            onCoworkModeChange={setCoworkMode}
+          />
           {isChatEmpty ? (
             // Empty state with welcome screen
             (<div className="flex-1 flex flex-col items-center justify-center px-4">
@@ -1115,7 +1389,7 @@ const ChatPage = () => {
                     availableModels={filteredAvailableModels}
                     groupedModelsByProvider={groupedModelsByProvider || undefined}
                     modelsLoading={modelsLoading}
-                    status={status}
+                    status={isCompacting ? 'submitted' : status}
                     modelTaskType={modelTaskType}
                     currentModelInfo={currentModelInfo}
                     attachedFiles={attachedFiles}
@@ -1129,7 +1403,8 @@ const ChatPage = () => {
                     selectedPrompts={selectedPrompts}
                     onPromptSelected={selectPrompt}
                     onPromptRemove={removePrompt}
-                    inputRef={promptInputRef}
+                    editorFocusRef={editorFocusRef}
+                    onMentionsChange={setFileMentions}
                   />
                 </div>
               </div>
@@ -1167,6 +1442,20 @@ const ChatPage = () => {
               </Conversation>
               {/* Input */}
               <div className="bg-transparent px-2">
+                <div className="max-w-3xl mx-auto w-full">
+                  <ContextUsageIndicator
+                    usage={contextUsage}
+                    onCompact={handleCompactConversation}
+                    compactDisabled={
+                      isCompacting ||
+                      status === 'streaming' ||
+                      status === 'submitted' ||
+                      !currentSession ||
+                      messages.length < 2
+                    }
+                    isCompacting={isCompacting}
+                  />
+                </div>
                 <ChatPromptInput
                   input={input}
                   onInputChange={setInput}
@@ -1187,7 +1476,7 @@ const ChatPage = () => {
                   availableModels={filteredAvailableModels}
                   groupedModelsByProvider={groupedModelsByProvider || undefined}
                   modelsLoading={modelsLoading}
-                  status={status}
+                  status={isCompacting ? 'submitted' : status}
                   modelTaskType={modelTaskType}
                   currentModelInfo={currentModelInfo}
                   attachedFiles={attachedFiles}
@@ -1201,7 +1490,8 @@ const ChatPage = () => {
                   selectedPrompts={selectedPrompts}
                   onPromptSelected={selectPrompt}
                   onPromptRemove={removePrompt}
-                  inputRef={promptInputRef}
+                  editorFocusRef={editorFocusRef}
+                  onMentionsChange={setFileMentions}
                 />
               </div>
             </>)
@@ -1209,7 +1499,7 @@ const ChatPage = () => {
         </div>
 
         {/* Panel lateral de preview */}
-        <WebPreviewPanel />
+        <SidePanel />
       </div>
     </>
   );
@@ -1235,26 +1525,37 @@ ChatPageWithProvider.getSidebarContent = (
   loading: boolean = false,
   projects?: any[],
   selectedProjectId?: string,
+  selectedProjectName?: string,
   onProjectSelect?: (project: any) => void,
   onCreateProject?: () => void,
   onEditProject?: (project: any) => void,
-  onDeleteProject?: (projectId: string, projectName: string, sessionCount: number) => void,
+  onDeleteProject?: (projectId: string, projectName: string, sessionCount: number, cwd?: string | null) => void,
+  coworkModeEnabled: boolean = false,
+  effectiveCwd: string | null = null,
+  onExitProject?: () => void,
 ) => {
   return (
-    <ChatList
-      sessions={sessions}
-      currentSessionId={currentSessionId}
-      onSessionSelect={onSessionSelect}
+    <SidebarSections
       onNewChat={onNewChat}
-      onDeleteChat={onDeleteChat}
-      onRenameChat={onRenameChat}
+      onExitProject={onExitProject}
       loading={loading}
-      projects={projects}
-      selectedProjectId={selectedProjectId}
-      onProjectSelect={onProjectSelect}
-      onCreateProject={onCreateProject}
-      onEditProject={onEditProject}
-      onDeleteProject={onDeleteProject}
+      coworkModeEnabled={coworkModeEnabled}
+      effectiveCwd={effectiveCwd}
+      chatListProps={{
+        sessions,
+        currentSessionId,
+        onSessionSelect,
+        onDeleteChat,
+        onRenameChat,
+        loading,
+        projects,
+        selectedProjectId,
+        selectedProjectName,
+        onProjectSelect,
+        onCreateProject,
+        onEditProject,
+        onDeleteProject,
+      }}
     />
   );
 };

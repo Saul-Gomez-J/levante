@@ -2,11 +2,11 @@ import { ENV_DEFAULTS } from '../../shared/envDefaults';
 
 class EnvConfig {
   get platformUrl(): string {
-    return process.env.LEVANTE_PLATFORM_URL || ENV_DEFAULTS.development.LEVANTE_PLATFORM_URL;
+    return process.env.LEVANTE_PLATFORM_URL || ENV_DEFAULTS.production.LEVANTE_PLATFORM_URL;
   }
 
   get servicesHost(): string {
-    return (process.env.LEVANTE_SERVICES_HOST || ENV_DEFAULTS.development.LEVANTE_SERVICES_HOST)
+    return (process.env.LEVANTE_SERVICES_HOST || ENV_DEFAULTS.production.LEVANTE_SERVICES_HOST)
       .replace(/\/$/, '');
   }
 }

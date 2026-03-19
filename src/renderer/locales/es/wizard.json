@@ -9,7 +9,7 @@
   },
   "welcome": {
     "title": "Bienvenido a Levante",
-    "subtitle": "Tu Asistente de IA Personal, Seguro y Gratuito",
+    "subtitle": "Tu Asistente de IA Personal y Seguro",
     "description": "Levante acerca la IA a todos, no solo a usuarios técnicos. Nos enfocamos en:",
     "features": {
       "privacy": {
@@ -112,6 +112,19 @@
       "sign_in": "Inicia sesión con OpenRouter",
       "waiting": "Esperando autorización...",
       "connect_message": "Conecta tu cuenta de forma segura con un click"
+    },
+    "anthropic_oauth": {
+      "auth_method": "Método de Autenticación",
+      "api_key_tab": "Clave de API",
+      "claude_tab": "Claude Max/Pro",
+      "connect_description": "Conecta tu suscripción de Claude Max o Claude Pro para usarlo sin una clave de API.",
+      "connect_button": "Conectar Suscripción de Claude",
+      "paste_code": "Pega el código de autorización o URL del navegador",
+      "paste_placeholder": "Pega código, URL o query string...",
+      "connect": "Conectar",
+      "connected": "Conectado",
+      "token_expired": "(token expirado)",
+      "disconnect": "Desconectar"
     }
   },
   "modeSelection": {
@@ -174,5 +187,8 @@
   },
   "steps": {
     "step": "Paso {{current}} de {{total}}"
+  },
+  "navigation": {
+    "start_using_levante": "Comenzar a usar Levante"
   }
 }

@@ -31,7 +31,7 @@ Rules:
 - Focus on the main topic or intent
 - Use title case (capitalize important words)
 - Be specific but not overly technical
-- No quotes, punctuation, or special characters
+- No quotes, punctuation, asterisks, or special characters
 - If it's a greeting/hello, use "General Chat"
 - If it's code-related, mention the language/technology
 - If it's a question, focus on the subject matter
@@ -94,7 +94,7 @@ Examples:
       let title = response.response?.trim() || '';
       
       // Clean up the title
-      title = title.replace(/["']/g, ''); // Remove quotes
+      title = title.replace(/["'*]/g, ''); // Remove quotes and asterisks
       title = title.replace(/[.,!?;:]$/, ''); // Remove trailing punctuation
       title = title.substring(0, 50); // Max 50 characters
       
