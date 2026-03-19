@@ -517,7 +517,7 @@ export class OAuthService {
     }
 
     /**
-     * Save client credentials to preferences (encrypted)
+     * Save client credentials to preferences (plaintext)
      *
      * @param serverId - MCP server ID
      * @param credentials - Client credentials from Dynamic Registration
@@ -526,26 +526,15 @@ export class OAuthService {
         serverId: string,
         credentials: OAuthClientCredentials
     ): Promise<void> {
-        // Encrypt sensitive fields
+        // Store in plaintext — file is in ~/levante/ with user-only access
         const toSave = {
             ...credentials,
-            clientSecret: credentials.clientSecret
-                ? `ENCRYPTED:${safeStorage
-                    .encryptString(credentials.clientSecret)
-                    .toString('base64')}`
-                : undefined,
+            clientSecret: credentials.clientSecret || undefined,
             registrationMetadata: credentials.registrationMetadata
                 ? {
                     ...credentials.registrationMetadata,
-                    registration_access_token: credentials
-                        .registrationMetadata.registration_access_token
-                        ? `ENCRYPTED:${safeStorage
-                            .encryptString(
-                                credentials.registrationMetadata
-                                    .registration_access_token
-                            )
-                            .toString('base64')}`
-                        : undefined,
+                    registration_access_token:
+                        credentials.registrationMetadata.registration_access_token || undefined,
                 }
                 : undefined,
         };
@@ -562,7 +551,8 @@ export class OAuthService {
     }
 
     /**
-     * Get client credentials from preferences (decrypted)
+     * Get client credentials from preferences
+     * Handles legacy ENCRYPTED: values via safeStorage migration
      *
      * @param serverId - MCP server ID
      * @returns Client credentials or null if not found
@@ -578,42 +568,43 @@ export class OAuthService {
             return null;
         }
 
-        // Decrypt sensitive fields
-        return {
+        // Read values, handling legacy ENCRYPTED: prefix via safeStorage migration
+        const decryptIfLegacy = (value: string | undefined): string | undefined => {
+            if (!value) return undefined;
+            if (!value.startsWith('ENCRYPTED:')) return value;
+            try {
+                return safeStorage.decryptString(
+                    Buffer.from(value.replace('ENCRYPTED:', ''), 'base64')
+                );
+            } catch {
+                logger.oauth.error('Failed to decrypt legacy client credential');
+                return undefined;
+            }
+        };
+
+        const result: OAuthClientCredentials = {
             ...stored,
-            clientSecret:
-                stored.clientSecret &&
-                    stored.clientSecret.startsWith('ENCRYPTED:')
-                    ? safeStorage.decryptString(
-                        Buffer.from(
-                            stored.clientSecret.replace('ENCRYPTED:', ''),
-                            'base64'
-                        )
-                    )
-                    : stored.clientSecret,
+            clientSecret: decryptIfLegacy(stored.clientSecret),
             registrationMetadata: stored.registrationMetadata
                 ? {
                     ...stored.registrationMetadata,
-                    registration_access_token:
-                        stored.registrationMetadata
-                            .registration_access_token &&
-                            stored.registrationMetadata.registration_access_token.startsWith(
-                                'ENCRYPTED:'
-                            )
-                            ? safeStorage.decryptString(
-                                Buffer.from(
-                                    stored.registrationMetadata.registration_access_token.replace(
-                                        'ENCRYPTED:',
-                                        ''
-                                    ),
-                                    'base64'
-                                )
-                            )
-                            : stored.registrationMetadata
-                                .registration_access_token,
+                    registration_access_token: decryptIfLegacy(
+                        stored.registrationMetadata.registration_access_token
+                    ),
                 }
                 : undefined,
         };
+
+        // Re-save as plaintext if any legacy encrypted values were found
+        const hadEncrypted =
+            stored.clientSecret?.startsWith('ENCRYPTED:') ||
+            stored.registrationMetadata?.registration_access_token?.startsWith('ENCRYPTED:');
+        if (hadEncrypted) {
+            logger.oauth.info('Migrating legacy encrypted client credentials to plaintext', { serverId });
+            await this.saveClientCredentials(serverId, result);
+        }
+
+        return result;
     }
 
     /**

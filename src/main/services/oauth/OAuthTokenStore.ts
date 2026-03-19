@@ -10,8 +10,8 @@ import { OAuthTokenStoreError as TokenStoreError } from './types';
 /**
  * OAuthTokenStore
  *
- * Gestión segura de tokens OAuth con encriptación automática
- * usando electron.safeStorage (Keychain/DPAPI/libsecret)
+ * Gestión de tokens OAuth almacenados en plaintext en ~/levante/ui-preferences.json.
+ * Soporta lectura de tokens legacy encriptados con safeStorage para migración transparente.
  */
 export class OAuthTokenStore {
     private logger = getLogger();
@@ -20,62 +20,34 @@ export class OAuthTokenStore {
     constructor(private preferencesService: PreferencesService) { }
 
     /**
-     * Encripta un valor usando safeStorage de Electron
+     * Desencripta un valor legacy encriptado con safeStorage.
+     * Solo se usa para migrar tokens existentes.
      */
-    private encrypt(value: string): string {
-        try {
-            if (!safeStorage.isEncryptionAvailable()) {
-                this.logger.oauth.warn('Encryption not available, storing in plaintext');
-                throw new TokenStoreError(
-                    'Encryption not available on this system',
-                    'ENCRYPTION_FAILED'
-                );
-            }
-
-            const encrypted = safeStorage.encryptString(value);
-            const base64 = encrypted.toString('base64');
-
-            return `${this.ENCRYPTED_PREFIX}${base64}`;
-        } catch (error) {
-            this.logger.oauth.error('Failed to encrypt token', {
-                error: error instanceof Error ? error.message : error,
-            });
-            if (error instanceof TokenStoreError) {
-                throw error;
-            }
-            throw new TokenStoreError(
-                'Failed to encrypt token',
-                'ENCRYPTION_FAILED'
-            );
-        }
+    private decryptLegacy(value: string): string {
+        const base64Data = value.replace(this.ENCRYPTED_PREFIX, '');
+        const buffer = Buffer.from(base64Data, 'base64');
+        return safeStorage.decryptString(buffer);
     }
 
     /**
-     * Desencripta un valor previamente encriptado
+     * Lee un valor de token, manejando tanto plaintext como legacy encriptado.
+     * Si el valor tiene prefijo ENCRYPTED: intenta desencriptar con safeStorage.
      */
-    private decrypt(encrypted: string): string {
+    private readTokenValue(value: string): string {
+        if (!value.startsWith(this.ENCRYPTED_PREFIX)) {
+            return value;
+        }
+
+        // Legacy encrypted token — decrypt and let caller re-save as plaintext
         try {
-            if (!encrypted.startsWith(this.ENCRYPTED_PREFIX)) {
-                throw new TokenStoreError(
-                    'Invalid encrypted format - missing ENCRYPTED: prefix',
-                    'INVALID_FORMAT'
-                );
-            }
-
-            const base64Data = encrypted.replace(this.ENCRYPTED_PREFIX, '');
-            const buffer = Buffer.from(base64Data, 'base64');
-
-            const decrypted = safeStorage.decryptString(buffer);
-            return decrypted;
+            this.logger.oauth.info('Migrating legacy encrypted token to plaintext');
+            return this.decryptLegacy(value);
         } catch (error) {
-            this.logger.oauth.error('Failed to decrypt token', {
+            this.logger.oauth.error('Failed to decrypt legacy token', {
                 error: error instanceof Error ? error.message : error,
             });
-            if (error instanceof TokenStoreError) {
-                throw error;
-            }
             throw new TokenStoreError(
-                'Failed to decrypt token',
+                'Failed to decrypt legacy token',
                 'DECRYPTION_FAILED'
             );
         }
@@ -83,25 +55,21 @@ export class OAuthTokenStore {
 
     /**
      * Guarda tokens OAuth para un servidor específico
-     * Los tokens se encriptan automáticamente antes de guardar
+     * Los tokens se guardan en plaintext en ~/levante/ui-preferences.json
      */
     async saveTokens(serverId: string, tokens: OAuthTokens): Promise<void> {
         try {
             this.logger.oauth.info('Saving OAuth tokens', { serverId });
 
-            // Encriptar tokens sensibles
             const stored: StoredOAuthTokens = {
-                accessToken: this.encrypt(tokens.accessToken),
-                refreshToken: tokens.refreshToken
-                    ? this.encrypt(tokens.refreshToken)
-                    : undefined,
+                accessToken: tokens.accessToken,
+                refreshToken: tokens.refreshToken || undefined,
                 expiresAt: tokens.expiresAt,
                 tokenType: tokens.tokenType,
                 scope: tokens.scope,
                 issuedAt: Date.now(),
             };
 
-            // Guardar en preferences
             await this.preferencesService.set(`oauthTokens.${serverId}`, stored);
 
             this.logger.oauth.debug('OAuth tokens saved successfully', {
@@ -120,7 +88,7 @@ export class OAuthTokenStore {
 
     /**
      * Obtiene tokens OAuth para un servidor específico
-     * Los tokens se desencriptan automáticamente
+     * Soporta lectura de tokens legacy encriptados (migración transparente)
      */
     async getTokens(serverId: string): Promise<OAuthTokens | null> {
         try {
@@ -133,16 +101,27 @@ export class OAuthTokenStore {
                 return null;
             }
 
-            // Desencriptar tokens
+            const accessToken = this.readTokenValue(stored.accessToken);
+            const refreshToken = stored.refreshToken
+                ? this.readTokenValue(stored.refreshToken)
+                : undefined;
+
             const tokens: OAuthTokens = {
-                accessToken: this.decrypt(stored.accessToken),
-                refreshToken: stored.refreshToken
-                    ? this.decrypt(stored.refreshToken)
-                    : undefined,
+                accessToken,
+                refreshToken,
                 expiresAt: stored.expiresAt,
                 tokenType: stored.tokenType,
                 scope: stored.scope,
             };
+
+            // If legacy encrypted tokens were found, re-save as plaintext
+            if (
+                stored.accessToken.startsWith(this.ENCRYPTED_PREFIX) ||
+                (stored.refreshToken && stored.refreshToken.startsWith(this.ENCRYPTED_PREFIX))
+            ) {
+                this.logger.oauth.info('Re-saving migrated tokens as plaintext', { serverId });
+                await this.saveTokens(serverId, tokens);
+            }
 
             this.logger.oauth.debug('OAuth tokens retrieved', {
                 serverId,
@@ -257,12 +236,5 @@ export class OAuthTokenStore {
             });
             return 0;
         }
-    }
-
-    /**
-     * Verifica si safeStorage está disponible en el sistema
-     */
-    isEncryptionAvailable(): boolean {
-        return safeStorage.isEncryptionAvailable();
     }
 }
