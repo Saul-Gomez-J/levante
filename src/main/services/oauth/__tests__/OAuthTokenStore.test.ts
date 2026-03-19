@@ -93,7 +93,7 @@ describe('OAuthTokenStore', () => {
     });
 
     describe('saveTokens', () => {
-        it('should encrypt and save tokens', async () => {
+        it('should save tokens in plaintext', async () => {
             const serverId = 'test-server-1';
             const tokens = createMockTokens();
 
@@ -101,8 +101,8 @@ describe('OAuthTokenStore', () => {
 
             const stored = await mockPreferences.get(`oauthTokens.${serverId}`);
             expect(stored).toBeDefined();
-            expect((stored as any).accessToken).toMatch(/^ENCRYPTED:/);
-            expect((stored as any).refreshToken).toMatch(/^ENCRYPTED:/);
+            expect((stored as any).accessToken).toBe(tokens.accessToken);
+            expect((stored as any).refreshToken).toBe(tokens.refreshToken);
             expect((stored as any).expiresAt).toBe(tokens.expiresAt);
             expect((stored as any).tokenType).toBe('Bearer');
         });
@@ -297,42 +297,38 @@ describe('OAuthTokenStore', () => {
         });
     });
 
-    describe('isEncryptionAvailable', () => {
-        it('should return true when safeStorage is available', () => {
-            expect(tokenStore.isEncryptionAvailable()).toBe(true);
-        });
-
-        it('should return false when safeStorage is not available', () => {
-            vi.mocked(safeStorage.isEncryptionAvailable).mockReturnValueOnce(false);
-            expect(tokenStore.isEncryptionAvailable()).toBe(false);
-        });
-    });
-
-    describe('encryption errors', () => {
-        it('should throw when encryption is not available', async () => {
-            vi.mocked(safeStorage.isEncryptionAvailable).mockReturnValueOnce(false);
-
-            const serverId = 'test-server';
-            const tokens = createMockTokens();
-
-            await expect(tokenStore.saveTokens(serverId, tokens)).rejects.toThrow(
-                OAuthTokenStoreError
-            );
-        });
-
-        it('should throw on invalid encrypted format during decryption', async () => {
+    describe('legacy encrypted token migration', () => {
+        it('should read legacy ENCRYPTED: tokens and re-save as plaintext', async () => {
             const serverId = 'test-server';
 
-            // Manually insert invalid encrypted data
+            // Simulate legacy encrypted token (mock safeStorage returns the utf8 string)
+            const legacyAccessToken = `ENCRYPTED:${Buffer.from('test-access-token', 'utf8').toString('base64')}`;
             await mockPreferences.set(`oauthTokens.${serverId}`, {
-                accessToken: 'INVALID_NO_PREFIX',
+                accessToken: legacyAccessToken,
                 expiresAt: Date.now() + 3600000,
                 tokenType: 'Bearer',
             });
 
-            await expect(tokenStore.getTokens(serverId)).rejects.toThrow(
-                OAuthTokenStoreError
-            );
+            const retrieved = await tokenStore.getTokens(serverId);
+            expect(retrieved).toBeDefined();
+            expect(retrieved!.accessToken).toBe('test-access-token');
+
+            // Verify it was re-saved as plaintext
+            const stored = await mockPreferences.get(`oauthTokens.${serverId}`);
+            expect((stored as any).accessToken).toBe('test-access-token');
+        });
+
+        it('should read plaintext tokens without migration', async () => {
+            const serverId = 'test-server';
+            await mockPreferences.set(`oauthTokens.${serverId}`, {
+                accessToken: 'plain-token',
+                expiresAt: Date.now() + 3600000,
+                tokenType: 'Bearer',
+            });
+
+            const retrieved = await tokenStore.getTokens(serverId);
+            expect(retrieved).toBeDefined();
+            expect(retrieved!.accessToken).toBe('plain-token');
         });
     });
 
