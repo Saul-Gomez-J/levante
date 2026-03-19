@@ -246,6 +246,8 @@ module.exports = {
         allowToChangeInstallationDirectory: true,
         installerIcon: './resources/icons/icon.ico',
         uninstallerIcon: './resources/icons/icon.ico',
+        // Disable electron-builder's own publish — Electron Forge handles publishing
+        publish: 'never',
         // Code signing will be added in a future phase
         // certificateFile: './cert.pfx',
         // certificatePassword: process.env.WIN_CSC_KEY_PASSWORD,
