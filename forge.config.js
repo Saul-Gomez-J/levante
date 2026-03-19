@@ -67,12 +67,28 @@ module.exports = {
         }
       }
 
-      // Copiar update-electron-app y sus dependencias
+      // Copiar update-electron-app y sus dependencias (macOS)
       console.log('  ✓ Finding update-electron-app dependencies...');
       const updateAppDeps = await getAllDependencies('update-electron-app');
 
       for (const dep of updateAppDeps) {
         if (allDeps.has(dep)) continue; // Ya copiado
+
+        const srcPath = path.join(projectNodeModules, dep);
+        const destPath = path.join(packageNodeModules, dep);
+
+        if (await fs.pathExists(srcPath)) {
+          console.log(`    - ${dep}`);
+          await fs.copy(srcPath, destPath, { overwrite: true, dereference: true });
+        }
+      }
+
+      // Copiar electron-updater y sus dependencias (Windows NSIS)
+      console.log('  ✓ Finding electron-updater dependencies...');
+      const electronUpdaterDeps = await getAllDependencies('electron-updater');
+
+      for (const dep of electronUpdaterDeps) {
+        if (allDeps.has(dep) || updateAppDeps.has(dep)) continue; // Ya copiado
 
         const srcPath = path.join(projectNodeModules, dep);
         const destPath = path.join(packageNodeModules, dep);
@@ -213,14 +229,16 @@ module.exports = {
     },
     // Windows makers
     {
-      name: '@electron-forge/maker-squirrel',
+      name: '@felixrieseberg/electron-forge-maker-nsis',
       config: {
-        name: 'Levante',
-        setupIcon: './resources/icons/icon.ico'
-        // loadingGif is optional, can be added later if needed
-        // Code signing will be added in Phase 2
+        oneClick: false,
+        perMachine: false,
+        allowToChangeInstallationDirectory: true,
+        installerIcon: './resources/icons/icon.ico',
+        uninstallerIcon: './resources/icons/icon.ico',
+        // Code signing will be added in a future phase
         // certificateFile: './cert.pfx',
-        // certificatePassword: process.env.WINDOWS_CERTIFICATE_PASSWORD
+        // certificatePassword: process.env.WIN_CSC_KEY_PASSWORD,
       }
     },
     {

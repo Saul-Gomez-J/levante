@@ -7,22 +7,14 @@ const logger = getLogger();
 /**
  * Auto-update service for Levante
  *
- * Uses update-electron-app for automatic background updates.
- * Manual checks use Electron's autoUpdater directly.
+ * macOS: uses update-electron-app + Electron's native autoUpdater
+ * Windows: uses electron-updater (compatible with NSIS installer)
  */
 class UpdateService {
   private repo = 'levante-hub/levante';
   private updateCheckInProgress = false;
   private appIcon: Electron.NativeImage | undefined;
   private autoUpdateInitialized = false;
-
-  /**
-   * Squirrel.Windows launches the app with this flag immediately after install.
-   * During that first run we should avoid autoUpdater activity.
-   */
-  private isSquirrelFirstRun(): boolean {
-    return process.platform === 'win32' && process.argv.includes('--squirrel-firstrun');
-  }
 
   /**
    * Check if the current version is a pre-release (beta, alpha, rc)
@@ -101,51 +93,47 @@ class UpdateService {
 
   /**
    * Initialize automatic updates (production only)
-   * Sets up background update checks using update-electron-app or autoUpdater
+   * Sets up background update checks using update-electron-app (macOS)
+   * or electron-updater (Windows NSIS).
    */
   initialize(): void {
-    if (this.isSquirrelFirstRun()) {
-      logger.core.info('Skipping auto-update initialization during Squirrel first run');
-      return;
-    }
-
-    // Log initialization attempt with environment details
     logger.core.info('Initializing auto-update system', {
       nodeEnv: process.env.NODE_ENV,
       isPackaged: app.isPackaged,
+      platform: process.platform,
       version: app.getVersion()
     });
 
     if (process.env.NODE_ENV === 'production' || app.isPackaged) {
       try {
-        const isBeta = this.isBetaVersion();
+        if (process.platform === 'win32') {
+          this.initializeWindowsUpdates();
+        } else if (process.platform === 'darwin') {
+          const isBeta = this.isBetaVersion();
 
-        if (isBeta) {
-          // For beta versions, use autoUpdater directly with pre-release support
-          logger.core.info('Using beta auto-update path (autoUpdater API)');
-          this.initializeBetaUpdates();
-        } else {
-          // For stable versions, use update-electron-app (simpler, battle-tested)
-          logger.core.info('Using stable auto-update path (update-electron-app)');
-          const { updateElectronApp } = require('update-electron-app');
-          updateElectronApp({
-            repo: this.repo,
-            updateInterval: '1 hour',
-            notifyUser: true,
-            logger: {
-              log: (...args: any[]) => logger.core.info('Auto-update:', ...args),
-              error: (...args: any[]) => logger.core.error('Auto-update error:', ...args)
-            }
-          });
+          if (isBeta) {
+            logger.core.info('Using beta auto-update path (autoUpdater API)');
+            this.initializeBetaUpdates();
+          } else {
+            logger.core.info('Using stable auto-update path (update-electron-app)');
+            const { updateElectronApp } = require('update-electron-app');
+            updateElectronApp({
+              repo: this.repo,
+              updateInterval: '1 hour',
+              notifyUser: true,
+              logger: {
+                log: (...args: any[]) => logger.core.info('Auto-update:', ...args),
+                error: (...args: any[]) => logger.core.error('Auto-update error:', ...args)
+              }
+            });
+          }
         }
 
         this.autoUpdateInitialized = true;
         logger.core.info('Auto-update system initialized successfully', {
           repo: this.repo,
           version: app.getVersion(),
-          isBeta,
-          includesPrereleases: isBeta,
-          updateInterval: '1 hour'
+          platform: process.platform
         });
       } catch (error) {
         logger.core.error('Failed to initialize auto-update', {
@@ -163,8 +151,67 @@ class UpdateService {
   }
 
   /**
-   * Initialize beta version updates using autoUpdater directly
-   * This allows us to include pre-releases in the update feed
+   * Initialize Windows updates using electron-updater (compatible with NSIS installer).
+   * Reads latest.yml from GitHub Releases.
+   */
+  private initializeWindowsUpdates(): void {
+    const { autoUpdater: electronUpdater } = require('electron-updater');
+
+    logger.core.info('Configuring Windows auto-update via electron-updater', {
+      version: app.getVersion(),
+      repo: this.repo
+    });
+
+    electronUpdater.setFeedURL({
+      provider: 'github',
+      owner: 'levante-hub',
+      repo: 'levante',
+      releaseType: this.isBetaVersion() ? 'prerelease' : 'release'
+    });
+
+    electronUpdater.logger = {
+      info: (...args: any[]) => logger.core.info('electron-updater:', ...args),
+      warn: (...args: any[]) => logger.core.warn('electron-updater:', ...args),
+      error: (...args: any[]) => logger.core.error('electron-updater:', ...args),
+      debug: (...args: any[]) => logger.core.debug('electron-updater:', ...args)
+    };
+
+    electronUpdater.on('update-downloaded', (info: any) => {
+      logger.core.info('Windows update downloaded', { version: info.version });
+
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Update Ready',
+        message: 'A new version has been downloaded',
+        detail: `Version ${info.version} is ready to install. The application will restart to apply the update.`,
+        buttons: ['Restart Now', 'Later'],
+        icon: this.getAppIcon()
+      }).then((result) => {
+        if (result.response === 0) {
+          electronUpdater.quitAndInstall();
+        }
+      });
+    });
+
+    electronUpdater.on('error', (error: Error) => {
+      logger.core.error('Windows auto-update error', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    });
+
+    // Check for updates every hour
+    const checkInterval = 60 * 60 * 1000;
+    setInterval(() => {
+      electronUpdater.checkForUpdatesAndNotify();
+    }, checkInterval);
+
+    // Initial check
+    electronUpdater.checkForUpdatesAndNotify();
+  }
+
+  /**
+   * Initialize macOS beta version updates using autoUpdater directly.
+   * This allows us to include pre-releases in the update feed.
    */
   private initializeBetaUpdates(): void {
     const { platform } = process;
@@ -181,21 +228,18 @@ class UpdateService {
     });
 
     try {
-      // Set feed URL for beta updates
       autoUpdater.setFeedURL({
         url: feedUrl,
         serverType: 'default'
       });
 
-      // Setup event handlers
       autoUpdater.on('update-available', () => {
         logger.core.info('Beta update available, downloading...');
       });
 
-      autoUpdater.on('update-downloaded', (event, releaseNotes, releaseName) => {
+      autoUpdater.on('update-downloaded', (_event, _releaseNotes, releaseName) => {
         logger.core.info('Beta update downloaded', { releaseName });
 
-        // Show notification to user
         dialog.showMessageBox({
           type: 'info',
           title: 'Update Ready',
@@ -217,7 +261,7 @@ class UpdateService {
       });
 
       // Check for updates every hour
-      const checkInterval = 60 * 60 * 1000; // 1 hour
+      const checkInterval = 60 * 60 * 1000;
       setInterval(() => {
         autoUpdater.checkForUpdates();
       }, checkInterval);
@@ -257,10 +301,8 @@ class UpdateService {
       // Filter releases based on version type
       const validReleases = releases.filter((release: any) => {
         if (isBeta) {
-          // For beta versions, include all releases (stable and pre-release)
           return true;
         } else {
-          // For stable versions, only include stable releases
           return !release.prerelease;
         }
       });
@@ -279,16 +321,10 @@ class UpdateService {
   }
 
   /**
-   * Manually check for updates
-   * Triggers the same auto-update mechanism as background checks
-   * Downloads and installs updates automatically, then prompts to restart
+   * Manually check for updates.
+   * Uses electron-updater on Windows, native autoUpdater on macOS.
    */
   async checkForUpdates(): Promise<void> {
-    if (this.isSquirrelFirstRun()) {
-      logger.core.info('Skipping manual update check during Squirrel first run');
-      return;
-    }
-
     if (this.updateCheckInProgress) {
       logger.core.info('Update check already in progress');
       return;
@@ -308,110 +344,19 @@ class UpdateService {
     }
 
     this.updateCheckInProgress = true;
-    logger.core.info('Manual update check initiated');
+    logger.core.info('Manual update check initiated', { platform: process.platform });
 
     try {
-      // Ensure auto-update is initialized
       if (!this.autoUpdateInitialized) {
         logger.core.warn('Update system not initialized, attempting to initialize');
         this.initialize();
       }
 
-      // Use Electron's autoUpdater to trigger a check
-      // update-electron-app already set up the feed URL and event handlers
-      logger.core.info('Triggering manual update check via autoUpdater');
-
-      // Set up one-time event listeners for this manual check
-      const updateNotAvailableHandler = async () => {
-        // Fetch latest remote version to show in dialog
-        const latestVersion = await this.getLatestRemoteVersion();
-        const currentVersion = app.getVersion();
-        const isBeta = this.isBetaVersion();
-
-        // Compare versions to determine if update is truly not available
-        let isUpToDate = true;
-        let message = 'You are running the latest version';
-        let title = 'No Updates Available';
-
-        if (latestVersion) {
-          const comparison = this.compareVersions(currentVersion, latestVersion);
-
-          if (comparison < 0) {
-            // Current version is older than latest version
-            isUpToDate = false;
-            message = 'A newer version is available but could not be installed';
-            title = 'Update Available';
-
-            logger.core.warn('Update available but autoUpdater reported not available', {
-              currentVersion,
-              latestVersion,
-              comparison
-            });
-          }
-        }
-
-        let detail = `Current version: ${currentVersion}`;
-        if (latestVersion) {
-          detail += `\nLatest version checked: ${latestVersion}`;
-          if (isBeta) {
-            detail += '\n\n(Beta channel: checking for pre-releases)';
-          }
-
-          if (!isUpToDate) {
-            detail += '\n\nThe update system detected a newer version but could not download it automatically. ';
-            detail += 'Please download the latest version manually from:\nhttps://github.com/levante-hub/levante/releases';
-          }
-        }
-
-        dialog.showMessageBox({
-          type: isUpToDate ? 'info' : 'warning',
-          title,
-          message,
-          detail,
-          buttons: ['OK'],
-          icon: this.getAppIcon()
-        }).finally(() => {
-          this.updateCheckInProgress = false;
-          cleanup();
-        });
-      };
-
-      const errorHandler = (error: Error) => {
-        logger.core.error('Error checking for updates', { error: error.message });
-        dialog.showMessageBox({
-          type: 'error',
-          title: 'Update Check Failed',
-          message: 'An error occurred while checking for updates',
-          detail: error.message,
-          buttons: ['OK'],
-          icon: this.getAppIcon()
-        }).finally(() => {
-          this.updateCheckInProgress = false;
-          cleanup();
-        });
-      };
-
-      const updateDownloadedHandler = () => {
-        // update-electron-app handles the download notification
-        // Just clean up our check state
-        this.updateCheckInProgress = false;
-        cleanup();
-      };
-
-      const cleanup = () => {
-        autoUpdater.removeListener('update-not-available', updateNotAvailableHandler);
-        autoUpdater.removeListener('error', errorHandler);
-        autoUpdater.removeListener('update-downloaded', updateDownloadedHandler);
-      };
-
-      // Register temporary listeners
-      autoUpdater.once('update-not-available', updateNotAvailableHandler);
-      autoUpdater.once('error', errorHandler);
-      autoUpdater.once('update-downloaded', updateDownloadedHandler);
-
-      // Trigger the check
-      autoUpdater.checkForUpdates();
-
+      if (process.platform === 'win32') {
+        await this.checkForUpdatesWindows();
+      } else {
+        await this.checkForUpdatesMacOS();
+      }
     } catch (error) {
       logger.core.error('Error initiating update check', {
         error: error instanceof Error ? error.message : error
@@ -430,6 +375,142 @@ class UpdateService {
     }
   }
 
+  private async checkForUpdatesWindows(): Promise<void> {
+    const { autoUpdater: electronUpdater } = require('electron-updater');
+
+    return new Promise<void>((resolve) => {
+      const cleanup = () => {
+        electronUpdater.removeListener('update-not-available', notAvailableHandler);
+        electronUpdater.removeListener('update-available', availableHandler);
+        electronUpdater.removeListener('error', errorHandler);
+        this.updateCheckInProgress = false;
+        resolve();
+      };
+
+      const notAvailableHandler = () => {
+        const currentVersion = app.getVersion();
+        dialog.showMessageBox({
+          type: 'info',
+          title: 'No Updates Available',
+          message: 'You are running the latest version',
+          detail: `Current version: ${currentVersion}`,
+          buttons: ['OK'],
+          icon: this.getAppIcon()
+        }).finally(cleanup);
+      };
+
+      const availableHandler = (info: any) => {
+        logger.core.info('Windows update available', { version: info.version });
+        // electron-updater will handle download + notify automatically
+        cleanup();
+      };
+
+      const errorHandler = (error: Error) => {
+        logger.core.error('Error checking for Windows updates', { error: error.message });
+        dialog.showMessageBox({
+          type: 'error',
+          title: 'Update Check Failed',
+          message: 'An error occurred while checking for updates',
+          detail: error.message,
+          buttons: ['OK'],
+          icon: this.getAppIcon()
+        }).finally(cleanup);
+      };
+
+      electronUpdater.once('update-not-available', notAvailableHandler);
+      electronUpdater.once('update-available', availableHandler);
+      electronUpdater.once('error', errorHandler);
+
+      electronUpdater.checkForUpdates();
+    });
+  }
+
+  private async checkForUpdatesMacOS(): Promise<void> {
+    logger.core.info('Triggering manual update check via autoUpdater');
+
+    const updateNotAvailableHandler = async () => {
+      const latestVersion = await this.getLatestRemoteVersion();
+      const currentVersion = app.getVersion();
+      const isBeta = this.isBetaVersion();
+
+      let isUpToDate = true;
+      let message = 'You are running the latest version';
+      let title = 'No Updates Available';
+
+      if (latestVersion) {
+        const comparison = this.compareVersions(currentVersion, latestVersion);
+
+        if (comparison < 0) {
+          isUpToDate = false;
+          message = 'A newer version is available but could not be installed';
+          title = 'Update Available';
+
+          logger.core.warn('Update available but autoUpdater reported not available', {
+            currentVersion,
+            latestVersion,
+            comparison
+          });
+        }
+      }
+
+      let detail = `Current version: ${currentVersion}`;
+      if (latestVersion) {
+        detail += `\nLatest version checked: ${latestVersion}`;
+        if (isBeta) {
+          detail += '\n\n(Beta channel: checking for pre-releases)';
+        }
+
+        if (!isUpToDate) {
+          detail += '\n\nThe update system detected a newer version but could not download it automatically. ';
+          detail += 'Please download the latest version manually from:\nhttps://github.com/levante-hub/levante/releases';
+        }
+      }
+
+      dialog.showMessageBox({
+        type: isUpToDate ? 'info' : 'warning',
+        title,
+        message,
+        detail,
+        buttons: ['OK'],
+        icon: this.getAppIcon()
+      }).finally(() => {
+        this.updateCheckInProgress = false;
+        cleanup();
+      });
+    };
+
+    const errorHandler = (error: Error) => {
+      logger.core.error('Error checking for updates', { error: error.message });
+      dialog.showMessageBox({
+        type: 'error',
+        title: 'Update Check Failed',
+        message: 'An error occurred while checking for updates',
+        detail: error.message,
+        buttons: ['OK'],
+        icon: this.getAppIcon()
+      }).finally(() => {
+        this.updateCheckInProgress = false;
+        cleanup();
+      });
+    };
+
+    const updateDownloadedHandler = () => {
+      this.updateCheckInProgress = false;
+      cleanup();
+    };
+
+    const cleanup = () => {
+      autoUpdater.removeListener('update-not-available', updateNotAvailableHandler);
+      autoUpdater.removeListener('error', errorHandler);
+      autoUpdater.removeListener('update-downloaded', updateDownloadedHandler);
+    };
+
+    autoUpdater.once('update-not-available', updateNotAvailableHandler);
+    autoUpdater.once('error', errorHandler);
+    autoUpdater.once('update-downloaded', updateDownloadedHandler);
+
+    autoUpdater.checkForUpdates();
+  }
 }
 
 export const updateService = new UpdateService();
