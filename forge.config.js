@@ -1,5 +1,15 @@
 const path = require('path');
 const fs = require('fs-extra');
+const { execSync } = require('child_process');
+
+const hasRpmbuild = (() => {
+  try {
+    execSync('which rpmbuild', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 module.exports = {
   hooks: {
@@ -263,7 +273,7 @@ module.exports = {
         }
       }
     },
-    {
+    ...(hasRpmbuild ? [{
       name: '@electron-forge/maker-rpm',
       config: {
         options: {
@@ -277,7 +287,7 @@ module.exports = {
           icon: './resources/icons/icon.png'
         }
       }
-    },
+    }] : []),
     {
       name: '@electron-forge/maker-zip',
       platforms: ['linux'],
