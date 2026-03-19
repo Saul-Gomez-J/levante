@@ -234,6 +234,7 @@ module.exports = {
       config: {
         options: {
           name: 'levante',
+          bin: 'Levante',
           productName: 'Levante',
           genericName: 'AI Chat Application',
           description: 'A friendly, private desktop chat app with AI and MCP integration',
@@ -249,6 +250,7 @@ module.exports = {
       config: {
         options: {
           name: 'levante',
+          bin: 'Levante',
           productName: 'Levante',
           genericName: 'AI Chat Application',
           description: 'A friendly, private desktop chat app with AI and MCP integration',
