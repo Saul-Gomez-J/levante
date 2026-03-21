@@ -1228,24 +1228,30 @@ export class AIService {
       const { getBuiltInTools } = await import('./ai/builtInTools');
       const builtInToolsConfig = await this.getBuiltInToolsConfig();
 
+      const codeModeEnabled = request.codeMode?.enabled === true;
+      const codeModePrompt = codeModeEnabled ? getCodeModeSystemPrompt() : null;
+
       const projectId = projectContext?.projectId;
       let installedSkills: InstalledSkill[] = [];
-      try {
-        installedSkills = await skillsService.listInstalledSkills(
-          projectId
-            ? { mode: 'project-merged', projectId }
-            : { mode: 'global' }
-        );
-        this.logger.aiSdk.debug('Loaded installed skills for agent context', {
-          count: installedSkills.length,
-          projectId,
-          mode: projectId ? 'project-merged' : 'global',
-          ids: installedSkills.map((s) => s.id),
-        });
-      } catch (error) {
-        this.logger.aiSdk.warn('Failed to load installed skills', {
-          error: error instanceof Error ? error.message : String(error),
-        });
+
+      if (codeModeEnabled) {
+        try {
+          installedSkills = await skillsService.listInstalledSkills(
+            projectId
+              ? { mode: 'project-merged', projectId }
+              : { mode: 'global' }
+          );
+          this.logger.aiSdk.debug('Loaded installed skills for agent context', {
+            count: installedSkills.length,
+            projectId,
+            mode: projectId ? 'project-merged' : 'global',
+            ids: installedSkills.map((s) => s.id),
+          });
+        } catch (error) {
+          this.logger.aiSdk.warn('Failed to load installed skills', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       const builtInTools = await getBuiltInTools({
@@ -1428,7 +1434,7 @@ export class AIService {
           builtInToolsConfig.mcpDiscovery,
           projectDescription,
           installedSkills,
-          getCodeModeSystemPrompt()
+          codeModePrompt
         ),
         // Use stopWhen as recommended in AI SDK v5 (not maxSteps)
         // This allows the model to continue generating after tool results
@@ -2177,18 +2183,24 @@ export class AIService {
       const builtInToolsConfig = await this.getBuiltInToolsConfig();
 
       // Load skills by scope (project-merged or global)
+      const singleMsgCodeModeEnabled = request.codeMode?.enabled === true;
+      const singleMsgCodeModePrompt = singleMsgCodeModeEnabled ? getCodeModeSystemPrompt() : null;
+
       const singleMsgProjectId = projectContext?.projectId;
       let singleMsgInstalledSkills: InstalledSkill[] = [];
-      try {
-        singleMsgInstalledSkills = await skillsService.listInstalledSkills(
-          singleMsgProjectId
-            ? { mode: 'project-merged', projectId: singleMsgProjectId }
-            : { mode: 'global' }
-        );
-      } catch (error) {
-        this.logger.aiSdk.warn('Failed to load installed skills for single message', {
-          error: error instanceof Error ? error.message : String(error),
-        });
+
+      if (singleMsgCodeModeEnabled) {
+        try {
+          singleMsgInstalledSkills = await skillsService.listInstalledSkills(
+            singleMsgProjectId
+              ? { mode: 'project-merged', projectId: singleMsgProjectId }
+              : { mode: 'global' }
+          );
+        } catch (error) {
+          this.logger.aiSdk.warn('Failed to load installed skills for single message', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       // Get built-in tools with skills context
@@ -2215,7 +2227,7 @@ export class AIService {
           builtInToolsConfig.mcpDiscovery,
           projectDescription,
           singleMsgInstalledSkills,
-          getCodeModeSystemPrompt()
+          singleMsgCodeModePrompt
         ),
         stopWhen: stepCountIs(await calculateMaxSteps(Object.keys({ ...singleMsgBuiltInTools, ...tools }).length)),
         providerOptions: await getReasoningProviderOptions(model, undefined, Object.keys({ ...singleMsgBuiltInTools, ...tools }).length > 0),

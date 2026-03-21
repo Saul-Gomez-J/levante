@@ -147,7 +147,9 @@
       "empty_enabled": "No enabled skills",
       "empty_disabled": "No disabled skills",
       "scope_global": "global",
-      "scope_project": "project"
+      "scope_project": "project",
+      "requires_cowork": "Skills are only available in Cowork mode",
+      "requires_cowork_directory": "Skills require a working directory in Cowork mode"
     },
     "enabled": "Enabled",
     "no_enabled_servers": "No enabled servers",

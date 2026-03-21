@@ -22,6 +22,12 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ToolsWarning } from '@/components/settings/ToolsWarning';
 import { SkillsPanel } from '@/components/chat/SkillsPanel';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { Tool, MCPConnectionStatus } from '@/types/mcp';
 
 interface ToolsMenuProps {
@@ -85,6 +91,13 @@ export function ToolsMenu({
 
   // Show warning when cowork is enabled but no CWD selected
   const showCoworkMissingDirWarning = coworkMode && !coworkModeCwd;
+
+  const skillsAvailable = coworkMode && !!coworkModeCwd;
+  const skillsTooltip = !coworkMode
+    ? t('tools_menu.skills.requires_cowork', 'Skills are only available in Cowork mode')
+    : !coworkModeCwd
+      ? t('tools_menu.skills.requires_cowork_directory', 'Skills require a working directory in Cowork mode')
+      : undefined;
 
   // Get short folder name (cross-platform)
   const getShortFolderName = (path: string): string => {
@@ -204,20 +217,37 @@ export function ToolsMenu({
             </div>
           )}
           {/* Skills Toggle */}
-          <div
-            className="flex items-center justify-between rounded-sm px-3 py-2 hover:bg-accent cursor-pointer"
-            onClick={() => onSkillsChange(!enableSkills)}
-          >
-            <div className="flex items-center gap-2">
-              <BookOpen size={16} className="text-muted-foreground" />
-              <span className="text-sm">{t('tools_menu.skills.show_in_chat', 'Show skills in chat')}</span>
-            </div>
-            <Switch
-              checked={enableSkills}
-              onCheckedChange={onSkillsChange}
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  className={cn(
+                    "flex items-center justify-between rounded-sm px-3 py-2",
+                    skillsAvailable
+                      ? "hover:bg-accent cursor-pointer"
+                      : "opacity-40 cursor-not-allowed"
+                  )}
+                  onClick={() => skillsAvailable && onSkillsChange(!enableSkills)}
+                >
+                  <div className="flex items-center gap-2">
+                    <BookOpen size={16} className="text-muted-foreground" />
+                    <span className="text-sm">{t('tools_menu.skills.show_in_chat', 'Show skills in chat')}</span>
+                  </div>
+                  <Switch
+                    checked={enableSkills}
+                    disabled={!skillsAvailable}
+                    onCheckedChange={onSkillsChange}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </div>
+              </TooltipTrigger>
+              {skillsTooltip && (
+                <TooltipContent side="bottom">
+                  <p>{skillsTooltip}</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
           {/* MCP Tools Toggle */}
           <div
             className="flex items-center justify-between rounded-sm px-3 py-2 hover:bg-accent cursor-pointer"
@@ -280,8 +310,8 @@ export function ToolsMenu({
       {/* Web Preview Button - visible when servers are detected */}
       <WebPreviewButton />
 
-      {/* Skills Dropdown - Only when Skills is enabled */}
-      {enableSkills && (
+      {/* Skills Dropdown - Only when Skills enabled AND effective Cowork is active */}
+      {enableSkills && skillsAvailable && (
         <DropdownMenu open={skillsOpen} onOpenChange={setSkillsOpen}>
           <DropdownMenuTrigger asChild>
             <div className="flex items-center justify-center h-8 w-8 rounded-lg ring-1 ring-primary/50 bg-primary/10 cursor-pointer">
