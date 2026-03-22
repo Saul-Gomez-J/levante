@@ -382,7 +382,7 @@ class ModelServiceImpl {
       const hasCredentials =
         provider.type === 'openrouter' ||
         !!provider.apiKey ||
-        (provider.type === 'anthropic' && provider.authMode === 'oauth');
+        ((provider.type === 'anthropic' || provider.type === 'openai') && provider.authMode === 'oauth');
 
       if (provider.modelSource === 'dynamic' &&
         hasCredentials &&
@@ -593,8 +593,17 @@ class ModelServiceImpl {
           }
           break;
         case 'openai':
-          if (provider.apiKey) {
-            models = await fetchOpenAIModels(provider.apiKey);
+          if (provider.authMode === 'oauth') {
+            models = await fetchOpenAIModels({
+              authMode: 'oauth',
+              organizationId: provider.organizationId,
+            });
+          } else if (provider.apiKey) {
+            models = await fetchOpenAIModels({
+              apiKey: provider.apiKey,
+              authMode: 'api-key',
+              organizationId: provider.organizationId,
+            });
           }
           break;
         case 'google':

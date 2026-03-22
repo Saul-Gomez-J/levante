@@ -360,13 +360,64 @@ export const CloudConfig = ({ provider }: { provider: ProviderConfig }) => {
   );
 };
 
-export const AnthropicConfig = ({ provider }: { provider: ProviderConfig }) => {
+const SUBSCRIPTION_OAUTH_UI: Record<
+  'anthropic' | 'openai',
+  {
+    oauthButtonLabel: string;
+    oauthDescription: string;
+    apiKeyLabel: string;
+    apiKeyPlaceholder: string;
+    apiKeyHelpUrl: string;
+    apiKeyHelpText: string;
+    extraFields?: Array<{
+      key: keyof ProviderConfig;
+      label: string;
+      placeholder: string;
+      description: string;
+    }>;
+  }
+> = {
+  anthropic: {
+    oauthButtonLabel: 'Claude Max/Pro',
+    oauthDescription:
+      'Connect your Claude Max or Claude Pro subscription to use it without an API key.',
+    apiKeyLabel: 'Anthropic API Key',
+    apiKeyPlaceholder: 'sk-ant-...',
+    apiKeyHelpUrl: 'https://console.anthropic.com/settings/keys',
+    apiKeyHelpText: 'Get your API key from Anthropic Console',
+  },
+  openai: {
+    oauthButtonLabel: 'ChatGPT Plus/Pro',
+    oauthDescription:
+      'Connect your ChatGPT Plus or Pro subscription to use OpenAI models without an API key.',
+    apiKeyLabel: 'OpenAI API Key',
+    apiKeyPlaceholder: 'sk-...',
+    apiKeyHelpUrl: 'https://platform.openai.com/api-keys',
+    apiKeyHelpText: 'Get your API key from OpenAI Platform',
+    extraFields: [
+      {
+        key: 'organizationId',
+        label: 'Organization ID (optional)',
+        placeholder: 'org-...',
+        description: 'Only needed for organization-scoped access.',
+      },
+    ],
+  },
+};
+
+export const SubscriptionOAuthConfig = ({ provider }: { provider: ProviderConfig }) => {
+  if (provider.type !== 'anthropic' && provider.type !== 'openai') {
+    return <CloudConfig provider={provider} />;
+  }
+
+  const ui = SUBSCRIPTION_OAUTH_UI[provider.type];
   const { updateProvider, syncProviderModels } = useModelStore();
 
   const [authMode, setAuthMode] = React.useState<'api-key' | 'oauth'>(
     (provider.authMode as 'api-key' | 'oauth') || 'api-key'
   );
   const [apiKey, setApiKey] = React.useState(provider.apiKey || '');
+  const [extraFieldValues, setExtraFieldValues] = React.useState<Record<string, string>>({});
   const [oauthCode, setOauthCode] = React.useState('');
   const [oauthStatus, setOauthStatus] = React.useState<{
     isConnected: boolean;
@@ -376,25 +427,62 @@ export const AnthropicConfig = ({ provider }: { provider: ProviderConfig }) => {
   const [oauthLoading, setOauthLoading] = React.useState(false);
   const [oauthError, setOauthError] = React.useState('');
 
-  // Sync local state when provider changes
   React.useEffect(() => {
     setAuthMode((provider.authMode as 'api-key' | 'oauth') || 'api-key');
     setApiKey(provider.apiKey || '');
   }, [provider.authMode, provider.apiKey]);
 
-  // Load OAuth status on mount and when authMode is oauth
+  React.useEffect(() => {
+    const values: Record<string, string> = {};
+    for (const field of ui.extraFields || []) {
+      values[field.key as string] = String((provider as any)[field.key] || '');
+    }
+    setExtraFieldValues(values);
+  }, [provider.id, provider.organizationId, provider.projectId, ui.extraFields]);
+
   React.useEffect(() => {
     if (authMode === 'oauth') {
-      window.levante.anthropicOAuth.status().then((result) => {
+      window.levante.subscriptionOAuth.status(provider.type).then((result) => {
         if (result.success && result.data) {
           setOauthStatus(result.data);
         }
       });
     }
-  }, [authMode]);
+  }, [authMode, provider.type]);
+
+  // Listen for automatic callback completion (local server captured the code)
+  React.useEffect(() => {
+    const unsubscribe = window.levante.subscriptionOAuth.onCallback(async (data) => {
+      if (data.providerId !== provider.type) return;
+      if (data.success) {
+        setOauthLoading(false);
+        setOauthCode('');
+        const statusResult = await window.levante.subscriptionOAuth.status(provider.type);
+        if (statusResult.success && statusResult.data) {
+          setOauthStatus(statusResult.data);
+        }
+        await updateProvider(provider.id, { authMode: 'oauth', apiKey: undefined });
+        syncProviderModels(provider.id);
+      } else {
+        setOauthLoading(false);
+        setOauthError(data.error || 'Callback failed');
+      }
+    });
+    return unsubscribe;
+  }, [provider.type, provider.id, updateProvider, syncProviderModels]);
 
   const handleSaveApiKey = async () => {
-    await updateProvider(provider.id, { apiKey, authMode: 'api-key' });
+    const updates: Partial<ProviderConfig> = {
+      apiKey,
+      authMode: 'api-key',
+    };
+
+    for (const field of ui.extraFields || []) {
+      (updates as any)[field.key] = extraFieldValues[field.key as string]?.trim() || undefined;
+    }
+
+    await updateProvider(provider.id, updates);
+
     if (apiKey && provider.modelSource === 'dynamic') {
       syncProviderModels(provider.id);
     }
@@ -403,22 +491,26 @@ export const AnthropicConfig = ({ provider }: { provider: ProviderConfig }) => {
   const handleSwitchMode = async (mode: 'api-key' | 'oauth') => {
     setAuthMode(mode);
     setOauthError('');
+
     if (mode === 'api-key') {
+      setOauthStatus(null);
       await updateProvider(provider.id, { authMode: 'api-key' });
-    } else {
-      await updateProvider(provider.id, { authMode: 'oauth', apiKey: undefined });
-      // Refresh status
-      const result = await window.levante.anthropicOAuth.status();
-      if (result.success && result.data) {
-        setOauthStatus(result.data);
-      }
+      return;
+    }
+
+    await updateProvider(provider.id, { authMode: 'oauth', apiKey: undefined });
+    const result = await window.levante.subscriptionOAuth.status(provider.type);
+    if (result.success && result.data) {
+      setOauthStatus(result.data);
     }
   };
 
   const handleStartOAuth = async () => {
     setOauthLoading(true);
     setOauthError('');
-    const result = await window.levante.anthropicOAuth.start('max');
+
+    const result = await window.levante.subscriptionOAuth.start(provider.type);
+
     setOauthLoading(false);
     if (!result.success) {
       setOauthError(result.error || 'Failed to start authorization');
@@ -426,28 +518,42 @@ export const AnthropicConfig = ({ provider }: { provider: ProviderConfig }) => {
   };
 
   const handleExchangeCode = async () => {
-    if (!oauthCode.trim()) return;
+    if (!oauthCode.trim()) {
+      return;
+    }
+
     setOauthLoading(true);
     setOauthError('');
-    const result = await window.levante.anthropicOAuth.exchange(oauthCode.trim());
+
+    const result = await window.levante.subscriptionOAuth.exchange(
+      provider.type,
+      oauthCode.trim()
+    );
+
     setOauthLoading(false);
-    if (result.success) {
-      setOauthCode('');
-      const statusResult = await window.levante.anthropicOAuth.status();
-      if (statusResult.success && statusResult.data) {
-        setOauthStatus(statusResult.data);
-      }
-      await updateProvider(provider.id, { authMode: 'oauth', apiKey: undefined });
-      syncProviderModels(provider.id);
-    } else {
+
+    if (!result.success) {
       setOauthError(result.error || 'Failed to exchange code');
+      return;
     }
+
+    setOauthCode('');
+
+    const statusResult = await window.levante.subscriptionOAuth.status(provider.type);
+    if (statusResult.success && statusResult.data) {
+      setOauthStatus(statusResult.data);
+    }
+
+    await updateProvider(provider.id, { authMode: 'oauth', apiKey: undefined });
+    syncProviderModels(provider.id);
   };
 
   const handleDisconnect = async () => {
     setOauthLoading(true);
     setOauthError('');
-    await window.levante.anthropicOAuth.disconnect();
+
+    await window.levante.subscriptionOAuth.disconnect(provider.type);
+
     setOauthStatus(null);
     setOauthLoading(false);
     await updateProvider(provider.id, { authMode: 'api-key', apiKey: undefined });
@@ -456,7 +562,6 @@ export const AnthropicConfig = ({ provider }: { provider: ProviderConfig }) => {
 
   return (
     <div className="space-y-4">
-      {/* Mode selector */}
       <div className="space-y-2">
         <Label>Authentication Method</Label>
         <div className="flex gap-2">
@@ -472,35 +577,56 @@ export const AnthropicConfig = ({ provider }: { provider: ProviderConfig }) => {
             size="sm"
             onClick={() => handleSwitchMode('oauth')}
           >
-            Claude Max/Pro
+            {ui.oauthButtonLabel}
           </Button>
         </div>
       </div>
 
       {authMode === 'api-key' ? (
-        <div className="space-y-2">
-          <Label htmlFor="anthropic-api-key">Anthropic API Key</Label>
-          <div className="flex gap-2">
-            <Input
-              id="anthropic-api-key"
-              type="password"
-              placeholder="sk-ant-..."
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-            />
-            <Button onClick={handleSaveApiKey}>Save</Button>
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor={`${provider.id}-api-key`}>{ui.apiKeyLabel}</Label>
+            <div className="flex gap-2">
+              <Input
+                id={`${provider.id}-api-key`}
+                type="password"
+                placeholder={ui.apiKeyPlaceholder}
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+              <Button onClick={handleSaveApiKey}>Save</Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {ui.apiKeyHelpText}.{' '}
+              <a
+                href={ui.apiKeyHelpUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                Get API key <ExternalLink className="w-3 h-3 inline" />
+              </a>
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Get your API key from Anthropic Console.{' '}
-            <a
-              href="https://console.anthropic.com/settings/keys"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline"
-            >
-              Get API key <ExternalLink className="w-3 h-3 inline" />
-            </a>
-          </p>
+
+          {(ui.extraFields || []).map((field) => (
+            <div key={String(field.key)} className="space-y-2">
+              <Label htmlFor={`${provider.id}-${String(field.key)}`}>{field.label}</Label>
+              <Input
+                id={`${provider.id}-${String(field.key)}`}
+                type="text"
+                placeholder={field.placeholder}
+                value={extraFieldValues[String(field.key)] || ''}
+                onChange={(e) =>
+                  setExtraFieldValues((prev) => ({
+                    ...prev,
+                    [String(field.key)]: e.target.value,
+                  }))
+                }
+              />
+              <p className="text-xs text-muted-foreground">{field.description}</p>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="space-y-4">
@@ -508,15 +634,17 @@ export const AnthropicConfig = ({ provider }: { provider: ProviderConfig }) => {
             <div className="space-y-3">
               <div className="flex items-center gap-2 text-sm">
                 <span className="text-green-600 font-medium">Connected</span>
-                {oauthStatus.isExpired && (
+                {oauthStatus.isExpired ? (
                   <span className="text-amber-600 text-xs">(token expired)</span>
-                )}
+                ) : null}
               </div>
-              {oauthStatus.expiresAt && (
+
+              {oauthStatus.expiresAt ? (
                 <p className="text-xs text-muted-foreground">
                   Expires: {new Date(oauthStatus.expiresAt).toLocaleString()}
                 </p>
-              )}
+              ) : null}
+
               <Button
                 variant="outline"
                 size="sm"
@@ -529,9 +657,7 @@ export const AnthropicConfig = ({ provider }: { provider: ProviderConfig }) => {
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-sm text-muted-foreground">
-                Connect your Claude Max or Claude Pro subscription to use it without an API key.
-              </p>
+              <p className="text-sm text-muted-foreground">{ui.oauthDescription}</p>
               <Button
                 onClick={handleStartOAuth}
                 disabled={oauthLoading}
@@ -542,15 +668,13 @@ export const AnthropicConfig = ({ provider }: { provider: ProviderConfig }) => {
                 ) : (
                   <ExternalLink className="w-4 h-4 mr-2" />
                 )}
-                Connect Claude Subscription
+                Connect {ui.oauthButtonLabel}
               </Button>
+
               <div className="space-y-2">
-                <Label htmlFor="anthropic-oauth-code">
-                  Paste the authorization code or URL from the browser
-                </Label>
+                <Label>Paste the authorization code or URL from the browser</Label>
                 <div className="flex gap-2">
                   <Input
-                    id="anthropic-oauth-code"
                     type="text"
                     placeholder="Paste code, URL or query string..."
                     value={oauthCode}
@@ -560,18 +684,22 @@ export const AnthropicConfig = ({ provider }: { provider: ProviderConfig }) => {
                     onClick={handleExchangeCode}
                     disabled={oauthLoading || !oauthCode.trim()}
                   >
-                    {oauthLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Connect'}
+                    {oauthLoading ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Connect'
+                    )}
                   </Button>
                 </div>
               </div>
             </div>
           )}
 
-          {oauthError && (
-            <p className="text-xs text-red-500">{oauthError}</p>
-          )}
+          {oauthError ? <p className="text-xs text-red-500">{oauthError}</p> : null}
         </div>
       )}
     </div>
   );
 };
+
+export const AnthropicConfig = SubscriptionOAuthConfig;

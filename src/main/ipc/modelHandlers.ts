@@ -61,21 +61,31 @@ export function setupModelHandlers() {
 
   // Fetch OpenAI models
   ipcMain.removeHandler('levante/models/openai');
-  ipcMain.handle('levante/models/openai', async (_, apiKey: string) => {
-    try {
-      const models = await ModelFetchService.fetchOpenAIModels(apiKey);
-      return {
-        success: true,
-        data: models
-      };
-    } catch (error) {
-      logger.ipc.error('Failed to fetch OpenAI models', { error: error instanceof Error ? error.message : error });
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error'
-      };
+  ipcMain.handle(
+    'levante/models/openai',
+    async (
+      _,
+      params:
+        | string
+        | { apiKey?: string; authMode?: 'api-key' | 'oauth'; organizationId?: string }
+    ) => {
+      try {
+        const models = await ModelFetchService.fetchOpenAIModels(params);
+        return {
+          success: true,
+          data: models
+        };
+      } catch (error) {
+        logger.ipc.error('Failed to fetch OpenAI models', {
+          error: error instanceof Error ? error.message : error
+        });
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        };
+      }
     }
-  });
+  );
 
   // Fetch Google AI models
   ipcMain.removeHandler('levante/models/google');

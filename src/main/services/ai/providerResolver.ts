@@ -140,7 +140,7 @@ async function configureProvider(provider: ProviderConfig, modelId: string): Pro
       return configureLocalProvider(provider, modelId);
 
     case "openai":
-      return configureOpenAI(provider, modelId);
+      return await configureOpenAI(provider, modelId);
 
     case "anthropic":
       return await configureAnthropic(provider, modelId);
@@ -246,19 +246,79 @@ function configureLocalProvider(provider: ProviderConfig, modelId: string) {
 /**
  * Configure OpenAI provider
  */
-function configureOpenAI(provider: ProviderConfig, modelId: string) {
+async function configureOpenAI(provider: ProviderConfig, modelId: string): Promise<LanguageModel> {
+  if (provider.authMode === 'oauth') {
+    const { getSubscriptionOAuthService } = await import('../subscription-oauth/SubscriptionOAuthService');
+    const { getProviderConfig } = await import('../subscription-oauth/providers');
+    const oauth = getSubscriptionOAuthService('openai');
+    const config = getProviderConfig('openai');
+
+    // Subscription OAuth uses chatgpt.com backend, not api.openai.com
+    const baseURL = config.oauthBaseUrl || 'https://chatgpt.com/backend-api/codex';
+
+    logger.aiSdk.info('[OpenAI OAuth] Configuring with subscription endpoint', { modelId, baseURL });
+
+    const openaiProvider = createOpenAI({
+      apiKey: 'oauth-placeholder',
+      baseURL,
+      fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+        const accessToken = await oauth.getValidAccessToken();
+
+        const headers = new Headers(init?.headers);
+        headers.delete('authorization');
+        headers.delete('Authorization');
+        headers.set('authorization', `Bearer ${accessToken}`);
+
+        // Codex backend has stricter requirements than api.openai.com — patch the body
+        let modifiedInit = init;
+        if (init?.body && typeof init.body === 'string') {
+          try {
+            const json = JSON.parse(init.body);
+            let patched = false;
+            if (!json.instructions) { json.instructions = 'You are a helpful assistant.'; patched = true; }
+            if (json.store !== false) { json.store = false; patched = true; }
+            if (patched) {
+              modifiedInit = { ...init, body: JSON.stringify(json) };
+            }
+          } catch { /* not JSON, pass through */ }
+        }
+
+        const reqUrl = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
+        logger.aiSdk.debug('[OpenAI OAuth] Request', { url: reqUrl, method: init?.method || 'GET' });
+
+        const response = await fetch(input, { ...modifiedInit, headers });
+
+        if (!response.ok) {
+          const cloned = response.clone();
+          const body = await cloned.text().catch(() => '');
+          logger.aiSdk.error('[OpenAI OAuth] Request failed', {
+            status: response.status,
+            body: body.substring(0, 500),
+            url: reqUrl,
+          });
+        }
+
+        return response;
+      },
+    });
+
+    return openaiProvider(modelId);
+  }
+
   if (!provider.apiKey) {
     throw new Error(
-      `OpenAI API key missing for provider ${provider.name}`
+      `OpenAI API key missing for provider ${provider.name}. ` +
+      `Either provide an API key or connect with ChatGPT Plus/Pro subscription.`
     );
   }
 
-  logger.aiSdk.debug("Creating OpenAI provider", { modelId });
+  logger.aiSdk.debug('Creating OpenAI provider', { modelId });
 
   const openaiProvider = createOpenAI({
     apiKey: provider.apiKey,
-    // Only pass organization if explicitly set and not empty
-    ...(provider.organizationId?.trim() && { organization: provider.organizationId.trim() }),
+    ...(provider.organizationId?.trim() && {
+      organization: provider.organizationId.trim(),
+    }),
   });
 
   return openaiProvider(modelId);
@@ -269,8 +329,8 @@ function configureOpenAI(provider: ProviderConfig, modelId: string) {
  */
 async function configureAnthropic(provider: ProviderConfig, modelId: string): Promise<LanguageModel> {
   if (provider.authMode === 'oauth') {
-    const { getAnthropicOAuthService } = await import('../anthropic/AnthropicOAuthService');
-    const oauth = getAnthropicOAuthService();
+    const { getSubscriptionOAuthService } = await import('../subscription-oauth/SubscriptionOAuthService');
+    const oauth = getSubscriptionOAuthService('anthropic');
 
     const anthropicProvider = createAnthropic({
       apiKey: 'oauth-placeholder',
