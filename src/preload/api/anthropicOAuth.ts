@@ -1,15 +1,15 @@
-import { ipcRenderer } from 'electron';
+import { subscriptionOAuthApi } from './subscriptionOAuth';
 
 export const anthropicOAuthApi = {
-  start: (mode: 'max' | 'console') =>
-    ipcRenderer.invoke('levante/anthropic/oauth/start', { mode }),
+  start: (_mode: 'max' | 'console') =>
+    subscriptionOAuthApi.start('anthropic'),
 
   exchange: (code: string) =>
-    ipcRenderer.invoke('levante/anthropic/oauth/exchange', { code }),
+    subscriptionOAuthApi.exchange('anthropic', code),
 
   status: () =>
-    ipcRenderer.invoke('levante/anthropic/oauth/status'),
+    subscriptionOAuthApi.status('anthropic'),
 
   disconnect: () =>
-    ipcRenderer.invoke('levante/anthropic/oauth/disconnect'),
+    subscriptionOAuthApi.disconnect('anthropic'),
 };

@@ -30,7 +30,7 @@ interface ProviderStepProps {
   onValidate: () => void;
   onModelSelect: (modelId: string) => void;
   onOAuthSuccess?: (apiKey: string) => void;
-  onAnthropicOAuthSuccess?: () => void;
+  onSubscriptionOAuthSuccess?: (providerId: 'anthropic' | 'openai') => void;
 }
 
 const PROVIDERS = [
@@ -92,7 +92,7 @@ export function ProviderStep({
   onValidate,
   onModelSelect,
   onOAuthSuccess,
-  onAnthropicOAuthSuccess,
+  onSubscriptionOAuthSuccess,
 }: ProviderStepProps) {
   const { t, i18n } = useTranslation('wizard');
   const provider = PROVIDERS.find((p) => p.id === selectedProvider);
@@ -100,8 +100,28 @@ export function ProviderStep({
   const [modelSearchQuery, setModelSearchQuery] = useState('');
   const [showAllModels, setShowAllModels] = useState(false);
 
-  // Anthropic OAuth state
-  const [anthropicAuthMode, setAnthropicAuthMode] = useState<'api-key' | 'oauth'>('api-key');
+  const subscriptionProviderId =
+    selectedProvider === 'anthropic' || selectedProvider === 'openai'
+      ? selectedProvider
+      : null;
+
+  const subscriptionOAuthUi =
+    selectedProvider === 'openai'
+      ? {
+          tabLabel: 'ChatGPT Plus/Pro',
+          connectDescription:
+            'Connect your ChatGPT Plus or Pro subscription to use OpenAI without an API key.',
+          connectButton: 'Connect ChatGPT Subscription',
+        }
+      : {
+          tabLabel: 'Claude Max/Pro',
+          connectDescription:
+            'Connect your Claude Max or Claude Pro subscription to use it without an API key.',
+          connectButton: 'Connect Claude Subscription',
+        };
+
+  const [subscriptionAuthMode, setSubscriptionAuthMode] =
+    useState<'api-key' | 'oauth'>('api-key');
   const [oauthCode, setOauthCode] = useState('');
   const [oauthStatus, setOauthStatus] = useState<{
     isConnected: boolean;
@@ -111,57 +131,80 @@ export function ProviderStep({
   const [oauthLoading, setOauthLoading] = useState(false);
   const [oauthError, setOauthError] = useState('');
 
-  // Load Anthropic OAuth status when mode switches to oauth
   useEffect(() => {
-    if (selectedProvider === 'anthropic' && anthropicAuthMode === 'oauth') {
-      window.levante.anthropicOAuth.status().then((result) => {
+    if (subscriptionProviderId && subscriptionAuthMode === 'oauth') {
+      window.levante.subscriptionOAuth.status(subscriptionProviderId).then((result) => {
         if (result.success && result.data) {
           setOauthStatus(result.data);
         }
       });
     }
-  }, [selectedProvider, anthropicAuthMode]);
+  }, [selectedProvider, subscriptionAuthMode, subscriptionProviderId]);
 
-  // Reset anthropic auth mode when provider changes
   useEffect(() => {
-    setAnthropicAuthMode('api-key');
+    setSubscriptionAuthMode('api-key');
     setOauthStatus(null);
     setOauthError('');
     setOauthCode('');
   }, [selectedProvider]);
 
-  const handleAnthropicStartOAuth = async () => {
+  // Listen for automatic callback completion (local server captured the code)
+  useEffect(() => {
+    const unsubscribe = window.levante.subscriptionOAuth.onCallback(async (data) => {
+      if (!subscriptionProviderId || data.providerId !== subscriptionProviderId) return;
+      if (data.success) {
+        setOauthLoading(false);
+        setOauthCode('');
+        const statusResult = await window.levante.subscriptionOAuth.status(subscriptionProviderId);
+        if (statusResult.success && statusResult.data) {
+          setOauthStatus(statusResult.data);
+        }
+        onSubscriptionOAuthSuccess?.(subscriptionProviderId);
+      } else {
+        setOauthLoading(false);
+        setOauthError(data.error || 'Callback failed');
+      }
+    });
+    return unsubscribe;
+  }, [subscriptionProviderId, onSubscriptionOAuthSuccess]);
+
+  const handleSubscriptionStartOAuth = async () => {
+    if (!subscriptionProviderId) return;
     setOauthLoading(true);
     setOauthError('');
-    const result = await window.levante.anthropicOAuth.start('max');
+    const result = await window.levante.subscriptionOAuth.start(subscriptionProviderId);
     setOauthLoading(false);
     if (!result.success) {
       setOauthError(result.error || 'Failed to start authorization');
     }
   };
 
-  const handleAnthropicExchangeCode = async () => {
-    if (!oauthCode.trim()) return;
+  const handleSubscriptionExchangeCode = async () => {
+    if (!subscriptionProviderId || !oauthCode.trim()) return;
     setOauthLoading(true);
     setOauthError('');
-    const result = await window.levante.anthropicOAuth.exchange(oauthCode.trim());
+    const result = await window.levante.subscriptionOAuth.exchange(
+      subscriptionProviderId,
+      oauthCode.trim()
+    );
     setOauthLoading(false);
     if (result.success) {
       setOauthCode('');
-      const statusResult = await window.levante.anthropicOAuth.status();
+      const statusResult = await window.levante.subscriptionOAuth.status(subscriptionProviderId);
       if (statusResult.success && statusResult.data) {
         setOauthStatus(statusResult.data);
       }
-      onAnthropicOAuthSuccess?.();
+      onSubscriptionOAuthSuccess?.(subscriptionProviderId);
     } else {
       setOauthError(result.error || 'Failed to exchange code');
     }
   };
 
-  const handleAnthropicDisconnect = async () => {
+  const handleSubscriptionDisconnect = async () => {
+    if (!subscriptionProviderId) return;
     setOauthLoading(true);
     setOauthError('');
-    await window.levante.anthropicOAuth.disconnect();
+    await window.levante.subscriptionOAuth.disconnect(subscriptionProviderId);
     setOauthStatus(null);
     setOauthLoading(false);
   };
@@ -336,57 +379,59 @@ export function ProviderStep({
               </Collapsible>
             )}
 
-            {/* Anthropic Provider: API Key + Claude Subscription toggle */}
-            {selectedProvider === 'anthropic' && (
+            {/* Subscription OAuth Providers (Anthropic + OpenAI): API Key + Subscription toggle */}
+            {subscriptionProviderId && (
               <>
-                {/* Auth mode toggle */}
                 <div className="space-y-2">
-                  <Label>{t('provider.anthropic_oauth.auth_method')}</Label>
+                  <Label>Authentication Method</Label>
                   <div className="flex gap-2">
                     <Button
-                      variant={anthropicAuthMode === 'api-key' ? 'default' : 'outline'}
+                      variant={subscriptionAuthMode === 'api-key' ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => { setAnthropicAuthMode('api-key'); setOauthError(''); }}
+                      onClick={() => { setSubscriptionAuthMode('api-key'); setOauthError(''); }}
                       type="button"
                     >
-                      {t('provider.anthropic_oauth.api_key_tab')}
+                      API Key
                     </Button>
                     <Button
-                      variant={anthropicAuthMode === 'oauth' ? 'default' : 'outline'}
+                      variant={subscriptionAuthMode === 'oauth' ? 'default' : 'outline'}
                       size="sm"
-                      onClick={() => { setAnthropicAuthMode('oauth'); setOauthError(''); }}
+                      onClick={() => { setSubscriptionAuthMode('oauth'); setOauthError(''); }}
                       type="button"
                     >
-                      {t('provider.anthropic_oauth.claude_tab')}
+                      {subscriptionOAuthUi.tabLabel}
                     </Button>
                   </div>
                 </div>
 
-                {anthropicAuthMode === 'api-key' ? (
+                {subscriptionAuthMode === 'api-key' ? (
                   <>
-                    {/* API Key mode */}
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="apiKey">{t('provider.api_key')}</Label>
-                        <a
-                          href="https://console.anthropic.com"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-primary hover:underline flex items-center gap-1"
-                        >
-                          {t('provider.get_api_key')}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
+                    {showApiKeyField && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="apiKey">{t('provider.api_key')}</Label>
+                          {provider?.signupUrl && (
+                            <a
+                              href={provider.signupUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary hover:underline flex items-center gap-1"
+                            >
+                              {t('provider.get_api_key')}
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                          )}
+                        </div>
+                        <Input
+                          id="apiKey"
+                          type="password"
+                          placeholder={t('provider.enter_api_key')}
+                          value={apiKey}
+                          onChange={(e) => onApiKeyChange(e.target.value)}
+                          className="font-mono text-sm"
+                        />
                       </div>
-                      <Input
-                        id="apiKey"
-                        type="password"
-                        placeholder={t('provider.enter_api_key')}
-                        value={apiKey}
-                        onChange={(e) => onApiKeyChange(e.target.value)}
-                        className="font-mono text-sm"
-                      />
-                    </div>
+                    )}
                     <div className="pt-2">
                       <Button
                         onClick={onValidate}
@@ -411,39 +456,34 @@ export function ProviderStep({
                     </div>
                   </>
                 ) : (
-                  /* OAuth mode - Claude Max/Pro subscription */
                   <div className="space-y-4">
                     {oauthStatus?.isConnected ? (
                       <div className="space-y-3">
                         <div className="flex items-center gap-2 text-sm">
                           <CheckCircle2 className="h-4 w-4 text-green-600" />
-                          <span className="text-green-600 font-medium">
-                            {t('provider.anthropic_oauth.connected')}
-                          </span>
-                          {oauthStatus.isExpired && (
-                            <span className="text-amber-600 text-xs">
-                              {t('provider.anthropic_oauth.token_expired')}
-                            </span>
-                          )}
+                          <span className="text-green-600 font-medium">Connected</span>
+                          {oauthStatus.isExpired ? (
+                            <span className="text-amber-600 text-xs">(token expired)</span>
+                          ) : null}
                         </div>
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={handleAnthropicDisconnect}
+                          onClick={handleSubscriptionDisconnect}
                           disabled={oauthLoading}
                           type="button"
                         >
                           {oauthLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-                          {t('provider.anthropic_oauth.disconnect')}
+                          Disconnect
                         </Button>
                       </div>
                     ) : (
                       <div className="space-y-3">
                         <p className="text-sm text-muted-foreground">
-                          {t('provider.anthropic_oauth.connect_description')}
+                          {subscriptionOAuthUi.connectDescription}
                         </p>
                         <Button
-                          onClick={handleAnthropicStartOAuth}
+                          onClick={handleSubscriptionStartOAuth}
                           disabled={oauthLoading}
                           className="w-full"
                           type="button"
@@ -453,29 +493,29 @@ export function ProviderStep({
                           ) : (
                             <ExternalLink className="w-4 h-4 mr-2" />
                           )}
-                          {t('provider.anthropic_oauth.connect_button')}
+                          {subscriptionOAuthUi.connectButton}
                         </Button>
                         <div className="space-y-2">
-                          <Label htmlFor="anthropic-oauth-code">
-                            {t('provider.anthropic_oauth.paste_code')}
+                          <Label htmlFor="subscription-oauth-code">
+                            Paste the authorization code or URL from the browser
                           </Label>
                           <div className="flex gap-2">
                             <Input
-                              id="anthropic-oauth-code"
+                              id="subscription-oauth-code"
                               type="text"
-                              placeholder={t('provider.anthropic_oauth.paste_placeholder')}
+                              placeholder="Paste code, URL or query string..."
                               value={oauthCode}
                               onChange={(e) => setOauthCode(e.target.value)}
                             />
                             <Button
-                              onClick={handleAnthropicExchangeCode}
+                              onClick={handleSubscriptionExchangeCode}
                               disabled={oauthLoading || !oauthCode.trim()}
                               type="button"
                             >
                               {oauthLoading ? (
                                 <Loader2 className="w-4 h-4 animate-spin" />
                               ) : (
-                                t('provider.anthropic_oauth.connect')
+                                'Connect'
                               )}
                             </Button>
                           </div>
@@ -483,16 +523,14 @@ export function ProviderStep({
                       </div>
                     )}
 
-                    {oauthError && (
-                      <p className="text-xs text-red-500">{oauthError}</p>
-                    )}
+                    {oauthError ? <p className="text-xs text-red-500">{oauthError}</p> : null}
                   </div>
                 )}
               </>
             )}
 
-            {/* Other Providers (non-OpenRouter, non-Anthropic): Direct API Key and Connection Test */}
-            {selectedProvider !== 'openrouter' && selectedProvider !== 'anthropic' && (
+            {/* Other Providers (non-OpenRouter, non-subscription-oauth): Direct API Key and Connection Test */}
+            {selectedProvider !== 'openrouter' && !subscriptionProviderId && (
               <>
                 {/* API Key Field - Primary for other providers */}
                 {showApiKeyField && (

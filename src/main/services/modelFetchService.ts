@@ -8,6 +8,7 @@ import {
 } from "../utils/urlValidator";
 import { getOAuthService } from "./oauth";
 import { envConfig } from "./envConfig";
+import { getProviderConfig } from "./subscription-oauth/providers";
 
 interface ModelResponse {
   object: string;
@@ -202,23 +203,54 @@ export class ModelFetchService {
   }
 
   // Fetch OpenAI models
-  static async fetchOpenAIModels(apiKey: string): Promise<any[]> {
+  static async fetchOpenAIModels(
+    params:
+      | string
+      | { apiKey?: string; authMode?: 'api-key' | 'oauth'; organizationId?: string }
+  ): Promise<any[]> {
+    const normalized =
+      typeof params === 'string'
+        ? { apiKey: params, authMode: 'api-key' as const }
+        : params;
+
+    if (normalized.authMode === 'oauth') {
+      try {
+        return await ModelFetchService.fetchSubscriptionOAuthModels('openai', {
+          organizationId: normalized.organizationId,
+        });
+      } catch (error) {
+        logger.models.warn('OpenAI OAuth model fetch failed, using fallback list', {
+          error: error instanceof Error ? error.message : error,
+        });
+        return ModelFetchService.getSubscriptionOAuthFallbackModels('openai');
+      }
+    }
+
+    if (!normalized.apiKey) {
+      throw new Error('OpenAI API key required for api-key mode.');
+    }
+
     try {
-      const response = await fetch("https://api.openai.com/v1/models", {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-      });
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${normalized.apiKey}`,
+        'Content-Type': 'application/json',
+      };
+
+      if (normalized.organizationId?.trim()) {
+        headers['OpenAI-Organization'] = normalized.organizationId.trim();
+      }
+
+      const response = await fetch('https://api.openai.com/v1/models', { headers });
 
       if (!response.ok) {
-        throw new Error(`OpenAI API error: ${response.statusText}`);
+        const text = await response.text().catch(() => response.statusText);
+        throw new Error(`OpenAI API error (${response.status}): ${text}`);
       }
 
       const data: ModelResponse = await response.json();
       return data.data || [];
     } catch (error) {
-      logger.models.error("Failed to fetch OpenAI models", {
+      logger.models.error('Failed to fetch OpenAI models', {
         error: error instanceof Error ? error.message : error,
       });
       throw error;
@@ -260,35 +292,12 @@ export class ModelFetchService {
 
     if (authMode === 'oauth') {
       try {
-        const { getAnthropicOAuthService } = await import('./anthropic/AnthropicOAuthService');
-        const oauth = getAnthropicOAuthService();
-        const accessToken = await oauth.getValidAccessToken();
-
-        const response = await fetch('https://api.anthropic.com/v1/models', {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'anthropic-beta': 'oauth-2025-04-20',
-            'anthropic-version': '2023-06-01',
-            'Content-Type': 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          const text = await response.text().catch(() => response.statusText);
-          throw new Error(`Anthropic OAuth models error (${response.status}): ${text}`);
-        }
-
-        const data = await response.json();
-        const models = data.data || [];
-        if (models.length > 0) return models;
-
-        logger.models.warn('Anthropic OAuth models endpoint returned empty list, using fallback list');
-        return ModelFetchService.getAnthropicOAuthFallbackModels();
+        return await ModelFetchService.fetchSubscriptionOAuthModels('anthropic');
       } catch (error) {
         logger.models.warn('Anthropic OAuth model fetch failed, using fallback list', {
           error: error instanceof Error ? error.message : error,
         });
-        return ModelFetchService.getAnthropicOAuthFallbackModels();
+        return ModelFetchService.getSubscriptionOAuthFallbackModels('anthropic');
       }
     }
 
@@ -319,15 +328,56 @@ export class ModelFetchService {
     }
   }
 
-  private static getAnthropicOAuthFallbackModels(): any[] {
-    return [
-      { id: 'claude-sonnet-4-5', display_name: 'Claude Sonnet 4.5' },
-      { id: 'claude-opus-4-1', display_name: 'Claude Opus 4.1' },
-      { id: 'claude-opus-4-5', display_name: 'Claude Opus 4.5' },
-      { id: 'claude-haiku-4-5', display_name: 'Claude Haiku 4.5' },
-      { id: 'claude-3-7-sonnet-latest', display_name: 'Claude 3.7 Sonnet (latest)' },
-      { id: 'claude-3-5-haiku-latest', display_name: 'Claude 3.5 Haiku (latest)' },
-    ];
+  private static async fetchSubscriptionOAuthModels(
+    providerId: 'anthropic' | 'openai',
+    options?: { organizationId?: string }
+  ): Promise<any[]> {
+    const config = getProviderConfig(providerId);
+
+    // OpenAI Codex subscription tokens don't have access to /v1/models,
+    // so return the known Codex models directly.
+    if (providerId === 'openai') {
+      return config.fallbackModels;
+    }
+
+    const { getSubscriptionOAuthService } = await import(
+      './subscription-oauth/SubscriptionOAuthService'
+    );
+
+    const oauth = getSubscriptionOAuthService(providerId);
+    const accessToken = await oauth.getValidAccessToken();
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      ...(config.oauthModelFetchHeaders || {}),
+    };
+
+    if (options?.organizationId?.trim()) {
+      headers['OpenAI-Organization'] = options.organizationId.trim();
+    }
+
+    const response = await fetch(config.modelsEndpoint, { headers });
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => response.statusText);
+      throw new Error(`${config.displayName} OAuth models error (${response.status}): ${text}`);
+    }
+
+    const data = await response.json();
+    const models = data.data || data.models || [];
+    if (models.length > 0) {
+      return models;
+    }
+
+    logger.models.warn(`${config.displayName} OAuth models endpoint returned empty list, using fallback list`);
+    return config.fallbackModels;
+  }
+
+  private static getSubscriptionOAuthFallbackModels(
+    providerId: 'anthropic' | 'openai'
+  ): any[] {
+    return getProviderConfig(providerId).fallbackModels;
   }
 
   // Fetch Groq models

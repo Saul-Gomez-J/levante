@@ -68,6 +68,7 @@ import { projectsApi } from "./api/projects";
 import { skillsApi } from "./api/skills";
 import { platformApi } from "./api/platform";
 import { anthropicOAuthApi } from "./api/anthropicOAuth";
+import { subscriptionOAuthApi } from "./api/subscriptionOAuth";
 import { filesystemApi } from "./api/filesystem";
 import { compactionApi } from "./api/compaction";
 import { contextBudgetApi } from "./api/contextBudget";
@@ -251,7 +252,9 @@ export interface LevanteAPI {
       endpoint: string
     ) => Promise<{ success: boolean; data?: any[]; error?: string }>;
     fetchOpenAI: (
-      apiKey: string
+      params:
+        | string
+        | { apiKey?: string; authMode?: 'api-key' | 'oauth'; organizationId?: string }
     ) => Promise<{ success: boolean; data?: any[]; error?: string }>;
     fetchGoogle: (
       apiKey: string
@@ -952,7 +955,7 @@ export interface LevanteAPI {
     }>;
   };
 
-  // Anthropic OAuth API (Claude Max/Pro subscription)
+  // Anthropic OAuth API (Claude Max/Pro subscription) - legacy shim
   anthropicOAuth: {
     start: (mode: 'max' | 'console') => Promise<{ success: boolean; authUrl?: string; error?: string }>;
     exchange: (code: string) => Promise<{ success: boolean; error?: string }>;
@@ -962,6 +965,19 @@ export interface LevanteAPI {
       error?: string;
     }>;
     disconnect: () => Promise<{ success: boolean; error?: string }>;
+  };
+
+  // Generic Subscription OAuth API (Anthropic + OpenAI)
+  subscriptionOAuth: {
+    start: (providerId: string) => Promise<{ success: boolean; authUrl?: string; error?: string }>;
+    exchange: (providerId: string, code: string) => Promise<{ success: boolean; error?: string }>;
+    status: (providerId: string) => Promise<{
+      success: boolean;
+      data?: { isConnected: boolean; isExpired: boolean; expiresAt?: number };
+      error?: string;
+    }>;
+    disconnect: (providerId: string) => Promise<{ success: boolean; error?: string }>;
+    onCallback: (callback: (data: { success: boolean; providerId: string; error?: string }) => void) => () => void;
   };
 
   // Compaction API
@@ -1084,8 +1100,11 @@ const api: LevanteAPI = {
   // Platform API
   platform: platformApi,
 
-  // Anthropic OAuth API
+  // Anthropic OAuth API (legacy shim)
   anthropicOAuth: anthropicOAuthApi,
+
+  // Generic Subscription OAuth API
+  subscriptionOAuth: subscriptionOAuthApi,
 
   // Filesystem API
   fs: filesystemApi,

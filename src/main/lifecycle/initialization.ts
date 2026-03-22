@@ -35,7 +35,7 @@ import { setupTaskHandlers } from "../ipc/taskHandlers";
 import { setupProjectHandlers } from "../ipc/projectHandlers";
 import { setupSkillsHandlers } from "../ipc/skillsHandlers";
 import { setupPlatformHandlers } from "../ipc/platformHandlers";
-import { setupAnthropicOAuthHandlers } from "../ipc/anthropicOAuthHandlers";
+import { setupSubscriptionOAuthHandlers } from "../ipc/subscriptionOAuthHandlers";
 import { setupFileSystemHandlers } from "../ipc/fileSystemHandlers";
 import { setupCompactionHandlers } from "../ipc/compactionHandlers";
 import { setupContextBudgetHandlers } from "../ipc/contextBudgetHandlers";
@@ -152,7 +152,7 @@ export async function registerIPCHandlers(getMainWindow: () => BrowserWindow | n
   setupProjectHandlers();
   setupSkillsHandlers();
   setupPlatformHandlers();
-  setupAnthropicOAuthHandlers();
+  setupSubscriptionOAuthHandlers();
   setupFileSystemHandlers(getMainWindow);
 
   // Note: Log viewer handlers are registered separately in main.ts after window creation

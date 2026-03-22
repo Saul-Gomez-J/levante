@@ -7,8 +7,12 @@ export const modelsApi = {
     ipcRenderer.invoke('levante/models/gateway', apiKey, baseUrl),
   fetchLocal: (endpoint: string) =>
     ipcRenderer.invoke('levante/models/local', endpoint),
-  fetchOpenAI: (apiKey: string) =>
-    ipcRenderer.invoke('levante/models/openai', apiKey),
+  fetchOpenAI: (
+    params:
+      | string
+      | { apiKey?: string; authMode?: 'api-key' | 'oauth'; organizationId?: string }
+  ) =>
+    ipcRenderer.invoke('levante/models/openai', params),
   fetchGoogle: (apiKey: string) =>
     ipcRenderer.invoke('levante/models/google', apiKey),
   fetchAnthropic: (params: { apiKey?: string; authMode?: 'api-key' | 'oauth' }) =>
