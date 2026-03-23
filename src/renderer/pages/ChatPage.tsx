@@ -43,6 +43,7 @@ import { WebPreviewToast } from '@/components/chat/WebPreviewToast';
 import { useWebPreview } from '@/hooks/useWebPreview';
 import type { FileMentionPayload } from '@/components/chat/lexical/FileMentionNode';
 import { toast } from 'sonner';
+import { shouldAutoSendAfterApproval } from '@/utils/toolApprovalAutoSend';
 import { ContextUsageIndicator, type ContextUsageData } from '@/components/chat/ContextUsageIndicator';
 import type { TokenUsage, ContextBudgetEstimate } from '../../preload/types';
 
@@ -475,37 +476,8 @@ const ChatPage = () => {
     id: currentSession?.id || 'new-chat',
     transport,
 
-    // ═══════════════════════════════════════════════════════
-    // Solo continuar automáticamente si hay APROBACIONES (approved: true)
-    // NO continuar si hay DENEGACIONES - respetar la decisión del usuario
-    // ═══════════════════════════════════════════════════════
     sendAutomaticallyWhen: ({ messages }) => {
-      const lastAssistantMessage = messages
-        .slice()
-        .reverse()
-        .find((m) => m.role === 'assistant');
-
-      if (!lastAssistantMessage) return false;
-
-      const toolParts =
-        lastAssistantMessage.parts?.filter((p: any) =>
-          p.type?.startsWith('tool-')
-        ) || [];
-
-      if (toolParts.length === 0) return false;
-
-      const partsWithApprovalResponse = toolParts.filter(
-        (p: any) => p.state === 'approval-responded' && p.approval
-      );
-
-      // Solo continuar si TODAS las respuestas son aprobaciones
-      const decision =
-        partsWithApprovalResponse.length > 0 &&
-        partsWithApprovalResponse.every(
-          (p: any) => p.approval.approved === true
-        );
-
-      return decision;
+      return shouldAutoSendAfterApproval(messages);
     },
 
     // Persist messages after AI finishes
