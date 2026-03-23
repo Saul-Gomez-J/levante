@@ -29,6 +29,24 @@ export interface SubscriptionOAuthProviderConfig {
   fallbackModels: Array<{ id: string; display_name?: string }>;
   /** Base URL for runtime API calls when using subscription OAuth (e.g. chatgpt.com backend). */
   oauthBaseUrl?: string;
+  /**
+   * Extra headers to inject on every runtime API call when using subscription OAuth.
+   * These are applied after auth headers are set.
+   */
+  oauthApiHeaders?: Record<string, string>;
+  /**
+   * Beta flags to merge with any existing SDK-provided Anthropic beta header.
+   */
+  oauthApiBetaFlags?: string[];
+  /**
+   * Whether the token exchange POST body must include `state`.
+   * Anthropic requires it. OpenAI does not.
+   */
+  sendStateInTokenExchange?: boolean;
+  /**
+   * System prompt prefix that must be prepended for runtime OAuth requests.
+   */
+  oauthSystemPromptPrefix?: string;
 }
 
 export const SUBSCRIPTION_OAUTH_PROVIDERS: Record<
@@ -67,6 +85,14 @@ export const SUBSCRIPTION_OAUTH_PROVIDERS: Record<
       { id: 'claude-3-7-sonnet-latest', display_name: 'Claude 3.7 Sonnet (latest)' },
       { id: 'claude-3-5-haiku-latest', display_name: 'Claude 3.5 Haiku (latest)' },
     ],
+    oauthApiHeaders: {
+      'anthropic-dangerous-direct-browser-access': 'true',
+      'user-agent': 'claude-cli/2.1.2 (external, cli)',
+      'x-app': 'cli',
+    },
+    oauthApiBetaFlags: ['claude-code-20250219', 'oauth-2025-04-20'],
+    sendStateInTokenExchange: true,
+    oauthSystemPromptPrefix: 'You are Claude Code, Anthropic\'s official CLI for Claude.',
   },
 
   openai: {

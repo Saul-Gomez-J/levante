@@ -82,8 +82,9 @@ export class SubscriptionOAuthService {
       code_verifier: codeVerifier,
     };
 
-    // Note: state is validated client-side above, NOT sent to the token endpoint
-    // (OpenAI rejects unknown parameters like state)
+    if (this.config.sendStateInTokenExchange) {
+      payload.state = parsed.state || expectedState;
+    }
 
     const response = await fetch(this.config.tokenEndpoint, {
       method: 'POST',
@@ -102,7 +103,10 @@ export class SubscriptionOAuthService {
       expires_in: number;
     };
 
-    console.log(`[SubscriptionOAuth][${this.providerId}] Token saved, prefix:`, json.access_token?.substring(0, 20));
+    console.log(
+      `[SubscriptionOAuth][${this.providerId}] Token saved, prefix:`,
+      json.access_token?.substring(0, 20)
+    );
 
     await this.tokenStore.saveTokens(this.serverId, {
       accessToken: json.access_token,
