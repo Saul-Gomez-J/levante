@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect, useRef } from 'react';
-import { Search, MessageSquare, FolderTree, FolderOpen, Plus, MoreVertical, Pencil, Trash2, ArrowLeft } from 'lucide-react';
+import { Search, MessageSquare, FolderTree, FolderOpen, Plus, MoreVertical, Pencil, Trash2, ArrowLeft, ChevronRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -80,8 +80,59 @@ export function SidebarSections({
     <div className="flex flex-col h-full">
       {/* New Chat + Projects + Search */}
       <div className="px-2">
-        {isInsideProject && onExitProject ? (
-          /* Inside a project: show back button + new chat */
+        {/* New Chat (always visible) */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={onNewChat} disabled={loading}>
+              <Plus className="w-4 h-4" />
+              {t('chat_list.new_chat')}
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+
+        {/* Search */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            {searchOpen ? (
+              <div className="relative px-2 py-1">
+                <Search
+                  className="absolute left-5 top-1/2 transform -translate-y-1/2 text-muted-foreground"
+                  size={16}
+                />
+                <Input
+                  ref={searchInputRef}
+                  placeholder={
+                    activeSection === 'chats'
+                      ? t('chat_list.search_placeholder')
+                      : t('chat_list.file_browser.search_files_placeholder')
+                  }
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setSearchOpen(false);
+                      setSearchQuery('');
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!searchQuery) setSearchOpen(false);
+                  }}
+                  className="pl-9 h-8"
+                />
+              </div>
+            ) : (
+              <SidebarMenuButton onClick={() => setSearchOpen(true)}>
+                <Search className="w-4 h-4" />
+                {activeSection === 'chats'
+                  ? t('chat_list.search_placeholder')
+                  : t('chat_list.file_browser.search_files_placeholder')}
+              </SidebarMenuButton>
+            )}
+          </SidebarMenuItem>
+        </SidebarMenu>
+
+        {/* Back button when inside a project */}
+        {isInsideProject && onExitProject && (
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton onClick={onExitProject}>
@@ -89,50 +140,34 @@ export function SidebarSections({
                 {t('chat_list.exit_project')}
               </SidebarMenuButton>
             </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton onClick={onNewChat} disabled={loading}>
-                <Plus className="w-4 h-4" />
-                {t('chat_list.new_chat')}
-              </SidebarMenuButton>
-            </SidebarMenuItem>
           </SidebarMenu>
-        ) : (
-          /* Normal view: new chat + projects collapsible */
-          <Collapsible open={projectsOpen} onOpenChange={setProjectsOpen}>
-            <SidebarMenu>
-              {/* New Chat */}
-              <SidebarMenuItem>
-                <SidebarMenuButton onClick={onNewChat} disabled={loading}>
-                  <Plus className="w-4 h-4" />
-                  {t('chat_list.new_chat')}
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+        )}
 
-              {/* Projects */}
-              <SidebarMenuItem>
-                <CollapsibleTrigger asChild>
-                  <SidebarMenuButton>
-                    <FolderOpen className="w-4 h-4" />
-                    {t('chat_list.projects_section')}
-                    {projects.length > 0 && (
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        {projects.length}
-                      </span>
-                    )}
-                  </SidebarMenuButton>
-                </CollapsibleTrigger>
-              </SidebarMenuItem>
-            </SidebarMenu>
+        {/* Projects section */}
+        {!isInsideProject && (
+          <Collapsible open={projectsOpen} onOpenChange={setProjectsOpen}>
+            <CollapsibleTrigger asChild>
+              <button className="flex items-center justify-between w-full px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
+                <span className="flex items-center gap-1">
+                  <ChevronRight
+                    size={12}
+                    className={cn('transition-transform', projectsOpen && 'rotate-90')}
+                  />
+                  {t('chat_list.projects_section')}
+                </span>
+                {onCreateProject && (
+                  <span
+                    role="button"
+                    onClick={(e) => { e.stopPropagation(); onCreateProject(); }}
+                    title={t('chat_list.new_project')}
+                  >
+                    <Plus size={14} />
+                  </span>
+                )}
+              </button>
+            </CollapsibleTrigger>
 
             <CollapsibleContent>
-              {onCreateProject && (
-                <button
-                  className="w-full text-xs text-muted-foreground hover:text-foreground px-4 py-2 text-left"
-                  onClick={onCreateProject}
-                >
-                  + {t('chat_list.new_project')}
-                </button>
-              )}
               {projects.map((project) => (
                 <div
                   key={project.id}
@@ -195,47 +230,6 @@ export function SidebarSections({
             </CollapsibleContent>
           </Collapsible>
         )}
-
-        {/* Search */}
-        <SidebarMenu>
-          <SidebarMenuItem>
-            {searchOpen ? (
-              <div className="relative px-2 py-1">
-                <Search
-                  className="absolute left-5 top-1/2 transform -translate-y-1/2 text-muted-foreground"
-                  size={16}
-                />
-                <Input
-                  ref={searchInputRef}
-                  placeholder={
-                    activeSection === 'chats'
-                      ? t('chat_list.search_placeholder')
-                      : t('chat_list.file_browser.search_files_placeholder')
-                  }
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      setSearchOpen(false);
-                      setSearchQuery('');
-                    }
-                  }}
-                  onBlur={() => {
-                    if (!searchQuery) setSearchOpen(false);
-                  }}
-                  className="pl-9 h-8"
-                />
-              </div>
-            ) : (
-              <SidebarMenuButton onClick={() => setSearchOpen(true)}>
-                <Search className="w-4 h-4" />
-                {activeSection === 'chats'
-                  ? t('chat_list.search_placeholder')
-                  : t('chat_list.file_browser.search_files_placeholder')}
-              </SidebarMenuButton>
-            )}
-          </SidebarMenuItem>
-        </SidebarMenu>
       </div>
 
       <div className="flex border-b shrink-0 mt-1">
