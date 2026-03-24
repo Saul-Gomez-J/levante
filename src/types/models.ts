@@ -47,7 +47,7 @@ export interface ProviderConfig {
   organizationId?: string; // For OpenAI
   projectId?: string; // For Google, Anthropic
   region?: string; // For AWS Bedrock (future)
-  authMode?: 'api-key' | 'oauth'; // For Anthropic Claude Max/Pro subscription
+  authMode?: 'api-key' | 'oauth'; // For providers that support subscription OAuth
 }
 
 export interface ProviderWithModels {

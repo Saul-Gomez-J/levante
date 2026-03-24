@@ -111,7 +111,7 @@ export const useSkillsStore = create<SkillsStore>((set, get) => ({
 
   loadInstalledForChat: async (projectId?: string | null) => {
     if (projectId) {
-      await get().loadInstalled({ mode: 'project-and-global', projectId });
+      await get().loadInstalled({ mode: 'project-merged', projectId });
       return;
     }
     await get().loadInstalled({ mode: 'global' });

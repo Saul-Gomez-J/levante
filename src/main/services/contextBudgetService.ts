@@ -39,18 +39,22 @@ class ContextBudgetService {
   async estimate(input: ContextBudgetEstimateInput): Promise<ContextBudgetEstimate> {
     try {
       // 1. Resolve skills
+      const codeModeEnabled = input.codeMode?.enabled === true;
       const projectId = input.projectContext?.projectId;
       let installedSkills: InstalledSkill[] = [];
-      try {
-        installedSkills = await skillsService.listInstalledSkills(
-          projectId
-            ? { mode: 'project-merged', projectId }
-            : { mode: 'global' }
-        );
-      } catch (error) {
-        logger.aiSdk.warn('contextBudgetService: failed to load skills', {
-          error: error instanceof Error ? error.message : String(error),
-        });
+
+      if (codeModeEnabled) {
+        try {
+          installedSkills = await skillsService.listInstalledSkills(
+            projectId
+              ? { mode: 'project-merged', projectId }
+              : { mode: 'global' }
+          );
+        } catch (error) {
+          logger.aiSdk.warn('contextBudgetService: failed to load skills', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       // 2. Get built-in tools config
@@ -61,7 +65,7 @@ class ContextBudgetService {
 
       // 3. Build system prompt (same logic as aiService)
       const { getCodeModeSystemPrompt } = await import('./ai/mcpToolsAdapter');
-      const codeModePrompt = input.codeMode?.enabled ? getCodeModeSystemPrompt() : null;
+      const codeModePrompt = codeModeEnabled ? getCodeModeSystemPrompt() : null;
 
       // Count tools
       let toolCount = 0;

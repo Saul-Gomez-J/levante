@@ -23,6 +23,7 @@ import { getCodingTools } from "./ai/codingTools";
 import { isToolUseNotSupportedError } from "./ai/toolErrorDetector";
 import { classifyStreamingError } from "./ai/streamingErrorClassifier";
 import { calculateMaxSteps } from "./ai/stepsCalculator";
+import { sanitizeMessagesForModel } from "./ai/toolMessageSanitizer";
 import { InferenceDispatcher } from "./inference/InferenceDispatcher";
 import { attachmentStorage } from "./attachmentStorage";
 import { pdfExtractionService } from "./pdfExtractionService";
@@ -120,155 +121,6 @@ type RendererAttachmentPayload = {
 type AttachmentAwareUIMessage = UIMessage & {
   attachments?: RendererAttachmentPayload[];
 };
-
-/**
- * Sanitize messages for model consumption.
- * Handles known Vercel AI SDK issues:
- * - Issue #8431: Deep clone to avoid object reference issues
- * - Issue #8061: Remove providerExecuted when null
- * - Issue #9731: Remove providerMetadata (except Google's thoughtSignature)
- * - Remove uiResources from tool results (MCP-UI specific)
- *
- * IMPORTANT: Google's thoughtSignature MUST be preserved for Gemini 3 tool calling.
- * Without it, multi-turn tool calls fail with "function call is missing a thought_signature".
- */
-function sanitizeMessagesForModel(messages: UIMessage[]): UIMessage[] {
-  // Deep clone to avoid reference issues (GitHub Issue #8431)
-  // This also cleans circular references and converts to plain objects
-  const clonedMessages = JSON.parse(JSON.stringify(messages));
-
-  return clonedMessages.map((message: any) => {
-    const parts = message.parts;
-    if (!Array.isArray(parts)) return message;
-
-    const sanitizedParts = parts.map((part: any) => {
-      if (!part) return part;
-
-      // FIX: Handle denied tool approvals
-      // When a tool is denied by the user, convert it to output-available with a denial message
-      // so that convertToModelMessages generates a proper tool_result.
-      // Without this, Anthropic/OpenRouter returns 500 because tool_use lacks tool_result.
-      if (part.state === 'approval-responded') {
-        const wasDenied = part.approval?.approved === false;
-        if (wasDenied) {
-          part = {
-            ...part,
-            state: 'output-available',
-            output: 'Tool execution was denied by the user.',
-          };
-        }
-      }
-
-      // Remove providerExecuted if null (GitHub Issue #8061)
-      // Databases like MongoDB convert undefined to null, causing validation errors
-      if ('providerExecuted' in part && part.providerExecuted === null) {
-        const { providerExecuted, ...partWithoutProvider } = part;
-        part = partWithoutProvider;
-      }
-
-      // Handle providerMetadata carefully (GitHub Issue #9731)
-      // IMPORTANT: Google's thoughtSignature MUST be preserved for Gemini 3 tool calling
-      // Without thoughtSignature, Gemini 3 fails with "function call is missing a thought_signature"
-      if ('providerMetadata' in part && part.providerMetadata) {
-        const metadata = part.providerMetadata as Record<string, unknown>;
-        // Check if this is Google metadata with thoughtSignature - preserve it
-        const googleMeta = metadata.google as Record<string, unknown> | undefined;
-        const vertexMeta = metadata.vertex as Record<string, unknown> | undefined;
-        const hasThoughtSignature = googleMeta?.thoughtSignature || vertexMeta?.thoughtSignature;
-
-        if (hasThoughtSignature) {
-          // Keep providerMetadata intact for Gemini 3 thought_signatures
-          // The SDK needs this to maintain conversation context for multi-turn tool calls
-        } else {
-          // For other providers, remove providerMetadata to avoid conversion issues
-          const { providerMetadata, ...partWithoutMetadata } = part;
-          part = partWithoutMetadata;
-        }
-      }
-
-      // Tool calls store provider metadata in `callProviderMetadata`.
-      // Keep only Gemini thought signatures there; OpenAI response item ids can become
-      // invalid in reconstructed histories (e.g. missing linked reasoning items).
-      if ('callProviderMetadata' in part && part.callProviderMetadata) {
-        const callMetadata = part.callProviderMetadata as Record<string, unknown>;
-        const googleMeta = callMetadata.google as Record<string, unknown> | undefined;
-        const vertexMeta = callMetadata.vertex as Record<string, unknown> | undefined;
-        const hasThoughtSignature =
-          googleMeta?.thoughtSignature || vertexMeta?.thoughtSignature;
-
-        if (!hasThoughtSignature) {
-          const { callProviderMetadata, ...partWithoutCallMetadata } = part;
-          part = partWithoutCallMetadata;
-        }
-      }
-
-      // Sanitize tool invocation outputs that contain uiResources (MCP-UI)
-      // According to MCP spec 2025-11-25:
-      // - structuredContent → SEND to LLM (structured JSON for processing)
-      // - content → SEND to LLM (text for backwards compatibility)
-      // - _meta → NEVER send (client metadata, may contain secrets like game words)
-      // - uiResources → NEVER send (only for widget rendering)
-      // Note: Tool parts can have type 'tool-invocation' or 'tool-{toolName}' depending on source
-      const isToolWithOutput = (
-        // AI SDK format: tool-invocation with output-available state
-        (// Stored format: tool-{name} with output-available state
-        ((part?.type === 'tool-invocation' && part?.state === 'output-available') || (part?.type?.startsWith('tool-') && part?.type !== 'tool-invocation' && part?.state === 'output-available')))
-      );
-      if (isToolWithOutput && part.output) {
-        const output = part.output;
-        if (output && typeof output === 'object' && 'uiResources' in output) {
-          // Build clean output for LLM - include structuredContent and content text
-          // but strip _meta (client metadata) and uiResources (widget rendering)
-          const cleanOutput: Record<string, unknown> = {};
-
-          // 1. Include structuredContent if present (MCP spec: structured JSON for LLM)
-          if (output.structuredContent) {
-            cleanOutput.structuredContent = output.structuredContent;
-          }
-
-          // 2. Extract text from content array (MCP spec: for backwards compatibility)
-          if (Array.isArray(output.content)) {
-            const contentTexts = output.content
-              .filter((item: any) => item?.type === 'text' && item?.text)
-              .map((item: any) => item.text);
-
-            if (contentTexts.length > 0) {
-              cleanOutput.text = contentTexts.join('\n');
-            }
-          }
-
-          // Fallback to output.text if content array didn't provide text
-          if (!cleanOutput.text && output.text) {
-            cleanOutput.text = output.text;
-          }
-
-          // If we have structuredContent, return it (preferred by LLM)
-          // Otherwise fall back to text, or a placeholder
-          let outputForModel: unknown;
-          if (cleanOutput.structuredContent) {
-            // LLM can work with structured data directly
-            outputForModel = cleanOutput.structuredContent;
-          } else if (cleanOutput.text) {
-            outputForModel = cleanOutput.text;
-          } else {
-            outputForModel = '[Widget rendered]';
-          }
-
-          return {
-            ...part,
-            output: outputForModel,
-          };
-        }
-      }
-      return part;
-    });
-
-    return {
-      ...message,
-      parts: sanitizedParts,
-    };
-  }) as UIMessage[];
-}
 
 type PreExecutedTool = {
   toolCallId: string;
@@ -1228,24 +1080,30 @@ export class AIService {
       const { getBuiltInTools } = await import('./ai/builtInTools');
       const builtInToolsConfig = await this.getBuiltInToolsConfig();
 
+      const codeModeEnabled = request.codeMode?.enabled === true;
+      const codeModePrompt = codeModeEnabled ? getCodeModeSystemPrompt() : null;
+
       const projectId = projectContext?.projectId;
       let installedSkills: InstalledSkill[] = [];
-      try {
-        installedSkills = await skillsService.listInstalledSkills(
-          projectId
-            ? { mode: 'project-merged', projectId }
-            : { mode: 'global' }
-        );
-        this.logger.aiSdk.debug('Loaded installed skills for agent context', {
-          count: installedSkills.length,
-          projectId,
-          mode: projectId ? 'project-merged' : 'global',
-          ids: installedSkills.map((s) => s.id),
-        });
-      } catch (error) {
-        this.logger.aiSdk.warn('Failed to load installed skills', {
-          error: error instanceof Error ? error.message : String(error),
-        });
+
+      if (codeModeEnabled) {
+        try {
+          installedSkills = await skillsService.listInstalledSkills(
+            projectId
+              ? { mode: 'project-merged', projectId }
+              : { mode: 'global' }
+          );
+          this.logger.aiSdk.debug('Loaded installed skills for agent context', {
+            count: installedSkills.length,
+            projectId,
+            mode: projectId ? 'project-merged' : 'global',
+            ids: installedSkills.map((s) => s.id),
+          });
+        } catch (error) {
+          this.logger.aiSdk.warn('Failed to load installed skills', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       const builtInTools = await getBuiltInTools({
@@ -1428,7 +1286,7 @@ export class AIService {
           builtInToolsConfig.mcpDiscovery,
           projectDescription,
           installedSkills,
-          getCodeModeSystemPrompt()
+          codeModePrompt
         ),
         // Use stopWhen as recommended in AI SDK v5 (not maxSteps)
         // This allows the model to continue generating after tool results
@@ -2177,18 +2035,24 @@ export class AIService {
       const builtInToolsConfig = await this.getBuiltInToolsConfig();
 
       // Load skills by scope (project-merged or global)
+      const singleMsgCodeModeEnabled = request.codeMode?.enabled === true;
+      const singleMsgCodeModePrompt = singleMsgCodeModeEnabled ? getCodeModeSystemPrompt() : null;
+
       const singleMsgProjectId = projectContext?.projectId;
       let singleMsgInstalledSkills: InstalledSkill[] = [];
-      try {
-        singleMsgInstalledSkills = await skillsService.listInstalledSkills(
-          singleMsgProjectId
-            ? { mode: 'project-merged', projectId: singleMsgProjectId }
-            : { mode: 'global' }
-        );
-      } catch (error) {
-        this.logger.aiSdk.warn('Failed to load installed skills for single message', {
-          error: error instanceof Error ? error.message : String(error),
-        });
+
+      if (singleMsgCodeModeEnabled) {
+        try {
+          singleMsgInstalledSkills = await skillsService.listInstalledSkills(
+            singleMsgProjectId
+              ? { mode: 'project-merged', projectId: singleMsgProjectId }
+              : { mode: 'global' }
+          );
+        } catch (error) {
+          this.logger.aiSdk.warn('Failed to load installed skills for single message', {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
       }
 
       // Get built-in tools with skills context
@@ -2215,7 +2079,7 @@ export class AIService {
           builtInToolsConfig.mcpDiscovery,
           projectDescription,
           singleMsgInstalledSkills,
-          getCodeModeSystemPrompt()
+          singleMsgCodeModePrompt
         ),
         stopWhen: stepCountIs(await calculateMaxSteps(Object.keys({ ...singleMsgBuiltInTools, ...tools }).length)),
         providerOptions: await getReasoningProviderOptions(model, undefined, Object.keys({ ...singleMsgBuiltInTools, ...tools }).length > 0),

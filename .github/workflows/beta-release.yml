@@ -143,30 +143,41 @@ jobs:
 
           rm certificate.p12
 
-      - name: Package & Publish Beta (macOS)
-        if: matrix.platform == 'darwin'
+      - name: Build and package application
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          # Notarization env vars needed for electron-forge publish
+          # Only set signing env vars if secrets exist, otherwise build unsigned
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: pnpm run publish
-
-      - name: Package & Publish Beta (Windows)
-        if: matrix.platform == 'win32'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: pnpm run publish
-
-      - name: Package & Publish Beta (Linux)
-        if: matrix.platform == 'linux'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
           FORGE_TARGET: ${{ matrix.target }}
-        run: pnpm run publish
+        run: pnpm run make
+
+      - name: Upload artifacts to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          find out/make -type f \( -name "*.dmg" -o -name "*.zip" -o -name "*.exe" -o -name "*.blockmap" -o -name "*.deb" -o -name "*.rpm" -o -name "*.AppImage" \) \
+            -exec gh release upload ${{ needs.create-release.outputs.tag_name }} {} --clobber \;
 
       - name: Cleanup keychain (macOS)
         if: matrix.platform == 'darwin' && always()
         run: security delete-keychain temp.keychain || true
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [create-release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GH_TOKEN }}
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              draft: false
+            });
+            console.log(`Published release ${{ needs.create-release.outputs.tag_name }}`);

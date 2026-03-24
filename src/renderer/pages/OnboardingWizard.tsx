@@ -469,34 +469,31 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
     }
   };
 
-  const handleAnthropicOAuthSuccess = async () => {
-    console.log('Anthropic OAuth success - configuring provider');
+  const handleSubscriptionOAuthSuccess = async (providerId: 'anthropic' | 'openai') => {
+    console.log('Subscription OAuth success - configuring provider', { providerId });
 
     setValidationStatus('valid');
     setValidationError('');
 
     try {
-      // Update provider with OAuth auth mode (no API key)
-      await updateProvider('anthropic', { authMode: 'oauth', apiKey: undefined });
+      await updateProvider(providerId, { authMode: 'oauth', apiKey: undefined });
+      await setActiveProvider(providerId);
+      await syncProviderModels(providerId);
 
-      // Set as active provider
-      await setActiveProvider('anthropic');
-
-      // Sync models from provider
-      await syncProviderModels('anthropic');
-
-      // Poll for models
       const maxAttempts = 10;
       const pollInterval = 300;
 
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const currentProviders = getModelStoreState().providers;
-        const provider = currentProviders.find((p: any) => p.id === 'anthropic');
+        const provider = currentProviders.find((p: any) => p.id === providerId);
 
         if (provider?.models && provider.models.length > 0) {
           const models = provider.models.filter((m: any) => m.isAvailable);
           setAvailableModels(models);
-          console.log('Anthropic OAuth models loaded:', models.length);
+          console.log('Subscription OAuth models loaded:', {
+            providerId,
+            count: models.length,
+          });
           return;
         }
 
@@ -505,10 +502,9 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
         }
       }
 
-      // Fallback
       loadAvailableModels();
     } catch (error) {
-      console.error('Anthropic OAuth configuration error:', error);
+      console.error('Subscription OAuth configuration error:', error);
       setValidationStatus('invalid');
       setValidationError(
         error instanceof Error ? error.message : 'Unknown error occurred'
@@ -613,7 +609,7 @@ export function OnboardingWizard({ onComplete }: OnboardingWizardProps = {}) {
           onValidate={handleValidateProvider}
           onModelSelect={handleModelSelect}
           onOAuthSuccess={handleOAuthSuccess}
-          onAnthropicOAuthSuccess={handleAnthropicOAuthSuccess}
+          onSubscriptionOAuthSuccess={handleSubscriptionOAuthSuccess}
         />
       )}
       {currentStepName === 'directory' && (

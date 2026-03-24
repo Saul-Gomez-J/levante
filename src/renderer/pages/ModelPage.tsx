@@ -22,9 +22,19 @@ import { Loader2, CheckCircle, XCircle, RefreshCw, Search, Plus } from 'lucide-r
 import { useModelStore } from '@/stores/modelStore';
 import type { ProviderConfig } from '../../types/models';
 import { useTranslation } from 'react-i18next';
-import { OpenRouterConfig, GatewayConfig, LocalConfig, CloudConfig, AnthropicConfig } from './ModelPage/ProviderConfigs';
+import {
+  OpenRouterConfig,
+  GatewayConfig,
+  LocalConfig,
+  CloudConfig,
+  SubscriptionOAuthConfig,
+} from './ModelPage/ProviderConfigs';
 import { ModelList } from './ModelPage/ModelList';
 import { AddInferenceModelDialog } from '@/components/dialogs/AddInferenceModelDialog';
+
+const hasSubscriptionOAuth = (provider: ProviderConfig) =>
+  (provider.type === 'anthropic' || provider.type === 'openai') &&
+  provider.authMode === 'oauth';
 
 const ModelPage = () => {
   const { t } = useTranslation('models');
@@ -91,8 +101,8 @@ const ModelPage = () => {
       case 'local':
         return <LocalConfig provider={provider} />;
       case 'anthropic':
-        return <AnthropicConfig provider={provider} />;
       case 'openai':
+        return <SubscriptionOAuthConfig provider={provider} />;
       case 'google':
       case 'groq':
       case 'xai':
@@ -147,7 +157,7 @@ const ModelPage = () => {
                     <SelectItem key={provider.id} value={provider.id}>
                       <div className="flex items-center gap-2">
                         <span>{provider.name}</span>
-                        {(provider.apiKey || (provider.type === 'anthropic' && provider.authMode === 'oauth')) && (
+                        {(provider.apiKey || hasSubscriptionOAuth(provider)) && (
                           <Badge variant="secondary" className="text-xs">
                             {t('provider_config.configured')}
                           </Badge>
@@ -252,7 +262,7 @@ const ModelPage = () => {
                       Add Inference Model
                     </Button>
                   )}
-                  {activeProvider.modelSource === 'dynamic' && (activeProvider.apiKey || (activeProvider.type === 'anthropic' && activeProvider.authMode === 'oauth') || activeProvider.type === 'openrouter') && (
+                  {activeProvider.modelSource === 'dynamic' && (activeProvider.apiKey || hasSubscriptionOAuth(activeProvider) || activeProvider.type === 'openrouter') && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -275,12 +285,12 @@ const ModelPage = () => {
                   <h3 className="text-lg font-semibold mb-2">{t('models.no_models')}</h3>
                   <p className="text-sm text-muted-foreground mb-4">
                     {activeProvider.modelSource === 'dynamic'
-                      ? (activeProvider.apiKey || (activeProvider.type === 'anthropic' && activeProvider.authMode === 'oauth'))
+                      ? (activeProvider.apiKey || hasSubscriptionOAuth(activeProvider))
                         ? t('models.sync_prompt')
                         : t('models.configure_key')
                       : t('models.user_defined')}
                   </p>
-                  {activeProvider.modelSource === 'dynamic' && (activeProvider.apiKey || (activeProvider.type === 'anthropic' && activeProvider.authMode === 'oauth')) && (
+                  {activeProvider.modelSource === 'dynamic' && (activeProvider.apiKey || hasSubscriptionOAuth(activeProvider)) && (
                     <Button onClick={() => syncProviderModels(activeProvider.id)} disabled={syncing}>
                       <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
                       {t('models.sync_now')}
