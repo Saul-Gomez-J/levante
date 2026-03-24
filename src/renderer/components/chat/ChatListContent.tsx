@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
+import { getRawModelId } from '../../../shared/modelRefs';
 import type { ChatSession, Project } from '../../../types/database';
 
 export interface ChatListContentProps {
@@ -66,9 +67,14 @@ export function ChatListContent({
   const filteredSessions = !searchQuery.trim()
     ? baseSessions
     : baseSessions.filter(
-        (s) =>
-          s.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          s.model.toLowerCase().includes(searchQuery.toLowerCase())
+        (s) => {
+          const q = searchQuery.toLowerCase();
+          return (
+            s.title?.toLowerCase().includes(q) ||
+            s.model.toLowerCase().includes(q) ||
+            getRawModelId(s.model).toLowerCase().includes(q)
+          );
+        }
       );
 
   const groupedSessions = filteredSessions.reduce((groups, session) => {

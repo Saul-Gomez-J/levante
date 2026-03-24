@@ -18,6 +18,7 @@ import { ProjectModal } from '@/components/projects/ProjectModal'
 import { useSkillsStore } from '@/stores/skillsStore'
 import { logger } from '@/services/logger'
 import { modelService } from '@/services/modelService'
+import { loadSelectableModels, resolveStoredModelForCatalog } from '@/lib/selectableModels'
 import { setupMermaidValidationHandler } from '@/services/mermaidValidationService'
 import { useMCPEvents } from '@/hooks/useMCPEvents'
 import { usePreference } from '@/hooks/usePreferences'
@@ -338,15 +339,25 @@ function App() {
       return preferredModelId;
     }
 
-    const models = await modelService.getAvailableModels();
+    const { appMode: currentAppMode, models: currentPlatformModels } = usePlatformStore.getState();
+    const useOtherProvidersResult = await window.levante.preferences.get('useOtherProviders');
+    const useOtherProvidersValue = (useOtherProvidersResult.data as boolean) ?? false;
+
+    const catalog = await loadSelectableModels({
+      appMode: currentAppMode,
+      useOtherProviders: useOtherProvidersValue,
+      platformModels: currentPlatformModels,
+    });
+
     const lastUsedResult = await window.levante.preferences.get('lastUsedModel');
     const lastUsed = lastUsedResult.data as string | undefined;
 
-    if (lastUsed && models.some((m) => m.id === lastUsed)) {
-      return lastUsed;
+    if (lastUsed) {
+      const resolved = resolveStoredModelForCatalog(lastUsed, catalog);
+      if (resolved) return resolved;
     }
 
-    return models[0]?.id;
+    return catalog.availableModels[0]?.id;
   }, []);
 
   const handleNewSessionInProject = async (projectId: string, initialMessage?: string, modelId?: string) => {
