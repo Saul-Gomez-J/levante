@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FolderOpen, ArrowUp, MoreVertical, Trash2 } from 'lucide-react';
 import { ChatSession, Project } from '../../types/database';
-import { modelService } from '@/services/modelService';
 import { ModelSearchableSelect } from '@/components/ai-elements/model-searchable-select';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,7 +12,9 @@ import {
 import { usePreference } from '@/hooks/usePreferences';
 import { usePlatformStore } from '@/stores/platformStore';
 import { useTranslation } from 'react-i18next';
+import { loadSelectableModels, resolveStoredModelForCatalog, formatStoredModelForDisplay } from '@/lib/selectableModels';
 import type { Model } from '../../types/models';
+import type { SelectableModelsResult } from '@/lib/selectableModels';
 
 interface ProjectPageProps {
   project: Project;
@@ -38,11 +39,13 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject, o
   const [input, setInput] = useState('');
 
   const [availableModels, setAvailableModels] = useState<Model[]>([]);
+  const [catalog, setCatalog] = useState<SelectableModelsResult | null>(null);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [lastUsedModel] = usePreference('lastUsedModel');
+  const [useOtherProviders] = usePreference('useOtherProviders');
 
-  const isPlatformMode = usePlatformStore((s) => s.appMode === 'platform');
+  const appMode = usePlatformStore((s) => s.appMode);
   const platformModels = usePlatformStore((s) => s.models);
 
   useEffect(() => {
@@ -60,22 +63,28 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject, o
   useEffect(() => {
     const loadModels = async () => {
       setModelsLoading(true);
-      let models: Model[];
-      if (isPlatformMode) {
-        models = platformModels;
-      } else {
-        models = await modelService.getAvailableModels();
-      }
-      setAvailableModels(models);
-      if (lastUsedModel && models.some((m) => m.id === lastUsedModel)) {
-        setSelectedModel(lastUsedModel);
+      const result = await loadSelectableModels({
+        appMode,
+        useOtherProviders: useOtherProviders ?? false,
+        platformModels,
+      });
+      setAvailableModels(result.availableModels);
+      setCatalog(result);
+
+      if (lastUsedModel) {
+        const resolved = resolveStoredModelForCatalog(lastUsedModel, result);
+        if (resolved) {
+          setSelectedModel(resolved);
+        } else {
+          setSelectedModel('');
+        }
       } else {
         setSelectedModel('');
       }
       setModelsLoading(false);
     };
     loadModels();
-  }, [lastUsedModel, isPlatformMode, platformModels]);
+  }, [lastUsedModel, appMode, platformModels, useOtherProviders]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,7 +176,9 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject, o
                             {session.title || 'Sin título'}
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5 truncate">
-                            {session.model}
+                            {catalog
+                              ? formatStoredModelForDisplay(session.model, catalog)
+                              : session.model}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 mt-0.5">

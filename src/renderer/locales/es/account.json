@@ -4,6 +4,7 @@
   "org_label": "Org: {{orgId}}",
   "manage_plan": "Gestionar plan",
   "log_out": "Cerrar sesión",
+  "use_other_providers_link": "Usar otros proveedores",
   "models_title": "Modelos Disponibles",
   "models_description": "{{count}} modelos incluidos en tu plan",
   "refresh_models": "Actualizar",
@@ -14,5 +15,10 @@
   "model_pricing": "Precio",
   "category_other": "Otros",
   "logout_confirm_title": "¿Cerrar sesión de Levante Platform?",
-  "logout_confirm_description": "Cambiarás al modo manual, donde tendrás que configurar tus propias claves de API (OpenRouter, OpenAI, Anthropic, etc.) para usar modelos de IA. Siempre puedes volver a iniciar sesión desde la página de Modelos."
+  "logout_confirm_description": "Cambiarás al modo manual, donde tendrás que configurar tus propias claves de API (OpenRouter, OpenAI, Anthropic, etc.) para usar modelos de IA. Siempre puedes volver a iniciar sesión desde la página de Modelos.",
+  "other_providers_title": "Otros Proveedores",
+  "other_providers_description": "Habilitar proveedores adicionales junto a Levante Platform.",
+  "other_providers_warning": "Los proveedores externos usan tus propias credenciales y facturación.",
+  "other_providers_toggle": "Habilitar otros proveedores",
+  "other_providers_back": "Volver a la cuenta"
 }

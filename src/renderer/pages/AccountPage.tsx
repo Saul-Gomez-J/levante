@@ -6,9 +6,11 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePlatformStore } from '@/stores/platformStore';
+import { usePreference } from '@/hooks/usePreferences';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
   AlertDialog,
@@ -21,9 +23,11 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
-import { Mail, Building2, RefreshCw, LogOut, Bot, Loader2, ExternalLink, Search } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Mail, Building2, RefreshCw, LogOut, Bot, Loader2, ExternalLink, Search, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { LEVANTE_PLATFORM_URL } from '@/lib/platformConstants';
 import { CATEGORY_DISPLAY_NAMES } from '../../types/modelCategories';
+import { ProviderConfigPanel } from '@/components/providers/ProviderConfigPanel';
 import type { Model } from '../../types/models';
 import type { ModelCategory } from '../../types/modelCategories';
 
@@ -97,7 +101,9 @@ export default function AccountPage() {
   const { t: tc } = useTranslation('common');
   const { t: tChat } = useTranslation('chat');
   const { user, models, isLoading, fetchModels, logout } = usePlatformStore();
+  const [useOtherProviders, setUseOtherProviders] = usePreference('useOtherProviders');
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [showProvidersView, setShowProvidersView] = useState(false);
   const [search, setSearch] = useState('');
 
   const filteredModels = useMemo(() => {
@@ -139,6 +145,54 @@ export default function AccountPage() {
     window.levante.openExternal(LEVANTE_PLATFORM_URL);
   };
 
+  // Providers sub-view
+  if (showProvidersView) {
+    return (
+      <div className="h-full overflow-y-auto">
+        <div className="max-w-4xl mx-auto px-6 pb-10">
+          <div className="py-6">
+            <button
+              onClick={() => setShowProvidersView(false)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {t('other_providers_back')}
+            </button>
+
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-semibold">{t('other_providers_title')}</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {t('other_providers_description')}
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <label htmlFor="other-providers-toggle" className="text-sm">
+                  {t('other_providers_toggle')}
+                </label>
+                <Switch
+                  id="other-providers-toggle"
+                  checked={useOtherProviders ?? false}
+                  onCheckedChange={(checked) => setUseOtherProviders(checked)}
+                />
+              </div>
+            </div>
+
+            {useOtherProviders && (
+              <>
+                <Alert variant="default" className="mb-4">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{t('other_providers_warning')}</AlertDescription>
+                </Alert>
+                <ProviderConfigPanel />
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="max-w-4xl mx-auto px-6 pb-10">
@@ -166,15 +220,23 @@ export default function AccountPage() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 pt-2">
-            <Button variant="outline" size="sm" onClick={handleOpenPlatform}>
-              <ExternalLink className="h-4 w-4 mr-2" />
-              {t('manage_plan')}
-            </Button>
-            <Button variant="destructive" size="sm" onClick={() => setShowLogoutConfirm(true)}>
-              <LogOut className="h-4 w-4 mr-2" />
-              {t('log_out')}
-            </Button>
+          <div className="flex flex-col items-end gap-2 pt-2">
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleOpenPlatform}>
+                <ExternalLink className="h-4 w-4 mr-2" />
+                {t('manage_plan')}
+              </Button>
+              <Button variant="destructive" size="sm" onClick={() => setShowLogoutConfirm(true)}>
+                <LogOut className="h-4 w-4 mr-2" />
+                {t('log_out')}
+              </Button>
+            </div>
+            <button
+              onClick={() => setShowProvidersView(true)}
+              className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+            >
+              {t('use_other_providers_link')}
+            </button>
           </div>
         </div>
 

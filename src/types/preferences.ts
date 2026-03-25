@@ -95,6 +95,8 @@ export interface UIPreferences {
   coworkMode: boolean;
   /** Working directory for Cowork mode (coding tools) */
   coworkModeCwd: string | null;
+  /** Enable other providers alongside Levante Platform in platform mode */
+  useOtherProviders: boolean;
 }
 
 export type PreferenceKey = keyof UIPreferences;
@@ -165,5 +167,6 @@ export const DEFAULT_PREFERENCES: UIPreferences = {
   enableMCP: true,
   enableSkills: true,
   coworkMode: false,
-  coworkModeCwd: null
+  coworkModeCwd: null,
+  useOtherProviders: false
 };

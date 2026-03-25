@@ -930,7 +930,7 @@ const ChatPage = () => {
         // If no session exists, create one and save message for later
         if (!currentSession) {
           // Determine session type based on model's taskType
-          const currentModelInfo = availableModels.find((m) => m.id === model);
+          // Use currentModelInfo already resolved by useModelSelection (handles qualified refs)
           const taskType = currentModelInfo?.taskType;
           const isInferenceModel = taskType && taskType !== 'chat' && taskType !== 'image-text-to-text';
           const sessionType = isInferenceModel ? 'inference' : 'chat';
