@@ -9,6 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ChatModeTabs } from '@/components/chat/ChatModeTabs';
 import { usePreference } from '@/hooks/usePreferences';
 import { usePlatformStore } from '@/stores/platformStore';
 import { useTranslation } from 'react-i18next';
@@ -44,6 +45,7 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject, o
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [lastUsedModel] = usePreference('lastUsedModel');
   const [useOtherProviders] = usePreference('useOtherProviders');
+  const [coworkMode, setCoworkMode] = usePreference('coworkMode');
 
   const appMode = usePlatformStore((s) => s.appMode);
   const platformModels = usePlatformStore((s) => s.models);
@@ -110,6 +112,10 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject, o
 
         {/* Chat input */}
         <div className="mb-8">
+          <ChatModeTabs
+            coworkMode={coworkMode ?? false}
+            onCoworkModeChange={setCoworkMode}
+          />
           <form onSubmit={handleSubmit}>
             <div className="rounded-2xl border bg-muted/50 focus-within:ring-1 focus-within:ring-ring">
               <textarea
