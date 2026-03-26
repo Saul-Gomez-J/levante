@@ -228,6 +228,11 @@ function MainLayoutContent({ children, title, currentPage, onPageChange, sidebar
           {/* Center title */}
           <div className={`flex-1 text-center ${!open ? '' : 'ml-16'}`}>
             <h1 className="text-sm font-medium text-muted-foreground">{title}</h1>
+            {open && selectedProjectName && (
+              <p className="text-xs text-muted-foreground/60 leading-none mt-0.5">
+                {selectedProjectName}
+              </p>
+            )}
           </div>
 
           {/* Right side spacer to balance layout */}
