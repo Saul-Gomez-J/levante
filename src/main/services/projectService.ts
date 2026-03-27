@@ -204,6 +204,51 @@ class ProjectService {
     }
   }
 
+  async addFilesToProject(projectId: string, filePaths: string[]): Promise<DatabaseResult<string[]>> {
+    try {
+      const projectResult = await this.getProject(projectId);
+      if (!projectResult.success || !projectResult.data) {
+        return { data: [], success: false, error: 'Project not found' };
+      }
+
+      const project = projectResult.data;
+      if (!project.cwd) {
+        return { data: [], success: false, error: 'Project has no working directory' };
+      }
+
+      await fs.mkdir(project.cwd, { recursive: true });
+
+      const copiedFiles: string[] = [];
+      for (const filePath of filePaths) {
+        const fileName = path.basename(filePath);
+        const destPath = path.join(project.cwd, fileName);
+        await fs.copyFile(filePath, destPath);
+        copiedFiles.push(destPath);
+      }
+
+      this.logger.database.info('Files added to project', {
+        projectId,
+        count: copiedFiles.length,
+      });
+
+      await databaseService.execute(
+        'UPDATE projects SET updated_at = ? WHERE id = ?',
+        [Date.now() as InValue, projectId as InValue]
+      );
+
+      return { data: copiedFiles, success: true };
+    } catch (error) {
+      this.logger.database.error('Failed to add files to project', {
+        error: error instanceof Error ? error.message : error,
+      });
+      return {
+        data: [],
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
   async getProjectSessions(projectId: string): Promise<DatabaseResult<ChatSession[]>> {
     try {
       const result = await databaseService.execute(

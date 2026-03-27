@@ -880,6 +880,7 @@ export interface LevanteAPI {
     update: (input: UpdateProjectInput) => Promise<DatabaseResult<Project>>;
     delete: (id: string) => Promise<DatabaseResult<boolean>>;
     getSessions: (projectId: string) => Promise<DatabaseResult<ChatSession[]>>;
+    addFiles: (projectId: string) => Promise<DatabaseResult<string[]>>;
   };
 
   // Platform API
