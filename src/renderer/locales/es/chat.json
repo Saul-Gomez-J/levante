@@ -97,11 +97,22 @@
       "show_hidden": "Mostrar archivos ocultos",
       "hide_hidden": "Ocultar archivos ocultos",
       "refresh": "Actualizar",
+      "add_files": "Añadir archivos",
       "empty_directory": "Directorio vacío",
       "read_dir_error": "No se pudo leer el directorio",
       "searching": "Buscando...",
       "no_search_results": "No se encontraron archivos"
     }
+  },
+  "project_page": {
+    "new_chat_placeholder": "Nuevo chat en {{name}}",
+    "select_model": "Selecciona un modelo",
+    "chats_tab": "Chats",
+    "loading": "Cargando...",
+    "no_conversations": "No hay conversaciones aún. ¡Empieza una nueva!",
+    "untitled": "Sin título",
+    "today": "Hoy",
+    "yesterday": "Ayer"
   },
   "tools_menu": {
     "button_label": "Configuración",

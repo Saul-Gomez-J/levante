@@ -97,11 +97,22 @@
       "show_hidden": "Show hidden files",
       "hide_hidden": "Hide hidden files",
       "refresh": "Refresh",
+      "add_files": "Add files",
       "empty_directory": "Empty directory",
       "read_dir_error": "Failed to read directory",
       "searching": "Searching...",
       "no_search_results": "No files found"
     }
+  },
+  "project_page": {
+    "new_chat_placeholder": "New chat in {{name}}",
+    "select_model": "Select a model",
+    "chats_tab": "Chats",
+    "loading": "Loading...",
+    "no_conversations": "No conversations yet. Start a new one!",
+    "untitled": "Untitled",
+    "today": "Today",
+    "yesterday": "Yesterday"
   },
   "tools_menu": {
     "button_label": "Settings",

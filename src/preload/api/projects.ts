@@ -20,4 +20,6 @@ export const projectsApi = {
     ipcRenderer.invoke('levante/projects/delete', id),
   getSessions: (projectId: string): Promise<DatabaseResult<ChatSession[]>> =>
     ipcRenderer.invoke('levante/projects/sessions', projectId),
+  addFiles: (projectId: string): Promise<DatabaseResult<string[]>> =>
+    ipcRenderer.invoke('levante/projects/addFiles', projectId),
 };
