@@ -8,8 +8,15 @@ import type { SkillBundleResponse } from '../../types/skills';
 
 const logger = getLogger();
 
-const DEFAULT_SKILL_ID = 'custom/skill-creator';
-const DEFAULT_SKILL_NAME = 'skill-creator';
+interface DefaultSkillEntry {
+  id: string;
+  name: string;
+}
+
+const DEFAULT_SKILLS: DefaultSkillEntry[] = [
+  { id: 'custom/skill-creator', name: 'skill-creator' },
+  { id: 'custom/pdf', name: 'pdf' },
+];
 
 function getBundledSkillsRoot(): string {
   if (app.isPackaged) {
@@ -98,9 +105,9 @@ async function collectFiles(
   return files;
 }
 
-async function getInstalledVersion(): Promise<string | null> {
+async function getInstalledVersion(skillName: string): Promise<string | null> {
   const globalSkillsDir = directoryService.getSubdirPath('skills');
-  const skillMdPath = path.join(globalSkillsDir, DEFAULT_SKILL_NAME, 'skill.md');
+  const skillMdPath = path.join(globalSkillsDir, skillName, 'skill.md');
 
   try {
     const raw = await fs.readFile(skillMdPath, 'utf-8');
@@ -111,19 +118,22 @@ async function getInstalledVersion(): Promise<string | null> {
   }
 }
 
-async function buildBundledSkillBundle(skillDir: string): Promise<SkillBundleResponse> {
+async function buildBundledSkillBundle(
+  skillDir: string,
+  entry: DefaultSkillEntry
+): Promise<SkillBundleResponse> {
   const manifestPath = path.join(skillDir, 'SKILL.md');
   const raw = await fs.readFile(manifestPath, 'utf-8');
   const { meta, content } = parseFrontmatter(raw);
 
   const version = meta['version']?.trim();
   if (!version) {
-    throw new Error('Bundled skill is missing version');
+    throw new Error(`Bundled skill "${entry.name}" is missing version`);
   }
 
   return {
-    id: DEFAULT_SKILL_ID,
-    name: meta['name'] ?? DEFAULT_SKILL_NAME,
+    id: entry.id,
+    name: meta['name'] ?? entry.name,
     description: meta['description'] ?? '',
     category: 'custom',
     version,
@@ -136,21 +146,21 @@ async function buildBundledSkillBundle(skillDir: string): Promise<SkillBundleRes
   };
 }
 
-export async function seedDefaultSkills(): Promise<void> {
-  const skillDir = getBundledSkillDir(DEFAULT_SKILL_NAME);
+async function seedSkill(entry: DefaultSkillEntry): Promise<void> {
+  const skillDir = getBundledSkillDir(entry.name);
 
   try {
     await fs.access(skillDir);
   } catch {
     logger.core.warn('Bundled default skill not found, skipping seeding', {
       skillDir,
-      skillId: DEFAULT_SKILL_ID,
+      skillId: entry.id,
     });
     return;
   }
 
-  const bundle = await buildBundledSkillBundle(skillDir);
-  const installedVersion = await getInstalledVersion();
+  const bundle = await buildBundledSkillBundle(skillDir, entry);
+  const installedVersion = await getInstalledVersion(entry.name);
 
   if (installedVersion && compareVersions(bundle.version!, installedVersion) <= 0) {
     logger.core.debug('Default skill already installed at same or newer version', {
@@ -162,7 +172,7 @@ export async function seedDefaultSkills(): Promise<void> {
   }
 
   if (installedVersion) {
-    await skillsService.uninstallSkill(DEFAULT_SKILL_ID, { scope: 'global' });
+    await skillsService.uninstallSkill(entry.id, { scope: 'global' });
   }
 
   await skillsService.installSkill(bundle, { scope: 'global' });
@@ -174,4 +184,17 @@ export async function seedDefaultSkills(): Promise<void> {
     filesCount: Object.keys(bundle.files).length,
     replacedExistingInstallation: installedVersion !== null,
   });
+}
+
+export async function seedDefaultSkills(): Promise<void> {
+  for (const entry of DEFAULT_SKILLS) {
+    try {
+      await seedSkill(entry);
+    } catch (error) {
+      logger.core.error('Failed to seed default skill', {
+        skillId: entry.id,
+        error: error instanceof Error ? error.message : error,
+      });
+    }
+  }
 }

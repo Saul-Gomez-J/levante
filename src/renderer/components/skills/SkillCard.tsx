@@ -6,7 +6,7 @@ import { Download, Trash2, ExternalLink, Globe, FolderOpen, FolderPlus } from 'l
 import { useTranslation } from 'react-i18next'
 import type { SkillDescriptor, InstalledSkill } from '../../../types/skills'
 
-const DEFAULT_SKILL_IDS = new Set(['custom/skill-creator'])
+const DEFAULT_SKILL_IDS = new Set(['custom/skill-creator', 'custom/pdf'])
 
 interface SkillCardProps {
   skill: SkillDescriptor
