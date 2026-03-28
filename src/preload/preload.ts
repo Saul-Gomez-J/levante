@@ -1016,6 +1016,16 @@ export interface LevanteAPI {
       userInvocable: boolean,
       options: import('../types/skills').SetUserInvocableOptions
     ) => Promise<import('../types/skills').IPCResult<import('../types/skills').InstalledSkill>>;
+    installFromZip: (
+      zipPath: string,
+      options?: import('../types/skills').InstallSkillOptions
+    ) => Promise<import('../types/skills').IPCResult<import('../types/skills').InstalledSkill>>;
+    installFromZipBuffer: (
+      buffer: ArrayBuffer,
+      fileName: string,
+      options?: import('../types/skills').InstallSkillOptions
+    ) => Promise<import('../types/skills').IPCResult<import('../types/skills').InstalledSkill>>;
+    selectZipFile: () => Promise<import('../types/skills').IPCResult<string | null>>;
   };
 }
 

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { getLogger } from '../services/logging';
 import { skillsService } from '../services/skillsService';
 import type {
@@ -82,6 +82,85 @@ export function setupSkillsHandlers(): void {
       });
       return fail(error);
     }
+  });
+
+  ipcMain.removeHandler('levante/skills:installFromZip');
+  ipcMain.handle('levante/skills:installFromZip', async (_, payload: {
+    zipPath: string;
+    options?: InstallSkillOptions;
+  }) => {
+    if (!payload?.zipPath) {
+      return fail(new Error('zipPath is required'));
+    }
+
+    if (payload.options?.scope === 'project' && !payload.options.projectId) {
+      return fail(new Error('projectId is required when scope is "project"'));
+    }
+
+    try {
+      const installed = await skillsService.installFromZip(payload.zipPath, payload.options);
+      return ok(installed);
+    } catch (error) {
+      logger.ipc.error('Failed to install skill from zip', {
+        zipPath: payload.zipPath,
+        scope: payload.options?.scope,
+        projectId: payload.options?.projectId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return fail(error);
+    }
+  });
+
+  ipcMain.removeHandler('levante/skills:installFromZipBuffer');
+  ipcMain.handle('levante/skills:installFromZipBuffer', async (_, payload: {
+    buffer: ArrayBuffer;
+    fileName: string;
+    options?: InstallSkillOptions;
+  }) => {
+    if (!payload?.buffer) {
+      return fail(new Error('buffer is required'));
+    }
+
+    const os = await import('node:os');
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    const tempPath = path.join(os.tmpdir(), `levante-drop-${Date.now()}-${payload.fileName || 'skill.zip'}`);
+
+    try {
+      await fs.writeFile(tempPath, Buffer.from(payload.buffer));
+      const installed = await skillsService.installFromZip(tempPath, payload.options);
+      return ok(installed);
+    } catch (error) {
+      logger.ipc.error('Failed to install skill from zip buffer', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return fail(error);
+    } finally {
+      await import('node:fs/promises').then((f) => f.rm(tempPath, { force: true }).catch(() => {}));
+    }
+  });
+
+  ipcMain.removeHandler('levante/skills:selectZipFile');
+  ipcMain.handle('levante/skills:selectZipFile', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+
+    const dialogOptions: Electron.OpenDialogOptions = {
+      title: 'Select Skill ZIP file',
+      buttonLabel: 'Select',
+      filters: [{ name: 'ZIP Archives', extensions: ['zip'] }],
+      properties: ['openFile'],
+    };
+
+    const result =
+      win && !win.isDestroyed()
+        ? await dialog.showOpenDialog(win, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions);
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return ok(null);
+    }
+
+    return ok(result.filePaths[0]);
   });
 
   ipcMain.removeHandler('levante/skills:uninstall');

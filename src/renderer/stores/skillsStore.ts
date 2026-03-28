@@ -28,6 +28,9 @@ interface SkillsStore {
   loadInstalledForChat: (projectId?: string | null) => Promise<void>;
   installSkill: (skill: SkillDescriptor, options?: InstallSkillOptions) => Promise<void>;
   uninstallSkill: (skillId: string, options: UninstallSkillOptions) => Promise<void>;
+  installFromZip: (zipPath: string, options?: InstallSkillOptions) => Promise<InstalledSkill>;
+  installFromZipBuffer: (buffer: ArrayBuffer, fileName: string, options?: InstallSkillOptions) => Promise<InstalledSkill>;
+  selectZipFile: () => Promise<string | null>;
   toggleUserInvocable: (skill: InstalledSkill, enabled: boolean) => Promise<void>;
 
   // Legacy compatibility: checks if installed globally
@@ -115,6 +118,61 @@ export const useSkillsStore = create<SkillsStore>((set, get) => ({
       return;
     }
     await get().loadInstalled({ mode: 'global' });
+  },
+
+  installFromZip: async (zipPath: string, options?: InstallSkillOptions) => {
+    const result = await window.levante.skills.installFromZip(zipPath, options);
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+
+    const installed = result.data;
+
+    set((state) => {
+      const already = state.installedSkills.some((s) => s.scopedKey === installed.scopedKey);
+      const nextList = already
+        ? state.installedSkills.map((s) => (s.scopedKey === installed.scopedKey ? installed : s))
+        : [...state.installedSkills, installed];
+
+      return {
+        installedSkills: nextList,
+        installedScopedKeys: new Set(nextList.map((s) => s.scopedKey)),
+      };
+    });
+
+    return installed;
+  },
+
+  installFromZipBuffer: async (buffer: ArrayBuffer, fileName: string, options?: InstallSkillOptions) => {
+    const result = await window.levante.skills.installFromZipBuffer(buffer, fileName, options);
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+
+    const installed = result.data;
+
+    set((state) => {
+      const already = state.installedSkills.some((s) => s.scopedKey === installed.scopedKey);
+      const nextList = already
+        ? state.installedSkills.map((s) => (s.scopedKey === installed.scopedKey ? installed : s))
+        : [...state.installedSkills, installed];
+
+      return {
+        installedSkills: nextList,
+        installedScopedKeys: new Set(nextList.map((s) => s.scopedKey)),
+      };
+    });
+
+    return installed;
+  },
+
+  selectZipFile: async () => {
+    const result = await window.levante.skills.selectZipFile();
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+
+    return result.data;
   },
 
   toggleUserInvocable: async (skill: InstalledSkill, enabled: boolean) => {

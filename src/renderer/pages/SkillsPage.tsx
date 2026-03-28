@@ -3,13 +3,15 @@ import { Input } from '@/components/ui/input'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
-import { Search, Globe, FolderOpen } from 'lucide-react'
+import { Search, Globe, FolderOpen, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { SkillCard } from '@/components/skills/SkillCard'
 import { SkillCategoryFilter } from '@/components/skills/SkillCategoryFilter'
 import { SkillDetailsModal } from '@/components/skills/SkillDetailsModal'
 import { SkillInstallScopeModal } from '@/components/skills/SkillInstallScopeModal'
 import { SkillUninstallScopeModal } from '@/components/skills/SkillUninstallScopeModal'
+import { CustomSkillImportModal } from '@/components/skills/CustomSkillImportModal'
+import { useTranslation } from 'react-i18next'
 import { useSkillsStore } from '@/stores/skillsStore'
 import { useProjectStore } from '@/stores/projectStore'
 import type { SkillDescriptor, InstallSkillOptions, UninstallSkillOptions } from '../../types/skills'
@@ -35,9 +37,11 @@ const SkillsPage = ({ installed }: SkillsPageProps) => {
     uninstallSkill,
   } = useSkillsStore()
 
+  const { t } = useTranslation('chat')
   const { projects, loadProjects } = useProjectStore()
 
   const [searchQuery, setSearchQuery] = useState('')
+  const [customImportOpen, setCustomImportOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null)
   const [selectedSkill, setSelectedSkill] = useState<SkillDescriptor | null>(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -62,10 +66,42 @@ const SkillsPage = ({ installed }: SkillsPageProps) => {
     loadProjects()
   }, [loadCatalog, loadCategories, loadInstalled, loadProjects])
 
+  const { installedSkills } = useSkillsStore()
+
+  // In installed view, merge custom skills (not in catalog) into the source list
+  const sourceSkills = useMemo((): SkillDescriptor[] => {
+    if (!installed) return catalog
+
+    const catalogIds = new Set(catalog.map((s) => s.id))
+    const customDescriptors: SkillDescriptor[] = installedSkills
+      .filter((s) => !catalogIds.has(s.id))
+      .reduce<SkillDescriptor[]>((acc, s) => {
+        // Dedupe by id (multiple scoped instances of the same skill)
+        if (!acc.some((d) => d.id === s.id)) {
+          acc.push({
+            id: s.id,
+            name: s.name,
+            description: s.description ?? '',
+            category: s.category ?? 'custom',
+            author: s.author,
+            version: s.version,
+            license: s.license,
+            allowedTools: s.allowedTools,
+            model: s.model,
+            userInvocable: s.userInvocable ?? undefined,
+            content: s.content ?? '',
+          })
+        }
+        return acc
+      }, [])
+
+    return [...catalog, ...customDescriptors]
+  }, [catalog, installedSkills, installed])
+
   const filteredSkills = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
 
-    return catalog.filter((skill) => {
+    return sourceSkills.filter((skill) => {
       // In installed view, only show skills that are installed somewhere
       if (installed && !isInstalledAnywhere(skill.id)) return false
 
@@ -91,7 +127,7 @@ const SkillsPage = ({ installed }: SkillsPageProps) => {
         skill.tags?.some((tag) => tag.toLowerCase().includes(q))
       )
     })
-  }, [catalog, searchQuery, selectedCategory, scopeFilter, getInstalledBySkillId, isInstalledAnywhere, installed])
+  }, [sourceSkills, searchQuery, selectedCategory, scopeFilter, getInstalledBySkillId, isInstalledAnywhere, installed])
 
   const handleInstall = async (skill: SkillDescriptor) => {
     if (projectsWithCwd.length > 0) {
@@ -174,7 +210,7 @@ const SkillsPage = ({ installed }: SkillsPageProps) => {
   }
 
   const uninstallModalSkill = uninstallSkillId
-    ? catalog.find((s) => s.id === uninstallSkillId) ?? null
+    ? sourceSkills.find((s) => s.id === uninstallSkillId) ?? null
     : null
   const uninstallModalInstances = uninstallSkillId ? getInstalledBySkillId(uninstallSkillId) : []
 
@@ -182,9 +218,22 @@ const SkillsPage = ({ installed }: SkillsPageProps) => {
     <div className="max-w-4xl mx-auto space-y-6 px-4 py-6">
       {/* Header */}
       <div className="space-y-4">
-        <h1 className="text-3xl font-bold">
-          {installed ? 'Installed Skills' : 'Skills Store'}
-        </h1>
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold">
+            {installed ? 'Installed Skills' : 'Skills Store'}
+          </h1>
+          {installed && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setCustomImportOpen(true)}
+            >
+              <Plus className="h-4 w-4" />
+              {t('tools_menu.skills.custom_import.button')}
+            </Button>
+          )}
+        </div>
 
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -236,6 +285,7 @@ const SkillsPage = ({ installed }: SkillsPageProps) => {
             ))}
           </div>
         )}
+
       </div>
 
       {/* Content */}
@@ -302,6 +352,11 @@ const SkillsPage = ({ installed }: SkillsPageProps) => {
           onCancel={() => setUninstallSkillId(null)}
         />
       )}
+
+      <CustomSkillImportModal
+        open={customImportOpen}
+        onClose={() => setCustomImportOpen(false)}
+      />
     </div>
   )
 }

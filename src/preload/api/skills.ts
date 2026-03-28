@@ -39,4 +39,20 @@ export const skillsApi = {
     options: SetUserInvocableOptions
   ): Promise<IPCResult<InstalledSkill>> =>
     ipcRenderer.invoke('levante/skills:setUserInvocable', { skillId, userInvocable, options }),
+
+  installFromZip: (
+    zipPath: string,
+    options?: InstallSkillOptions
+  ): Promise<IPCResult<InstalledSkill>> =>
+    ipcRenderer.invoke('levante/skills:installFromZip', { zipPath, options }),
+
+  installFromZipBuffer: (
+    buffer: ArrayBuffer,
+    fileName: string,
+    options?: InstallSkillOptions
+  ): Promise<IPCResult<InstalledSkill>> =>
+    ipcRenderer.invoke('levante/skills:installFromZipBuffer', { buffer, fileName, options }),
+
+  selectZipFile: (): Promise<IPCResult<string | null>> =>
+    ipcRenderer.invoke('levante/skills:selectZipFile'),
 };
