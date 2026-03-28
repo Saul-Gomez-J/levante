@@ -148,6 +148,9 @@ module.exports = {
   },
 
   packagerConfig: {
+    extraResource: [
+      './resources/default-skills'
+    ],
     asar: {
       unpack: '**/@libsql/**/*.node'
     },

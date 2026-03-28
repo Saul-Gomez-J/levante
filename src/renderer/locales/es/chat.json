@@ -160,7 +160,22 @@
       "scope_global": "global",
       "scope_project": "proyecto",
       "requires_cowork": "Las skills solo están disponibles en modo Cowork",
-      "requires_cowork_directory": "Las skills requieren una carpeta de trabajo en modo Cowork"
+      "requires_cowork_directory": "Las skills requieren una carpeta de trabajo en modo Cowork",
+      "default_skill_tooltip": "Esta es una skill integrada y no se puede eliminar. Puedes desactivarla si no la quieres en un chat.",
+      "custom_import": {
+        "button": "Añadir Personalizado",
+        "title": "Importar Skill Personalizado",
+        "description": "Importa una skill desde un archivo .zip que contiene un manifiesto SKILL.md.",
+        "drop_zone": "Arrastra un archivo .zip aquí, o haz clic para buscar",
+        "browse": "Buscar Archivo",
+        "scope_label": "Ámbito de instalación",
+        "scope_global_desc": "Disponible en todos los chats",
+        "install_button": "Instalar Skill",
+        "success": "Skill \"{{name}}\" instalada correctamente",
+        "error": "Error al instalar la skill: {{message}}",
+        "invalid_file_type": "Solo se aceptan archivos .zip",
+        "missing_path": "No se pudo leer la ruta local del archivo arrastrado"
+      }
     },
     "enabled": "Habilitados",
     "no_enabled_servers": "No hay servidores habilitados",

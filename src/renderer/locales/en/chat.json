@@ -160,7 +160,22 @@
       "scope_global": "global",
       "scope_project": "project",
       "requires_cowork": "Skills are only available in Cowork mode",
-      "requires_cowork_directory": "Skills require a working directory in Cowork mode"
+      "requires_cowork_directory": "Skills require a working directory in Cowork mode",
+      "default_skill_tooltip": "This is a built-in skill and cannot be removed. You can disable it if you don't want it in a chat.",
+      "custom_import": {
+        "button": "Add Custom",
+        "title": "Import Custom Skill",
+        "description": "Import a skill from a .zip file containing a SKILL.md manifest.",
+        "drop_zone": "Drag & drop a .zip file here, or click to browse",
+        "browse": "Browse Files",
+        "scope_label": "Install scope",
+        "scope_global_desc": "Available in all chats",
+        "install_button": "Install Skill",
+        "success": "Skill \"{{name}}\" installed successfully",
+        "error": "Failed to install skill: {{message}}",
+        "invalid_file_type": "Only .zip files are accepted",
+        "missing_path": "Could not read the local file path for the dropped file"
+      }
     },
     "enabled": "Enabled",
     "no_enabled_servers": "No enabled servers",

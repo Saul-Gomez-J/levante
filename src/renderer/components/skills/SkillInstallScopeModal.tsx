@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Label } from '@/components/ui/label'
+import { formatPathTail } from '@/lib/utils'
 import { Globe, FolderOpen } from 'lucide-react'
 import { useState } from 'react'
 import type { InstallSkillOptions } from '../../../types/skills'
@@ -69,11 +70,13 @@ export function SkillInstallScopeModal({
               onClick={() => setSelectedValue(project.id)}
             >
               <RadioGroupItem value={project.id} id={`scope-${project.id}`} />
-              <Label htmlFor={`scope-${project.id}`} className="flex items-center gap-2 cursor-pointer flex-1">
+              <Label htmlFor={`scope-${project.id}`} className="flex min-w-0 items-center gap-2 cursor-pointer flex-1">
                 <FolderOpen className="h-4 w-4 text-muted-foreground" />
-                <div>
+                <div className="min-w-0">
                   <div className="font-medium text-sm">{project.name}</div>
-                  <div className="text-xs text-muted-foreground truncate max-w-[200px]">{project.cwd}</div>
+                  <div className="truncate text-xs text-muted-foreground" title={project.cwd ?? undefined}>
+                    {formatPathTail(project.cwd ?? '', 2)}
+                  </div>
                 </div>
               </Label>
             </div>
