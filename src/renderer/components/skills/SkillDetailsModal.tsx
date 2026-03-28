@@ -16,7 +16,7 @@ import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 import type { SkillDescriptor, InstallSkillOptions, UninstallSkillOptions } from '../../../types/skills'
 
-const DEFAULT_SKILL_IDS = new Set(['custom/skill-creator'])
+const DEFAULT_SKILL_IDS = new Set(['custom/skill-creator', 'custom/pdf'])
 import { useSkillsStore } from '@/stores/skillsStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { SkillInstallScopeModal } from './SkillInstallScopeModal'
