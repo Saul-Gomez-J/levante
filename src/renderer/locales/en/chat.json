@@ -161,6 +161,7 @@
       "scope_project": "project",
       "requires_cowork": "Skills are only available in Cowork mode",
       "requires_cowork_directory": "Skills require a working directory in Cowork mode",
+      "default_skill_tooltip": "This is a built-in skill and cannot be removed. You can disable it if you don't want it in a chat.",
       "custom_import": {
         "button": "Add Custom",
         "title": "Import Custom Skill",
