@@ -165,15 +165,15 @@
       "custom_import": {
         "button": "Añadir Personalizado",
         "title": "Importar Skill Personalizado",
-        "description": "Importa una skill desde un archivo .zip que contiene un manifiesto SKILL.md.",
-        "drop_zone": "Arrastra un archivo .zip aquí, o haz clic para buscar",
+        "description": "Importa una skill desde un archivo .zip o .skill que contiene un manifiesto SKILL.md.",
+        "drop_zone": "Arrastra un archivo .zip o .skill aquí, o haz clic para buscar",
         "browse": "Buscar Archivo",
         "scope_label": "Ámbito de instalación",
         "scope_global_desc": "Disponible en todos los chats",
         "install_button": "Instalar Skill",
         "success": "Skill \"{{name}}\" instalada correctamente",
         "error": "Error al instalar la skill: {{message}}",
-        "invalid_file_type": "Solo se aceptan archivos .zip",
+        "invalid_file_type": "Solo se aceptan archivos .zip y .skill",
         "missing_path": "No se pudo leer la ruta local del archivo arrastrado"
       }
     },
@@ -181,6 +181,12 @@
     "no_enabled_servers": "No hay servidores habilitados",
     "disabled_servers_info": "Activa para habilitar",
     "no_disabled_servers": "No hay servidores deshabilitados"
+  },
+  "present_files": {
+    "install_skill": "Copiar a tus habilidades",
+    "open": "Abrir",
+    "show_in_folder": "Mostrar en carpeta",
+    "missing": "El archivo ya no existe"
   },
   "paid_model_chat_warning": {
     "title": "Aviso sobre Modelo de Pago",

@@ -353,6 +353,38 @@ describe('SkillsService', () => {
       ).resolves.toBe('Use bullet points');
     });
 
+    it('installs a wrapped custom skill .skill package globally', async () => {
+      const skillPath = path.join(os.tmpdir(), `lead-summary-${Date.now()}.skill`);
+      await fs.writeFile(skillPath, 'dummy skill content', 'utf-8');
+
+      mockExtractZip.mockImplementation(async (_zipPath: string, options: { dir: string }) => {
+        const root = path.join(options.dir, 'lead-summary');
+        await fs.mkdir(path.join(root, 'rules'), { recursive: true });
+        await fs.writeFile(
+          path.join(root, 'SKILL.md'),
+          [
+            '---',
+            'name: lead-summary',
+            'description: Summarize leads',
+            '---',
+            '',
+            '# Lead Summary',
+          ].join('\n'),
+          'utf-8'
+        );
+      });
+
+      const result = await service.installFromZip(skillPath, { scope: 'global' });
+      expect(result.name).toBe('lead-summary');
+      expect(result.scope).toBe('global');
+    });
+
+    it('rejects unsupported file extensions', async () => {
+      await expect(
+        service.installFromZip('/tmp/not-a-skill.txt', { scope: 'global' })
+      ).rejects.toThrow('Only .zip and .skill files are supported');
+    });
+
     it('fails when the zip does not contain a manifest', async () => {
       const zipPath = path.join(os.tmpdir(), `invalid-skill-${Date.now()}.zip`);
       await fs.writeFile(zipPath, 'dummy zip content', 'utf-8');

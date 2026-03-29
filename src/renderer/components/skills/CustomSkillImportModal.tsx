@@ -66,7 +66,8 @@ export function CustomSkillImportModal({ open, onClose }: CustomSkillImportModal
     const file = e.dataTransfer.files?.[0]
     if (!file) return
 
-    if (!file.name.toLowerCase().endsWith('.zip')) {
+    const lowerName = file.name.toLowerCase()
+    if (!lowerName.endsWith('.zip') && !lowerName.endsWith('.skill')) {
       toast.error(t('tools_menu.skills.custom_import.invalid_file_type'))
       return
     }
