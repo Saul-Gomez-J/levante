@@ -165,15 +165,15 @@
       "custom_import": {
         "button": "Add Custom",
         "title": "Import Custom Skill",
-        "description": "Import a skill from a .zip file containing a SKILL.md manifest.",
-        "drop_zone": "Drag & drop a .zip file here, or click to browse",
+        "description": "Import a skill from a .zip or .skill file containing a SKILL.md manifest.",
+        "drop_zone": "Drag & drop a .zip or .skill file here, or click to browse",
         "browse": "Browse Files",
         "scope_label": "Install scope",
         "scope_global_desc": "Available in all chats",
         "install_button": "Install Skill",
         "success": "Skill \"{{name}}\" installed successfully",
         "error": "Failed to install skill: {{message}}",
-        "invalid_file_type": "Only .zip files are accepted",
+        "invalid_file_type": "Only .zip and .skill files are accepted",
         "missing_path": "Could not read the local file path for the dropped file"
       }
     },
@@ -181,6 +181,12 @@
     "no_enabled_servers": "No enabled servers",
     "disabled_servers_info": "Toggle to enable",
     "no_disabled_servers": "No disabled servers"
+  },
+  "present_files": {
+    "install_skill": "Copy to your skills",
+    "open": "Open",
+    "show_in_folder": "Show in folder",
+    "missing": "File no longer exists"
   },
   "paid_model_chat_warning": {
     "title": "Paid Model Notice",

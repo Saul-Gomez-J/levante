@@ -221,7 +221,11 @@ class FileSystemService {
   }
 
   async readFile(filePath: string, options?: ReadFileOptions): Promise<FileContent> {
-    const resolvedPath = this.validatePath(filePath);
+    const resolvedPath = path.resolve(filePath);
+
+    if (!existsSync(resolvedPath)) {
+      throw new Error(`File not found: ${resolvedPath}`);
+    }
     const maxSize = options?.maxSize ?? MAX_FILE_SIZE;
     const encoding = options?.encoding ?? 'utf-8';
 

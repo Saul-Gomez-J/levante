@@ -145,9 +145,9 @@ export function setupSkillsHandlers(): void {
     const win = BrowserWindow.fromWebContents(event.sender);
 
     const dialogOptions: Electron.OpenDialogOptions = {
-      title: 'Select Skill ZIP file',
+      title: 'Select Skill Package',
       buttonLabel: 'Select',
-      filters: [{ name: 'ZIP Archives', extensions: ['zip'] }],
+      filters: [{ name: 'Skill Packages', extensions: ['zip', 'skill'] }],
       properties: ['openFile'],
     };
 

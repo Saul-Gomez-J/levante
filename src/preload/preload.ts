@@ -72,6 +72,7 @@ import { subscriptionOAuthApi } from "./api/subscriptionOAuth";
 import { filesystemApi } from "./api/filesystem";
 import { compactionApi } from "./api/compaction";
 import { contextBudgetApi } from "./api/contextBudget";
+import { shellApi } from "./api/shell";
 
 // Re-export types for backwards compatibility
 export type {
@@ -1002,6 +1003,11 @@ export interface LevanteAPI {
     }>;
   };
 
+  // Shell API
+  shell: {
+    showItemInFolder: (path: string) => void;
+  };
+
   // Skills API
   skills: {
     getCatalog: () => Promise<import('../types/skills').IPCResult<import('../types/skills').SkillsCatalogResponse>>;
@@ -1104,6 +1110,9 @@ const api: LevanteAPI = {
 
   // Context Budget API
   contextBudget: contextBudgetApi,
+
+  // Shell API
+  shell: shellApi,
 
   // Skills API
   skills: skillsApi,

@@ -579,8 +579,9 @@ export class SkillsService {
       throw new Error('zipPath is required');
     }
 
-    if (path.extname(zipPath).toLowerCase() !== '.zip') {
-      throw new Error('Only .zip files are supported');
+    const ext = path.extname(zipPath).toLowerCase();
+    if (ext !== '.zip' && ext !== '.skill') {
+      throw new Error('Only .zip and .skill files are supported');
     }
 
     await fs.access(zipPath);

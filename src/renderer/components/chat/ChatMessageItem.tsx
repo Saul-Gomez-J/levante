@@ -26,6 +26,7 @@ import { ToolCall } from '@/components/ai-elements/tool-call';
 import { ToolApprovalInline } from '@/components/ai-elements/tool-approval';
 import { DiffViewer } from '@/components/ai-elements/diff-viewer';
 import { UIResourceMessage } from '@/components/chat/UIResourceMessage';
+import { PresentedFilesCard } from './PresentedFilesCard';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
 import { extractUIResources } from '@/types/ui-resource';
 import { cn } from '@/lib/utils';
@@ -93,6 +94,36 @@ export function ChatMessageItem({
     if (!text.startsWith('[COMPACTION_SUMMARY]')) return null;
     return text.replace('[COMPACTION_SUMMARY]', '').trim();
   }, [message.role, messageText]);
+
+  const collectedPresentedFiles = useMemo(() => {
+    if (!isAssistant || !message.parts?.length) return [];
+
+    const deduped = new Map<string, Record<string, unknown>>();
+
+    for (const part of message.parts as any[]) {
+      if (!part?.type?.startsWith('tool-')) continue;
+
+      const name = (part.toolName || part.type.replace(/^tool-/, '')).trim().toLowerCase();
+      if (name !== 'present_files') continue;
+      if (part.state !== 'output-available') continue;
+
+      const output = part.output;
+
+      if (typeof output !== 'object' || output === null) continue;
+
+      const files = Array.isArray((output as Record<string, unknown>).files)
+        ? ((output as Record<string, unknown>).files as Array<Record<string, unknown>>)
+        : [];
+
+      for (const file of files) {
+        const path = typeof file?.path === 'string' ? file.path : '';
+        if (!path) continue;
+        deduped.set(path, file);
+      }
+    }
+
+    return Array.from(deduped.values());
+  }, [isAssistant, message.parts]);
 
   if (compactionSummary !== null) {
     return (
@@ -401,6 +432,13 @@ export function ChatMessageItem({
           )}
         </MessageContent>
       </Message>
+
+      {/* Presented files card — shown at end of message, only after streaming completes */}
+      {isAssistant && !isStreaming && collectedPresentedFiles.length > 0 && (
+        <div className="mt-2 w-full">
+          <PresentedFilesCard files={collectedPresentedFiles as any} />
+        </div>
+      )}
 
       {/* Action buttons - appears below message on hover, outside the message container */}
       {isUser && !isStreaming && !isEditing && (
