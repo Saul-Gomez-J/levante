@@ -1,7 +1,7 @@
 ---
 name: skill-creator
 description: Create new skills, modify and improve existing skills, and measure skill performance. Use when users want to create a skill from scratch, edit, or optimize an existing skill, run evals to test a skill, benchmark skill performance with variance analysis, or optimize a skill's description for better triggering accuracy.
-version: "1.0.0"
+version: "1.1.0"
 license: Apache-2.0
 ---
 
@@ -446,15 +446,123 @@ In Claude.ai, the core workflow is the same (draft → test → review → impro
 
 ## Cowork-Specific Instructions
 
-If you're in Cowork, the main things to know are:
+**Levante/Cowork does NOT have subagents.** Ignore all subagent-related instructions in this document. Instead, follow this sequential workflow:
 
-- You have subagents, so the main workflow (spawn test cases in parallel, run baselines, grade, etc.) all works. (However, if you run into severe problems with timeouts, it's OK to run the test prompts in series rather than parallel.)
-- You don't have a browser or display, so when generating the eval viewer, use `--static <output_path>` to write a standalone HTML file instead of starting a server. Then proffer a link that the user can click to open the HTML in their browser.
-- For whatever reason, the Cowork setup seems to disincline Claude from generating the eval viewer after running the tests, so just to reiterate: whether you're in Cowork or in Claude Code, after running tests, you should always generate the eval viewer for the human to look at examples before revising the skill yourself and trying to make corrections, using `generate_review.py` (not writing your own boutique html code). Sorry in advance but I'm gonna go all caps here: GENERATE THE EVAL VIEWER *BEFORE* evaluating inputs yourself. You want to get them in front of the human ASAP!
-- Feedback works differently: since there's no running server, the viewer's "Submit All Reviews" button will download `feedback.json` as a file. You can then read it from there (you may have to request access first).
-- Packaging works — `package_skill.py` just needs Python and a filesystem.
-- Description optimization (`run_loop.py` / `run_eval.py`) should work in Cowork just fine since it uses `claude -p` via subprocess, not a browser, but please save it until you've fully finished making the skill and the user agrees it's in good shape.
-- **Updating an existing skill**: The user might be asking you to update an existing skill, not create a new one. Follow the update guidance in the claude.ai section above.
+---
+
+### Running test cases (sequential, no subagents)
+
+Run each test case yourself, one at a time, in this order:
+
+1. **with_skill** — read the skill's SKILL.md and follow its instructions to complete the eval prompt
+2. **without_skill** — complete the same prompt from scratch, without consulting the skill at all
+
+For each run, save outputs to the correct directory structure. This structure is critical — the `aggregate_benchmark.py` script will silently skip any run that doesn't follow it exactly:
+
+```
+<skill-name>-workspace/
+└── iteration-1/
+    └── eval-<name>/                  ← one directory per test case
+        ├── eval_metadata.json
+        ├── with_skill/
+        │   ├── run-1/                ← REQUIRED: grading.json goes here, not in with_skill/ directly
+        │   │   └── grading.json
+        │   └── outputs/              ← output files go here
+        │       └── result.md
+        └── without_skill/
+            ├── run-1/                ← REQUIRED: same structure
+            │   └── grading.json
+            └── outputs/
+                └── result.md
+```
+
+**Common mistake to avoid**: Do not place `grading.json` directly inside `with_skill/` or `without_skill/`. It must be inside a `run-1/` subdirectory. The script uses `config_dir.glob("run-*")` to find runs — if there are no `run-*` directories, it skips the config entirely and produces an empty benchmark.
+
+---
+
+### Grading each run
+
+After completing each run, grade it inline (no grader subagent). Read `agents/grader.md` for the full criteria, but the key rule is the **exact schema** for `grading.json`:
+
+```json
+{
+  "expectations": [
+    {
+      "text": "The output file is saved as .md",
+      "passed": true,
+      "evidence": "File result.md found in outputs/"
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 0,
+    "total": 1,
+    "pass_rate": 1.0
+  }
+}
+```
+
+**Critical field names** — the `aggregate_benchmark.py` script reads `grading["summary"]["pass_rate"]`. If you use any other structure (e.g., `pass_rate` at the root level, or `assertions` instead of `expectations`), the benchmark will read 0% for everything.
+
+For assertions that can be checked programmatically (file exists, pattern found in content, word count, etc.), write a short Python script and run it — much more reliable than eyeballing. Save the script in the workspace so it can be reused in the next iteration.
+
+---
+
+### Aggregating and launching the viewer
+
+Once all runs are graded, run from the skill-creator directory:
+
+```bash
+cd /path/to/skill-creator
+python3 -m scripts.aggregate_benchmark <workspace>/iteration-N --skill-name <name>
+```
+
+Then generate the static HTML viewer (no browser server in Cowork):
+
+```bash
+python3 eval-viewer/generate_review.py \
+  <workspace>/iteration-N \
+  --skill-name "<name>" \
+  --benchmark <workspace>/iteration-N/benchmark.json \
+  --static <workspace>/iteration-N/review.html
+```
+
+Then open the file and use `present_files` to show it to the user:
+
+```bash
+open <workspace>/iteration-N/review.html
+```
+
+**GENERATE THE EVAL VIEWER BEFORE evaluating results yourself.** Get it in front of the user as fast as possible — their qualitative judgment is more valuable than your own.
+
+---
+
+### Feedback
+
+The viewer's "Submit All Reviews" button downloads `feedback.json`. Once the user shares it (or you read it from Downloads), look for runs where `feedback` is non-empty — those are the ones to focus on when improving the skill.
+
+---
+
+### What does NOT work in Levante/Cowork
+
+- **Subagents**: not available — run everything sequentially yourself
+- **`claude -p` CLI**: not available — skip Description Optimization entirely
+- **Blind comparison**: requires subagents — skip it
+- **Live HTTP server**: not available — always use `--static` for the viewer
+
+### What DOES work
+
+- Sequential test runs (with_skill then without_skill, one by one)
+- Inline grading with Python scripts
+- `aggregate_benchmark.py` — works fine as long as the directory structure is correct
+- `generate_review.py --static` — generates a standalone HTML file
+- `package_skill.py` — works fine
+
+---
+
+### Updating an existing skill
+
+Follow the update guidance in the Claude.ai section above.
 
 ---
 
