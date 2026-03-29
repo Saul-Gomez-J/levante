@@ -758,10 +758,6 @@ class ModelServiceImpl {
       provider.lastModelSync = Date.now();
       await this.saveProviders();
 
-      // Track provider stats (fire and forget)
-      const selectedCount = provider.selectedModelIds?.length || 0;
-      window.levante.analytics?.trackProvider?.(provider.name, selectedCount).catch(() => { });
-
       return models;
     } catch (error) {
       logger.models.error('Failed to sync models for provider', {

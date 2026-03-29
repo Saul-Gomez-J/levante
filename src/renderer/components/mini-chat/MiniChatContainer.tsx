@@ -119,6 +119,12 @@ export function MiniChatContainer() {
         if (!result.success) {
           console.error('Failed to persist mini-chat message:', result.error);
         }
+
+        // Track model usage (fire and forget)
+        const currentModel = useMiniChatStore.getState().selectedModel;
+        if (currentModel) {
+          window.levante.analytics?.trackModelUsage?.(currentModel, 'mini-chat').catch(() => {});
+        }
       } catch (error) {
         console.error('Error persisting mini-chat message:', error);
       }
