@@ -134,19 +134,19 @@ export class SupabaseClient {
         }
     }
 
-    async insertProviderStats(userId: string, providerName: string, activeModelsCount: number): Promise<boolean> {
+    async insertModelUsage(userId: string, modelId: string, provider: string): Promise<boolean> {
         if (!this.client) return false;
         try {
-            const { error } = await this.client.rpc('log_provider_stats', {
+            const { error } = await this.client.rpc('log_model_usage', {
                 p_user_id: userId,
-                p_provider_name: providerName,
-                p_count: activeModelsCount
+                p_model_id: modelId,
+                p_provider: provider,
             });
 
             if (error) throw error;
             return true;
         } catch (error) {
-            getLogger().analytics?.error('Failed to insert provider stats', { error });
+            getLogger().analytics?.error('Failed to insert model usage', { error });
             return false;
         }
     }

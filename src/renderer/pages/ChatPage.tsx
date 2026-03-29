@@ -584,6 +584,11 @@ const ChatPage = () => {
 
         const persistResult = await persistMessage(messageWithAttachments, tokenUsage);
 
+        // Track model usage (fire and forget)
+        if (model && currentModelInfo) {
+          window.levante.analytics?.trackModelUsage?.(model, currentModelInfo.provider).catch(() => {});
+        }
+
         // Update the message in useChat state with token usage
         if (tokenUsage) {
           setMessages((prevMessages) =>

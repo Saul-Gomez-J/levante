@@ -746,9 +746,9 @@ export interface LevanteAPI {
       name: string,
       status: "active" | "removed"
     ) => Promise<{ success: boolean; error?: string }>;
-    trackProvider: (
-      name: string,
-      count: number
+    trackModelUsage: (
+      modelId: string,
+      provider: string
     ) => Promise<{ success: boolean; error?: string }>;
     trackUser: () => Promise<{ success: boolean; error?: string }>;
     trackAppOpen: (force?: boolean) => Promise<{ success: boolean; error?: string }>;

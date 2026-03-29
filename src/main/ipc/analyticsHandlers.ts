@@ -12,8 +12,8 @@ export function registerAnalyticsHandlers() {
         return { success: true };
     });
 
-    ipcMain.handle('levante/analytics/track-provider', async (_, name: string, count: number) => {
-        await analyticsService.trackProviderStats(name, count);
+    ipcMain.handle('levante/analytics/track-model-usage', async (_, modelId: string, provider: string) => {
+        await analyticsService.trackModelUsage(modelId, provider);
         return { success: true };
     });
 
