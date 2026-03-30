@@ -277,8 +277,8 @@ export function BackgroundTasksDropdown({ className }: BackgroundTasksDropdownPr
                     </Badge>
                   </div>
 
-                  <div className="flex items-center justify-between text-xs text-muted-foreground gap-2">
-                    <div className="flex items-center gap-3 overflow-x-auto">
+                  <div className="flex min-w-0 items-center justify-between text-xs text-muted-foreground gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto">
                       <span>
                         {t('background_tasks.task_id', 'ID')}: {task.id.slice(0, 8)}
                       </span>
@@ -343,7 +343,7 @@ export function BackgroundTasksDropdown({ className }: BackgroundTasksDropdownPr
         )}
 
         {tasks.length > 0 && (
-          <div className="px-3 py-2 border-t text-xs text-muted-foreground flex items-center gap-3">
+          <div className="px-3 py-2 border-t text-xs text-muted-foreground flex flex-wrap items-center gap-3">
             <span>
               {t('background_tasks.total', 'Total')}: {stats.total}
             </span>
