@@ -8,6 +8,7 @@
 import fs from 'node:fs/promises';
 import { existsSync, realpathSync, statSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import chokidar, { type FSWatcher } from 'chokidar';
 import ignore, { type Ignore } from 'ignore';
 import { getLogger } from '../logging';
 
@@ -53,6 +54,19 @@ export interface FileSearchResult {
 export interface SearchFilesOptions {
   maxResults?: number; // default 20
   maxDepth?: number;   // default 10
+}
+
+export type FileSystemChangeKind =
+  | 'file-added'
+  | 'file-changed'
+  | 'file-removed'
+  | 'directory-added'
+  | 'directory-removed';
+
+export interface FileSystemChange {
+  path: string;
+  parentPath: string;
+  kind: FileSystemChangeKind;
 }
 
 const MAX_FILE_SIZE = 1 * 1024 * 1024; // 1MB
@@ -135,6 +149,11 @@ class FileSystemService {
   private workingDirectory: string | null = null;
   private searchCache = new Map<string, { expiresAt: number; data: FileSearchResult[] }>();
   private ignoreMatcherCache = new Map<string, Ignore>();
+  private watcher: FSWatcher | null = null;
+  private watchedDirectory: string | null = null;
+  private debounceTimer: NodeJS.Timeout | null = null;
+  private pendingChanges = new Map<string, FileSystemChange>();
+  private readonly debounceDelay = 300;
 
   setWorkingDirectory(dir: string): void {
     const resolved = path.resolve(dir);
@@ -151,6 +170,11 @@ class FileSystemService {
     }
 
     this.workingDirectory = real;
+
+    if (this.watchedDirectory && this.watchedDirectory !== real) {
+      void this.stopWatching();
+    }
+
     this.searchCache.clear();
     this.ignoreMatcherCache.clear();
     logger.core.info('FileSystemService: working directory set', { dir: real });
@@ -393,6 +417,165 @@ class FileSystemService {
 
     this.ignoreMatcherCache.set(workingDir, ig);
     return ig;
+  }
+
+  async startWatching(onChange: (changes: FileSystemChange[]) => void): Promise<void> {
+    if (!this.workingDirectory) {
+      throw new Error('No working directory configured');
+    }
+
+    const root = this.workingDirectory;
+
+    if (this.watcher && this.watchedDirectory === root) {
+      return;
+    }
+
+    if (this.watcher) {
+      await this.stopWatching();
+    }
+
+    try {
+      const watcher = chokidar.watch(root, {
+        persistent: true,
+        ignoreInitial: true,
+        awaitWriteFinish: {
+          stabilityThreshold: 200,
+          pollInterval: 50,
+        },
+        ignored: (candidatePath) => this.shouldIgnoreWatchedPath(root, candidatePath),
+      });
+
+      const queue = (kind: FileSystemChangeKind, changedPath: string) => {
+        this.queueChange(root, kind, changedPath, onChange);
+      };
+
+      watcher
+        .on('add', (changedPath) => queue('file-added', changedPath))
+        .on('change', (changedPath) => queue('file-changed', changedPath))
+        .on('unlink', (changedPath) => queue('file-removed', changedPath))
+        .on('addDir', (changedPath) => queue('directory-added', changedPath))
+        .on('unlinkDir', (changedPath) => queue('directory-removed', changedPath))
+        .on('error', (error) => {
+          logger.core.error('FileSystemService: watcher runtime error', {
+            dir: root,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+
+      this.watcher = watcher;
+      this.watchedDirectory = root;
+
+      logger.core.info('FileSystemService: watching directory', { dir: root });
+    } catch (error) {
+      logger.core.error('FileSystemService: failed to watch directory', {
+        dir: root,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new Error(
+        error instanceof Error ? error.message : 'Failed to start file watcher'
+      );
+    }
+  }
+
+  async stopWatching(): Promise<void> {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+      this.debounceTimer = null;
+    }
+
+    this.pendingChanges.clear();
+
+    if (this.watcher) {
+      await this.watcher.close();
+      this.watcher = null;
+    }
+
+    if (this.watchedDirectory) {
+      logger.core.info('FileSystemService: stopped watching directory', {
+        dir: this.watchedDirectory,
+      });
+      this.watchedDirectory = null;
+    }
+  }
+
+  async dispose(): Promise<void> {
+    await this.stopWatching();
+    this.searchCache.clear();
+    this.ignoreMatcherCache.clear();
+  }
+
+  private queueChange(
+    root: string,
+    kind: FileSystemChangeKind,
+    changedPath: string,
+    onChange: (changes: FileSystemChange[]) => void
+  ): void {
+    const resolved = path.resolve(changedPath);
+
+    if (!this.isPathInsideRoot(root, resolved)) {
+      return;
+    }
+
+    this.invalidateCachesForPath(resolved);
+
+    const parentPath = this.getParentPath(root, resolved);
+    const key = `${kind}:${resolved}`;
+
+    this.pendingChanges.set(key, {
+      path: resolved,
+      parentPath,
+      kind,
+    });
+
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+    }
+
+    this.debounceTimer = setTimeout(() => {
+      const changes = Array.from(this.pendingChanges.values());
+      this.pendingChanges.clear();
+      this.debounceTimer = null;
+
+      if (changes.length > 0) {
+        onChange(changes);
+      }
+    }, this.debounceDelay);
+  }
+
+  private invalidateCachesForPath(changedPath: string): void {
+    this.searchCache.clear();
+
+    if (path.basename(changedPath) === '.gitignore') {
+      this.ignoreMatcherCache.clear();
+    }
+  }
+
+  private shouldIgnoreWatchedPath(root: string, candidatePath: string): boolean {
+    const resolved = path.resolve(candidatePath);
+    const relative = path.relative(root, resolved);
+
+    if (!relative || relative === '') {
+      return false;
+    }
+
+    const normalized = relative.replace(/\\/g, '/');
+    const segments = normalized.split('/').filter(Boolean);
+
+    if (segments.some((segment) => IGNORED_DIRECTORIES.has(segment))) {
+      return true;
+    }
+
+    return IGNORED_FILES.has(path.basename(resolved));
+  }
+
+  private getParentPath(root: string, changedPath: string): string {
+    const parent = path.dirname(changedPath);
+    return this.isPathInsideRoot(root, parent) ? parent : root;
+  }
+
+  private isPathInsideRoot(root: string, candidate: string): boolean {
+    const relative = path.relative(root, candidate);
+    return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
   }
 
   resolveAndValidatePath(requestedPath: string): string {

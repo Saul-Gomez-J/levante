@@ -1,5 +1,23 @@
 import { ipcRenderer } from 'electron';
 
+export type FileSystemChangeKind =
+  | 'file-added'
+  | 'file-changed'
+  | 'file-removed'
+  | 'directory-added'
+  | 'directory-removed';
+
+export interface FileSystemChange {
+  path: string;
+  parentPath: string;
+  kind: FileSystemChangeKind;
+}
+
+export interface FilesChangedPayload {
+  rootPath: string;
+  changes: FileSystemChange[];
+}
+
 export const filesystemApi = {
   setWorkingDir: (path: string) =>
     ipcRenderer.invoke('levante/fs:setWorkingDir', { path }),
@@ -23,4 +41,22 @@ export const filesystemApi = {
     query: string,
     options?: { maxResults?: number; maxDepth?: number }
   ) => ipcRenderer.invoke('levante/fs:searchFiles', { query, ...options }),
+
+  startWatching: () =>
+    ipcRenderer.invoke('levante/fs:startWatching'),
+
+  stopWatching: () =>
+    ipcRenderer.invoke('levante/fs:stopWatching'),
+
+  onFilesChanged: (callback: (payload: FilesChangedPayload) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, payload: FilesChangedPayload) => {
+      callback(payload);
+    };
+
+    ipcRenderer.on('levante/fs:filesChanged', listener);
+
+    return () => {
+      ipcRenderer.removeListener('levante/fs:filesChanged', listener);
+    };
+  },
 };

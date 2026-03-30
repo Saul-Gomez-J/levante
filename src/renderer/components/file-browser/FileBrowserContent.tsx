@@ -117,7 +117,9 @@ export function FileBrowserContent({ searchQuery, cwd, projectId }: FileBrowserC
     initialize,
     toggleDirectory,
     refreshDirectory,
+    applyExternalChanges,
     setShowHidden,
+    setError,
   } = useFileBrowserStore();
 
   // Backend search state
@@ -128,8 +130,42 @@ export function FileBrowserContent({ searchQuery, cwd, projectId }: FileBrowserC
   const requestIdRef = useRef(0);
 
   useEffect(() => {
-    void initialize(cwd);
-  }, [cwd, initialize]);
+    if (!cwd) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const unsubscribe = window.levante.fs.onFilesChanged((payload) => {
+      if (payload.rootPath !== cwd || cancelled) {
+        return;
+      }
+
+      applyExternalChanges(payload.changes);
+    });
+
+    void (async () => {
+      await initialize(cwd);
+      if (cancelled) {
+        return;
+      }
+
+      const watchResult = await window.levante.fs.startWatching();
+
+      if (!watchResult.success) {
+        setError(watchResult.error ?? 'Failed to start file watcher');
+        return;
+      }
+
+      setError(null);
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      void window.levante.fs.stopWatching();
+    };
+  }, [cwd, initialize, applyExternalChanges, setError]);
 
   // Debounced backend search
   useEffect(() => {

@@ -171,6 +171,9 @@ importers:
       ai:
         specifier: ^6.0.105
         version: 6.0.105(zod@4.3.6)
+      chokidar:
+        specifier: ^5.0.0
+        version: 5.0.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1

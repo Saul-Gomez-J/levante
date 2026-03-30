@@ -955,6 +955,21 @@ export interface LevanteAPI {
       }>;
       error?: string;
     }>;
+    startWatching: () => Promise<{ success: boolean; error?: string }>;
+    stopWatching: () => Promise<{ success: boolean; error?: string }>;
+    onFilesChanged: (callback: (payload: {
+      rootPath: string;
+      changes: Array<{
+        path: string;
+        parentPath: string;
+        kind:
+          | 'file-added'
+          | 'file-changed'
+          | 'file-removed'
+          | 'directory-added'
+          | 'directory-removed';
+      }>;
+    }) => void) => () => void;
   };
 
   // Anthropic OAuth API (Claude Max/Pro subscription) - legacy shim
