@@ -49,6 +49,7 @@ export interface DocTab {
   fileName: string;
   htmlContent: string | null;
   isLoading: boolean;
+  loadError: string | null;
 }
 
 export type PanelTab = ServerTab | FileTab | PdfTab | DocTab;
@@ -74,6 +75,8 @@ interface SidePanelState {
 
   openFileTab: (filePath: string) => Promise<void>;
   updateFileContent: (filePath: string, content: string) => void;
+
+  openDocTab: (filePath: string) => Promise<void>;
 
   openPdfTab: (filePath: string) => void;
   setPdfPage: (tabId: string, page: number) => void;
@@ -242,6 +245,10 @@ export const useSidePanelStore = create<SidePanelState>((set, get) => ({
       get().openPdfTab(filePath);
       return;
     }
+    if (ext === 'html' || ext === 'htm') {
+      await get().openDocTab(filePath);
+      return;
+    }
 
     const tabId = normalizePath(filePath);
 
@@ -349,6 +356,82 @@ export const useSidePanelStore = create<SidePanelState>((set, get) => ({
           : tab
       ),
     }));
+  },
+
+  openDocTab: async (filePath) => {
+    const tabId = `doc:${normalizePath(filePath)}`;
+
+    const existing = get().tabs.find((tab) => tab.type === 'doc' && tab.id === tabId);
+    if (existing) {
+      set({ isPanelOpen: true, activeTabId: tabId });
+      return;
+    }
+
+    const fileName = getFileName(filePath);
+    const newTab: DocTab = {
+      type: 'doc',
+      id: tabId,
+      filePath,
+      fileName,
+      htmlContent: null,
+      isLoading: true,
+      loadError: null,
+    };
+
+    set((state) => ({
+      tabs: [...state.tabs, newTab],
+      activeTabId: tabId,
+      isPanelOpen: true,
+    }));
+
+    const updateTab = (patch: Partial<DocTab>) => {
+      set((state) => ({
+        tabs: state.tabs.map((tab) =>
+          tab.type === 'doc' && tab.id === tabId ? { ...tab, ...patch } : tab
+        ),
+      }));
+    };
+
+    try {
+      const result = await window.levante.fs.readFile(filePath);
+
+      if (!result.success || !result.data) {
+        updateTab({
+          isLoading: false,
+          loadError: result.error ?? 'Failed to read HTML file',
+        });
+        return;
+      }
+
+      const fileData = result.data;
+
+      if (fileData.isBinary) {
+        updateTab({
+          isLoading: false,
+          loadError: 'HTML preview is only available for text-based HTML files.',
+        });
+        return;
+      }
+
+      if (fileData.isTruncated) {
+        updateTab({
+          isLoading: false,
+          loadError: 'HTML file is too large to preview in the side panel.',
+        });
+        return;
+      }
+
+      updateTab({
+        htmlContent: fileData.content,
+        isLoading: false,
+        loadError: null,
+      });
+    } catch (error) {
+      updateTab({
+        isLoading: false,
+        loadError: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
   },
 
   openPdfTab: (filePath) => {
