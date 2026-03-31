@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { RefreshCw, Eye, EyeOff, FolderOpen, Loader2 } from 'lucide-react';
+import { RefreshCw, Eye, EyeOff, FolderOpen, Loader2, FilePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useFileBrowserStore, type DirectoryEntry } from '@/stores/fileBrowserStore';
 import { useSidePanelStore } from '@/stores/sidePanelStore';
@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 interface FileBrowserContentProps {
   searchQuery: string;
   cwd: string;
+  projectId?: string | null;
 }
 
 interface FileSearchResult {
@@ -104,7 +105,7 @@ function FileTree({
   );
 }
 
-export function FileBrowserContent({ searchQuery, cwd }: FileBrowserContentProps) {
+export function FileBrowserContent({ searchQuery, cwd, projectId }: FileBrowserContentProps) {
   const { t } = useTranslation('chat');
   const openFileTab = useSidePanelStore((state) => state.openFileTab);
   const {
@@ -116,7 +117,9 @@ export function FileBrowserContent({ searchQuery, cwd }: FileBrowserContentProps
     initialize,
     toggleDirectory,
     refreshDirectory,
+    applyExternalChanges,
     setShowHidden,
+    setError,
   } = useFileBrowserStore();
 
   // Backend search state
@@ -127,8 +130,42 @@ export function FileBrowserContent({ searchQuery, cwd }: FileBrowserContentProps
   const requestIdRef = useRef(0);
 
   useEffect(() => {
-    void initialize(cwd);
-  }, [cwd, initialize]);
+    if (!cwd) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const unsubscribe = window.levante.fs.onFilesChanged((payload) => {
+      if (payload.rootPath !== cwd || cancelled) {
+        return;
+      }
+
+      applyExternalChanges(payload.changes);
+    });
+
+    void (async () => {
+      await initialize(cwd);
+      if (cancelled) {
+        return;
+      }
+
+      const watchResult = await window.levante.fs.startWatching();
+
+      if (!watchResult.success) {
+        setError(watchResult.error ?? 'Failed to start file watcher');
+        return;
+      }
+
+      setError(null);
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+      void window.levante.fs.stopWatching();
+    };
+  }, [cwd, initialize, applyExternalChanges, setError]);
 
   // Debounced backend search
   useEffect(() => {
@@ -188,6 +225,14 @@ export function FileBrowserContent({ searchQuery, cwd }: FileBrowserContentProps
     void openFileTab(entry.path);
   };
 
+  const handleAddFiles = async () => {
+    if (!projectId) return;
+    const result = await window.levante.projects.addFiles(projectId);
+    if (result.success && result.data && result.data.length > 0) {
+      refreshDirectory(cwd);
+    }
+  };
+
   const rootBasename = getBasename(cwd);
   const rootEntries = entries.get(cwd) ?? [];
   const isSearchMode = searchQuery.trim().length >= 2;
@@ -201,6 +246,18 @@ export function FileBrowserContent({ searchQuery, cwd }: FileBrowserContentProps
         </div>
 
         <div className="flex gap-0.5 shrink-0">
+          {projectId && (
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-5 w-5"
+              onClick={handleAddFiles}
+              title={t('chat_list.file_browser.add_files')}
+            >
+              <FilePlus size={12} />
+            </Button>
+          )}
+
           <Button
             size="icon"
             variant="ghost"
@@ -285,8 +342,19 @@ export function FileBrowserContent({ searchQuery, cwd }: FileBrowserContentProps
       ) : (
         <>
           {rootEntries.length === 0 && !isLoadingDir ? (
-            <div className="px-3 py-4 text-xs text-muted-foreground text-center">
-              {t('chat_list.file_browser.empty_directory')}
+            <div className="px-3 py-4 text-xs text-muted-foreground text-center flex flex-col items-center gap-2">
+              <span>{t('chat_list.file_browser.empty_directory')}</span>
+              {projectId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs"
+                  onClick={handleAddFiles}
+                >
+                  <FilePlus size={14} className="mr-1.5" />
+                  {t('chat_list.file_browser.add_files')}
+                </Button>
+              )}
             </div>
           ) : (
             <div className="py-1">

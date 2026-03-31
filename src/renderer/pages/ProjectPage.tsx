@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { FolderOpen, ArrowUp, MoreVertical, Trash2 } from 'lucide-react';
 import { ChatSession, Project } from '../../types/database';
-import { modelService } from '@/services/modelService';
 import { ModelSearchableSelect } from '@/components/ai-elements/model-searchable-select';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,10 +9,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ChatModeTabs } from '@/components/chat/ChatModeTabs';
 import { usePreference } from '@/hooks/usePreferences';
 import { usePlatformStore } from '@/stores/platformStore';
 import { useTranslation } from 'react-i18next';
+import { loadSelectableModels, resolveStoredModelForCatalog, formatStoredModelForDisplay } from '@/lib/selectableModels';
 import type { Model } from '../../types/models';
+import type { SelectableModelsResult } from '@/lib/selectableModels';
 
 interface ProjectPageProps {
   project: Project;
@@ -22,27 +24,30 @@ interface ProjectPageProps {
   onDeleteSession: (sessionId: string) => Promise<boolean>;
 }
 
-function formatDate(timestamp: number): string {
+function formatDate(timestamp: number, t: (key: string) => string, lng: string): string {
   const date = new Date(timestamp);
   const now = new Date();
   const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'Hoy';
-  if (diffDays === 1) return 'Ayer';
-  return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+  if (diffDays === 0) return t('project_page.today');
+  if (diffDays === 1) return t('project_page.yesterday');
+  return date.toLocaleDateString(lng, { day: 'numeric', month: 'short' });
 }
 
 export function ProjectPage({ project, onSessionSelect, onNewSessionInProject, onDeleteSession }: ProjectPageProps) {
-  const { t } = useTranslation('chat');
+  const { t, i18n } = useTranslation('chat');
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [input, setInput] = useState('');
 
   const [availableModels, setAvailableModels] = useState<Model[]>([]);
+  const [catalog, setCatalog] = useState<SelectableModelsResult | null>(null);
   const [modelsLoading, setModelsLoading] = useState(true);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [lastUsedModel] = usePreference('lastUsedModel');
+  const [useOtherProviders] = usePreference('useOtherProviders');
+  const [coworkMode, setCoworkMode] = usePreference('coworkMode');
 
-  const isPlatformMode = usePlatformStore((s) => s.appMode === 'platform');
+  const appMode = usePlatformStore((s) => s.appMode);
   const platformModels = usePlatformStore((s) => s.models);
 
   useEffect(() => {
@@ -60,22 +65,28 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject, o
   useEffect(() => {
     const loadModels = async () => {
       setModelsLoading(true);
-      let models: Model[];
-      if (isPlatformMode) {
-        models = platformModels;
-      } else {
-        models = await modelService.getAvailableModels();
-      }
-      setAvailableModels(models);
-      if (lastUsedModel && models.some((m) => m.id === lastUsedModel)) {
-        setSelectedModel(lastUsedModel);
+      const result = await loadSelectableModels({
+        appMode,
+        useOtherProviders: useOtherProviders ?? false,
+        platformModels,
+      });
+      setAvailableModels(result.availableModels);
+      setCatalog(result);
+
+      if (lastUsedModel) {
+        const resolved = resolveStoredModelForCatalog(lastUsedModel, result);
+        if (resolved) {
+          setSelectedModel(resolved);
+        } else {
+          setSelectedModel('');
+        }
       } else {
         setSelectedModel('');
       }
       setModelsLoading(false);
     };
     loadModels();
-  }, [lastUsedModel, isPlatformMode, platformModels]);
+  }, [lastUsedModel, appMode, platformModels, useOtherProviders]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,12 +112,16 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject, o
 
         {/* Chat input */}
         <div className="mb-8">
+          <ChatModeTabs
+            coworkMode={coworkMode ?? false}
+            onCoworkModeChange={setCoworkMode}
+          />
           <form onSubmit={handleSubmit}>
             <div className="rounded-2xl border bg-muted/50 focus-within:ring-1 focus-within:ring-ring">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={`Nuevo chat en ${project.name}`}
+                placeholder={t('project_page.new_chat_placeholder', { name: project.name })}
                 className="w-full px-4 pt-4 pb-2 text-sm resize-none min-h-[80px] bg-transparent outline-none"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -122,7 +137,7 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject, o
                   onValueChange={setSelectedModel}
                   models={availableModels}
                   loading={modelsLoading}
-                  placeholder="Selecciona un modelo"
+                  placeholder={t('project_page.select_model')}
                   className="h-7 text-xs"
                 />
                 <button
@@ -141,15 +156,15 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject, o
         <div className="flex-1">
           <div className="flex gap-4 mb-4 border-b">
             <button className="text-sm font-semibold pb-2 border-b-2 border-foreground -mb-px">
-              Chats
+              {t('project_page.chats_tab')}
             </button>
           </div>
 
           {loading ? (
-            <div className="py-8 text-center text-muted-foreground text-sm">Cargando...</div>
+            <div className="py-8 text-center text-muted-foreground text-sm">{t('project_page.loading')}</div>
           ) : sessions.length === 0 ? (
             <div className="py-8 text-center text-muted-foreground text-sm">
-              No hay conversaciones aún. ¡Empieza una nueva!
+              {t('project_page.no_conversations')}
             </div>
           ) : (
             <div>
@@ -164,15 +179,17 @@ export function ProjectPage({ project, onSessionSelect, onNewSessionInProject, o
                       <div className="flex items-start justify-between gap-4">
                         <div className="flex-1 min-w-0">
                           <div className="font-semibold text-sm truncate">
-                            {session.title || 'Sin título'}
+                            {session.title || t('project_page.untitled')}
                           </div>
                           <div className="text-xs text-muted-foreground mt-0.5 truncate">
-                            {session.model}
+                            {catalog
+                              ? formatStoredModelForDisplay(session.model, catalog)
+                              : session.model}
                           </div>
                         </div>
                         <div className="flex items-center gap-2 shrink-0 mt-0.5">
                           <div className="text-xs text-muted-foreground">
-                            {formatDate(session.updated_at)}
+                            {formatDate(session.updated_at, t, i18n.language)}
                           </div>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>

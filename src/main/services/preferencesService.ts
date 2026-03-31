@@ -226,6 +226,10 @@ export class PreferencesService {
           coworkModeCwd: {
             type: ['string', 'null'],
             default: null
+          },
+          useOtherProviders: {
+            type: 'boolean',
+            default: false
           }
         }
       });

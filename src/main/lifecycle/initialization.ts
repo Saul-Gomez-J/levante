@@ -40,6 +40,7 @@ import { setupFileSystemHandlers } from "../ipc/fileSystemHandlers";
 import { setupCompactionHandlers } from "../ipc/compactionHandlers";
 import { setupContextBudgetHandlers } from "../ipc/contextBudgetHandlers";
 import { registerPdfProtocol } from "../services/filesystem/pdfProtocolService";
+import { seedDefaultSkills } from "../services/defaultSkillsSeeder";
 
 const logger = getLogger();
 
@@ -118,6 +119,17 @@ export async function initializeServices(): Promise<void> {
   // 6. Register PDF protocol handler
   registerPdfProtocol();
   logger.core.info("PDF protocol registered successfully");
+
+  // 7. Seed bundled default skills
+  try {
+    await seedDefaultSkills();
+    logger.core.info("Default skills seeding completed");
+  } catch (error) {
+    logger.core.error("Failed to seed default skills", {
+      error: error instanceof Error ? error.message : error,
+    });
+    // Non-critical: continue with app startup
+  }
 }
 
 /**

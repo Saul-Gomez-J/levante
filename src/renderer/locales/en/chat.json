@@ -97,11 +97,22 @@
       "show_hidden": "Show hidden files",
       "hide_hidden": "Hide hidden files",
       "refresh": "Refresh",
+      "add_files": "Add files",
       "empty_directory": "Empty directory",
       "read_dir_error": "Failed to read directory",
       "searching": "Searching...",
       "no_search_results": "No files found"
     }
+  },
+  "project_page": {
+    "new_chat_placeholder": "New chat in {{name}}",
+    "select_model": "Select a model",
+    "chats_tab": "Chats",
+    "loading": "Loading...",
+    "no_conversations": "No conversations yet. Start a new one!",
+    "untitled": "Untitled",
+    "today": "Today",
+    "yesterday": "Yesterday"
   },
   "tools_menu": {
     "button_label": "Settings",
@@ -149,12 +160,33 @@
       "scope_global": "global",
       "scope_project": "project",
       "requires_cowork": "Skills are only available in Cowork mode",
-      "requires_cowork_directory": "Skills require a working directory in Cowork mode"
+      "requires_cowork_directory": "Skills require a working directory in Cowork mode",
+      "default_skill_tooltip": "This is a built-in skill and cannot be removed. You can disable it if you don't want it in a chat.",
+      "custom_import": {
+        "button": "Add Custom",
+        "title": "Import Custom Skill",
+        "description": "Import a skill from a .zip or .skill file containing a SKILL.md manifest.",
+        "drop_zone": "Drag & drop a .zip or .skill file here, or click to browse",
+        "browse": "Browse Files",
+        "scope_label": "Install scope",
+        "scope_global_desc": "Available in all chats",
+        "install_button": "Install Skill",
+        "success": "Skill \"{{name}}\" installed successfully",
+        "error": "Failed to install skill: {{message}}",
+        "invalid_file_type": "Only .zip and .skill files are accepted",
+        "missing_path": "Could not read the local file path for the dropped file"
+      }
     },
     "enabled": "Enabled",
     "no_enabled_servers": "No enabled servers",
     "disabled_servers_info": "Toggle to enable",
     "no_disabled_servers": "No disabled servers"
+  },
+  "present_files": {
+    "install_skill": "Copy to your skills",
+    "open": "Open",
+    "show_in_folder": "Show in folder",
+    "missing": "File no longer exists"
   },
   "paid_model_chat_warning": {
     "title": "Paid Model Notice",

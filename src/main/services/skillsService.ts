@@ -1,5 +1,7 @@
 import { app } from 'electron';
+import extract from 'extract-zip';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { getLogger } from './logging';
 import { directoryService } from './directoryService';
@@ -288,6 +290,153 @@ async function scanSkillsDir(input: ScanSkillsDirInput): Promise<InstalledSkill[
   return installed;
 }
 
+function getFrontmatterBlock(raw: string): string {
+  const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) {
+    throw new Error('Invalid skill file: missing YAML frontmatter');
+  }
+
+  return match[1];
+}
+
+function extractNestedFrontmatterValue(
+  frontmatter: string,
+  parentKey: string,
+  childKey: string
+): string | undefined {
+  const lines = frontmatter.split('\n');
+  let insideParent = false;
+  let parentIndent = 0;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const indent = line.length - line.trimStart().length;
+
+    if (!insideParent && trimmed === `${parentKey}:`) {
+      insideParent = true;
+      parentIndent = indent;
+      continue;
+    }
+
+    if (!insideParent) continue;
+
+    if (indent <= parentIndent) {
+      insideParent = false;
+      continue;
+    }
+
+    const idx = trimmed.indexOf(':');
+    if (idx <= 0) continue;
+
+    const key = trimmed.slice(0, idx).trim();
+    let value = trimmed.slice(idx + 1).trim();
+    value = value.replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
+
+    if (key === childKey) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
+function buildCustomSkillBundle(rawContent: string, skillRoot: string): SkillBundleResponse {
+  const { meta, content } = parseFrontmatter(rawContent);
+  const frontmatter = getFrontmatterBlock(rawContent);
+
+  const manifestId = meta['id']?.trim();
+  const manifestName = meta['name']?.trim();
+
+  if (!manifestId && !manifestName) {
+    throw new Error('Skill manifest must include at least "name" or "id"');
+  }
+
+  const derivedName = manifestName || manifestId!.split('/').pop() || path.basename(skillRoot);
+  const nestedAuthor = extractNestedFrontmatterValue(frontmatter, 'metadata', 'author');
+  const nestedVersion = extractNestedFrontmatterValue(frontmatter, 'metadata', 'version');
+
+  return {
+    id: manifestId || `custom/${sanitizePathSegment(derivedName)}`,
+    name: derivedName,
+    description: meta['description'] ?? '',
+    category: meta['category']?.trim() || 'custom',
+    author: meta['author'] ?? nestedAuthor,
+    version: meta['version'] ?? nestedVersion ?? '1.0.0',
+    license: meta['license'],
+    allowedTools: meta['allowed-tools'],
+    model: meta['model'],
+    userInvocable:
+      meta['user-invocable'] === undefined ? true : meta['user-invocable'] === 'true',
+    content,
+    files: {},
+  };
+}
+
+async function findSkillManifest(extractedDir: string): Promise<{
+  manifestPath: string;
+  skillRoot: string;
+}> {
+  for (const fileName of ['SKILL.md', 'skill.md']) {
+    const candidate = path.join(extractedDir, fileName);
+    try {
+      await fs.access(candidate);
+      return { manifestPath: candidate, skillRoot: extractedDir };
+    } catch {
+      // continue
+    }
+  }
+
+  const entries = await fs.readdir(extractedDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name === '__MACOSX') continue;
+
+    const subDir = path.join(extractedDir, entry.name);
+
+    for (const fileName of ['SKILL.md', 'skill.md']) {
+      const candidate = path.join(subDir, fileName);
+      try {
+        await fs.access(candidate);
+        return { manifestPath: candidate, skillRoot: subDir };
+      } catch {
+        // continue
+      }
+    }
+  }
+
+  throw new Error('No SKILL.md or skill.md found in zip archive');
+}
+
+async function collectCompanionFiles(
+  rootDir: string,
+  manifestPath: string
+): Promise<Record<string, string>> {
+  const files: Record<string, string> = {};
+
+  const walk = async (dir: string): Promise<void> => {
+    const entries = await fs.readdir(dir, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dir, entry.name);
+
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+        continue;
+      }
+
+      if (fullPath === manifestPath) continue;
+
+      const relativePath = path.relative(rootDir, fullPath);
+      files[relativePath] = await fs.readFile(fullPath, 'utf-8');
+    }
+  };
+
+  await walk(rootDir);
+  return files;
+}
+
 export class SkillsService {
   async getCatalog(): Promise<SkillsCatalogResponse> {
     const cachePath = getCachePath();
@@ -420,6 +569,38 @@ export class SkillsService {
       } : {}),
       scopedKey: buildScopedKey(scope, bundle.id, project?.id),
     };
+  }
+
+  async installFromZip(
+    zipPath: string,
+    options: InstallSkillOptions = {}
+  ): Promise<InstalledSkill> {
+    if (!zipPath?.trim()) {
+      throw new Error('zipPath is required');
+    }
+
+    const ext = path.extname(zipPath).toLowerCase();
+    if (ext !== '.zip' && ext !== '.skill') {
+      throw new Error('Only .zip and .skill files are supported');
+    }
+
+    await fs.access(zipPath);
+
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'levante-skill-'));
+
+    try {
+      await extract(zipPath, { dir: tempDir });
+
+      const { manifestPath, skillRoot } = await findSkillManifest(tempDir);
+      const rawContent = await fs.readFile(manifestPath, 'utf-8');
+
+      const bundle = buildCustomSkillBundle(rawContent, skillRoot);
+      bundle.files = await collectCompanionFiles(skillRoot, manifestPath);
+
+      return await this.installSkill(bundle, options);
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
   }
 
   async uninstallSkill(skillId: string, options: UninstallSkillOptions): Promise<void> {

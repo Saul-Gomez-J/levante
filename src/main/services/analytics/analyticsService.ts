@@ -97,15 +97,15 @@ export class AnalyticsService {
         }
     }
 
-    async trackProviderStats(name: string, count: number): Promise<void> {
+    async trackModelUsage(modelId: string, provider: string): Promise<void> {
         try {
             if (!await this.canTrack()) return;
             const userId = await this.getUserId();
             if (!userId) return;
 
-            await this.supabaseClient.insertProviderStats(userId, name, count);
+            await this.supabaseClient.insertModelUsage(userId, modelId, provider);
         } catch (error) {
-            getLogger().analytics?.info('Error tracking provider stats', { error });
+            getLogger().analytics?.info('Error tracking model usage', { error });
         }
     }
 

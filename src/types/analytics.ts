@@ -30,11 +30,11 @@ export interface MCPUsageRecord {
     event_at?: string;
 }
 
-export interface ProviderStatsRecord {
+export interface ModelUsageRecord {
     user_id: string;
-    provider_name: string;
-    active_models_count: number;
-    recorded_at?: string;
+    model_id: string;
+    provider: string;
+    used_at?: string;
 }
 
 export interface RuntimeUsageRecord {

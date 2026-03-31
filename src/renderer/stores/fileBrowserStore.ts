@@ -4,6 +4,7 @@
  * Holds sidebar file tree state for Fase 1.
  */
 
+import path from 'path-browserify';
 import { create } from 'zustand';
 
 export interface DirectoryEntry {
@@ -14,6 +15,62 @@ export interface DirectoryEntry {
   extension: string;
   modifiedAt: number;
   isHidden: boolean;
+}
+
+export type FileSystemChangeKind =
+  | 'file-added'
+  | 'file-changed'
+  | 'file-removed'
+  | 'directory-added'
+  | 'directory-removed';
+
+export interface FileSystemChange {
+  path: string;
+  parentPath: string;
+  kind: FileSystemChangeKind;
+}
+
+export function pruneEntriesSubtree(
+  entries: Map<string, DirectoryEntry[]>,
+  subtreeRoot: string
+): Map<string, DirectoryEntry[]> {
+  const next = new Map(entries);
+  const normalizedRoot = subtreeRoot.replace(/\\/g, '/').replace(/\/+$/, '');
+  const prefix = `${normalizedRoot}/`;
+
+  for (const key of next.keys()) {
+    const normalizedKey = key.replace(/\\/g, '/').replace(/\/+$/, '');
+    if (normalizedKey === normalizedRoot || normalizedKey.startsWith(prefix)) {
+      next.delete(key);
+    }
+  }
+
+  return next;
+}
+
+export function findNearestLoadedAncestor(
+  candidatePath: string,
+  loadedDirs: Set<string>,
+  workingDirectory: string
+): string {
+  let current = candidatePath;
+
+  while (true) {
+    if (loadedDirs.has(current)) {
+      return current;
+    }
+
+    if (current === workingDirectory) {
+      return workingDirectory;
+    }
+
+    const parent = path.dirname(current);
+    if (!parent || parent === current) {
+      return workingDirectory;
+    }
+
+    current = parent;
+  }
 }
 
 interface FileBrowserState {
@@ -29,7 +86,9 @@ interface FileBrowserState {
   loadDirectory: (dirPath: string) => Promise<void>;
   toggleDirectory: (dirPath: string) => void;
   refreshDirectory: (dirPath: string) => void;
+  applyExternalChanges: (changes: FileSystemChange[]) => void;
   setShowHidden: (show: boolean) => void;
+  setError: (error: string | null) => void;
   clearError: () => void;
   reset: () => void;
 }
@@ -134,6 +193,39 @@ export const useFileBrowserStore = create<FileBrowserState>((set, get) => ({
     void get().loadDirectory(dirPath);
   },
 
+  applyExternalChanges: (changes: FileSystemChange[]) => {
+    const state = get();
+    const workingDirectory = state.workingDirectory;
+
+    if (!workingDirectory || changes.length === 0) {
+      return;
+    }
+
+    const loadedDirs = new Set(state.entries.keys());
+    let nextEntries = new Map(state.entries);
+    const dirsToRefresh = new Set<string>();
+
+    for (const change of changes) {
+      if (change.kind === 'directory-removed') {
+        nextEntries = pruneEntriesSubtree(nextEntries, change.path);
+      }
+
+      const refreshTarget = findNearestLoadedAncestor(
+        change.parentPath,
+        loadedDirs,
+        workingDirectory
+      );
+
+      dirsToRefresh.add(refreshTarget);
+    }
+
+    set({ entries: nextEntries });
+
+    for (const dir of dirsToRefresh) {
+      void get().loadDirectory(dir);
+    }
+  },
+
   setShowHidden: (show: boolean) => {
     set({ showHiddenFiles: show });
 
@@ -143,6 +235,10 @@ export const useFileBrowserStore = create<FileBrowserState>((set, get) => ({
     for (const dir of dirs) {
       void get().loadDirectory(dir);
     }
+  },
+
+  setError: (error: string | null) => {
+    set({ error });
   },
 
   clearError: () => {

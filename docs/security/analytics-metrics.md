@@ -167,31 +167,33 @@ Levante's analytics system is designed with privacy as a core principle:
 
 ---
 
-### 5. Provider Statistics (`trackProviderStats()`)
+### 5. Model Usage (`trackModelUsage()`)
 
-**Purpose:** Track AI provider usage and model selection patterns
+**Purpose:** Track which AI models are actually used and how often
 
-**Table:** `provider_stats` (via RPC function `log_provider_stats`)
+**Table:** `model_usage` (via RPC function `log_model_usage`)
 
 **Data Sent:**
 ```typescript
 {
-  user_id: string,              // Anonymous UUID v4
-  provider_name: string,        // e.g., "OpenRouter", "OpenAI", "Anthropic"
-  active_models_count: number   // Number of models user has selected
+  user_id: string,    // Anonymous UUID v4
+  model_id: string,   // e.g., "openai/gpt-4o", "anthropic/claude-sonnet-4-20250514"
+  provider: string,   // e.g., "openrouter", "openai", "levante-platform"
+  used_at: timestamp  // When the model was used
 }
 ```
 
-**Trigger:** When user updates their selected models for a provider
+**Trigger:** When the AI completes a response (onFinish callback)
 
 **Use Cases:**
-- Understand provider popularity
-- Track multi-provider adoption
-- Identify model selection patterns
+- Understand which models are most popular
+- Track provider usage (via `GROUP BY provider`)
+- Identify model adoption patterns over time
 
 **Notes:**
-- Uses RPC function for aggregation/deduplication logic on server
-- Does NOT track which specific models are selected, only the count
+- One row inserted per completed AI response
+- Does NOT track message content, only that a model was used
+- Provider and model count stats can be derived via aggregation queries
 
 ---
 
@@ -294,7 +296,7 @@ DEBUG_ANALYTICS=true
 2. **app_opens** - Application launch events
 3. **conversations** - Chat activity
 4. **mcp_usage** - MCP server adoption
-5. **provider_stats** - AI provider usage (via RPC)
+5. **model_usage** - AI model usage per message (via RPC)
 6. **runtime_usage** - Python/Node.js runtime tracking
 
 ### Row Level Security (RLS)

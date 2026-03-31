@@ -584,6 +584,11 @@ const ChatPage = () => {
 
         const persistResult = await persistMessage(messageWithAttachments, tokenUsage);
 
+        // Track model usage (fire and forget)
+        if (model && currentModelInfo) {
+          window.levante.analytics?.trackModelUsage?.(model, currentModelInfo.provider).catch(() => {});
+        }
+
         // Update the message in useChat state with token usage
         if (tokenUsage) {
           setMessages((prevMessages) =>
@@ -930,7 +935,7 @@ const ChatPage = () => {
         // If no session exists, create one and save message for later
         if (!currentSession) {
           // Determine session type based on model's taskType
-          const currentModelInfo = availableModels.find((m) => m.id === model);
+          // Use currentModelInfo already resolved by useModelSelection (handles qualified refs)
           const taskType = currentModelInfo?.taskType;
           const isInferenceModel = taskType && taskType !== 'chat' && taskType !== 'image-text-to-text';
           const sessionType = isInferenceModel ? 'inference' : 'chat';

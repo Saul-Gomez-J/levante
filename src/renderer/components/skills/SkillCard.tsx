@@ -1,8 +1,12 @@
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Download, Trash2, ExternalLink, Globe, FolderOpen, FolderPlus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import type { SkillDescriptor, InstalledSkill } from '../../../types/skills'
+
+const DEFAULT_SKILL_IDS = new Set(['custom/skill-creator', 'custom/pdf'])
 
 interface SkillCardProps {
   skill: SkillDescriptor
@@ -21,7 +25,9 @@ export function SkillCard({
   onUninstall,
   onViewDetails,
 }: SkillCardProps) {
+  const { t } = useTranslation('chat')
   const isInstalledAnywhere = installedInstances.length > 0
+  const isDefault = DEFAULT_SKILL_IDS.has(skill.id)
   const hasGlobal = installedInstances.some((i) => i.scope === 'global')
   const projectInstances = installedInstances.filter((i) => i.scope === 'project')
   const MAX_PROJECT_BADGES = 2
@@ -92,16 +98,29 @@ export function SkillCard({
 
       <CardFooter className="pt-2 gap-2">
         {isInstalledAnywhere && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs text-destructive hover:text-destructive"
-            onClick={() => onUninstall(skill.id)}
-            disabled={isLoading}
-          >
-            <Trash2 className="h-3 w-3 mr-1" />
-            Remove
-          </Button>
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs text-destructive hover:text-destructive"
+                    onClick={() => onUninstall(skill.id)}
+                    disabled={isLoading || isDefault}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Remove
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {isDefault && (
+                <TooltipContent side="bottom">
+                  <p>{t('tools_menu.skills.default_skill_tooltip')}</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         )}
 
         <Button

@@ -72,6 +72,7 @@ import { subscriptionOAuthApi } from "./api/subscriptionOAuth";
 import { filesystemApi } from "./api/filesystem";
 import { compactionApi } from "./api/compaction";
 import { contextBudgetApi } from "./api/contextBudget";
+import { shellApi } from "./api/shell";
 
 // Re-export types for backwards compatibility
 export type {
@@ -746,9 +747,9 @@ export interface LevanteAPI {
       name: string,
       status: "active" | "removed"
     ) => Promise<{ success: boolean; error?: string }>;
-    trackProvider: (
-      name: string,
-      count: number
+    trackModelUsage: (
+      modelId: string,
+      provider: string
     ) => Promise<{ success: boolean; error?: string }>;
     trackUser: () => Promise<{ success: boolean; error?: string }>;
     trackAppOpen: (force?: boolean) => Promise<{ success: boolean; error?: string }>;
@@ -880,6 +881,7 @@ export interface LevanteAPI {
     update: (input: UpdateProjectInput) => Promise<DatabaseResult<Project>>;
     delete: (id: string) => Promise<DatabaseResult<boolean>>;
     getSessions: (projectId: string) => Promise<DatabaseResult<ChatSession[]>>;
+    addFiles: (projectId: string) => Promise<DatabaseResult<string[]>>;
   };
 
   // Platform API
@@ -953,6 +955,21 @@ export interface LevanteAPI {
       }>;
       error?: string;
     }>;
+    startWatching: () => Promise<{ success: boolean; error?: string }>;
+    stopWatching: () => Promise<{ success: boolean; error?: string }>;
+    onFilesChanged: (callback: (payload: {
+      rootPath: string;
+      changes: Array<{
+        path: string;
+        parentPath: string;
+        kind:
+          | 'file-added'
+          | 'file-changed'
+          | 'file-removed'
+          | 'directory-added'
+          | 'directory-removed';
+      }>;
+    }) => void) => () => void;
   };
 
   // Anthropic OAuth API (Claude Max/Pro subscription) - legacy shim
@@ -1001,6 +1018,11 @@ export interface LevanteAPI {
     }>;
   };
 
+  // Shell API
+  shell: {
+    showItemInFolder: (path: string) => void;
+  };
+
   // Skills API
   skills: {
     getCatalog: () => Promise<import('../types/skills').IPCResult<import('../types/skills').SkillsCatalogResponse>>;
@@ -1015,6 +1037,16 @@ export interface LevanteAPI {
       userInvocable: boolean,
       options: import('../types/skills').SetUserInvocableOptions
     ) => Promise<import('../types/skills').IPCResult<import('../types/skills').InstalledSkill>>;
+    installFromZip: (
+      zipPath: string,
+      options?: import('../types/skills').InstallSkillOptions
+    ) => Promise<import('../types/skills').IPCResult<import('../types/skills').InstalledSkill>>;
+    installFromZipBuffer: (
+      buffer: ArrayBuffer,
+      fileName: string,
+      options?: import('../types/skills').InstallSkillOptions
+    ) => Promise<import('../types/skills').IPCResult<import('../types/skills').InstalledSkill>>;
+    selectZipFile: () => Promise<import('../types/skills').IPCResult<string | null>>;
   };
 }
 
@@ -1093,6 +1125,9 @@ const api: LevanteAPI = {
 
   // Context Budget API
   contextBudget: contextBudgetApi,
+
+  // Shell API
+  shell: shellApi,
 
   // Skills API
   skills: skillsApi,

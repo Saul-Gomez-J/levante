@@ -10,6 +10,8 @@ import {
 } from "ai";
 import { getLogger } from "./logging";
 import { getModelProvider } from "./ai/providerResolver";
+import { resolveModelTarget } from "./ai/modelTargetResolver";
+import { getRawModelId } from "../../shared/modelRefs";
 import {
   getReasoningConfig,
   buildProviderOptions,
@@ -321,19 +323,28 @@ async function getReasoningProviderOptions(
     const aiConfig = preferencesService.get('ai') as { reasoningText?: ReasoningConfig } | undefined;
     const globalReasoningConfig = aiConfig?.reasoningText;
 
-    // If no provider passed, try to find it
+    // If no provider passed, try to find it using resolveModelTarget
     let resolvedProvider = provider;
     if (!resolvedProvider) {
-      const providers = (preferencesService.get("providers") as ProviderConfig[]) || [];
-      resolvedProvider = providers.find((p) => {
-        if (p.modelSource === "dynamic") {
-          return p.selectedModelIds?.includes(modelId);
-        } else {
-          return p.models.some(
-            (model) => model.id === modelId && model.isSelected !== false
-          );
+      try {
+        const target = await resolveModelTarget(modelId);
+        if (target.source === 'provider') {
+          resolvedProvider = target.provider;
         }
-      });
+      } catch {
+        // Fallback: search by raw ID
+        const rawId = getRawModelId(modelId);
+        const providers = (preferencesService.get("providers") as ProviderConfig[]) || [];
+        resolvedProvider = providers.find((p) => {
+          if (p.modelSource === "dynamic") {
+            return p.selectedModelIds?.includes(rawId);
+          } else {
+            return p.models.some(
+              (model) => model.id === rawId && model.isSelected !== false
+            );
+          }
+        });
+      }
     }
 
     // Get reasoning config with priority resolution
@@ -811,18 +822,21 @@ export class AIService {
     | undefined
   > {
     try {
+      // Extract raw model ID for lookups in provider models
+      const rawId = getRawModelId(modelId);
+
       const { preferencesService } = await import("./preferencesService");
       const providers = (preferencesService.get("providers") as any[]) || [];
 
       for (const provider of providers) {
-        // Find model in provider (should have minimal data + classification saved)
-        const model = provider.models?.find((m: any) => m.id === modelId);
+        // Find model in provider using raw ID (providers store raw IDs)
+        const model = provider.models?.find((m: any) => m.id === rawId);
 
         if (model) {
           // Use cached classification (saved from renderer)
           if (model.category && model.computedCapabilities) {
             this.logger.aiSdk.debug("Using saved model classification", {
-              modelId,
+              modelId: rawId,
               category: model.category,
               capabilities: model.computedCapabilities,
             });
@@ -837,7 +851,7 @@ export class AIService {
           // Fallback: classify on-the-fly (shouldn't happen with Phase 2 sync)
           this.logger.aiSdk.warn(
             "Model not classified, classifying on-the-fly",
-            { modelId }
+            { modelId: rawId }
           );
           const classification = classifyModel(model);
 
@@ -850,8 +864,8 @@ export class AIService {
       }
 
       // Model not found - return undefined (like original getModelTaskType)
-      // getModelProvider will handle the error
-      this.logger.aiSdk.debug("Model not found in preferences", { modelId });
+      // For platform-qualified refs, model info may not be in preferences
+      this.logger.aiSdk.debug("Model not found in preferences", { modelId: rawId });
       return undefined;
     } catch (error) {
       this.logger.aiSdk.warn("Failed to get model info", {
@@ -867,24 +881,30 @@ export class AIService {
    */
   private async getProviderType(modelId: string): Promise<string | undefined> {
     try {
-      const { preferencesService } = await import("./preferencesService");
-      const providers = (preferencesService.get("providers") as any[]) || [];
+      const target = await resolveModelTarget(modelId);
+      return target.providerType;
+    } catch {
+      // Fallback: try raw lookup in providers for backwards compat
+      try {
+        const rawId = getRawModelId(modelId);
+        const { preferencesService } = await import("./preferencesService");
+        const providers = (preferencesService.get("providers") as any[]) || [];
 
-      // Find which provider this model belongs to
-      const providerWithModel = providers.find((provider) => {
-        if (provider.modelSource === "dynamic") {
-          return provider.selectedModelIds?.includes(modelId);
-        } else {
-          return provider.models.some(
-            (model: any) => model.id === modelId && model.isSelected !== false
-          );
-        }
-      });
+        const providerWithModel = providers.find((provider) => {
+          if (provider.modelSource === "dynamic") {
+            return provider.selectedModelIds?.includes(rawId);
+          } else {
+            return provider.models.some(
+              (model: any) => model.id === rawId && model.isSelected !== false
+            );
+          }
+        });
 
-      return providerWithModel?.type;
-    } catch (error) {
-      this.logger.aiSdk.error("Failed to get provider type", { error, modelId });
-      return undefined;
+        return providerWithModel?.type;
+      } catch (error) {
+        this.logger.aiSdk.error("Failed to get provider type", { error, modelId });
+        return undefined;
+      }
     }
   }
 

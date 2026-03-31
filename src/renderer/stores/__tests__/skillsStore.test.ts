@@ -13,6 +13,8 @@ const mockLevante = {
     listInstalled: vi.fn(),
     isInstalled: vi.fn(),
     setUserInvocable: vi.fn(),
+    installFromZip: vi.fn(),
+    selectZipFile: vi.fn(),
   },
 };
 
@@ -141,7 +143,7 @@ describe('skillsStore', () => {
   });
 
   describe('loadInstalledForChat', () => {
-    it('uses project-and-global mode when projectId exists', async () => {
+    it('uses project-merged mode when projectId exists', async () => {
       mockLevante.skills.listInstalled.mockResolvedValue({ success: true, data: [] });
 
       await act(async () => {
@@ -149,7 +151,7 @@ describe('skillsStore', () => {
       });
 
       expect(mockLevante.skills.listInstalled).toHaveBeenCalledWith({
-        mode: 'project-and-global',
+        mode: 'project-merged',
         projectId: 'proj_1',
       });
     });
@@ -226,6 +228,50 @@ describe('skillsStore', () => {
 
     it('legacy isInstalled checks only global scope', () => {
       expect(useSkillsStore.getState().isInstalled('test/skill-one')).toBe(true);
+    });
+  });
+
+  describe('installFromZip', () => {
+    it('upserts the returned installation by scopedKey', async () => {
+      const globalSkill = makeInstalledSkill({ scope: 'global' });
+      useSkillsStore.setState({
+        installedSkills: [globalSkill],
+        installedScopedKeys: new Set([globalSkill.scopedKey]),
+      });
+
+      const projectSkill = makeInstalledSkill({
+        id: 'custom/lead-summary',
+        name: 'lead-summary',
+        scope: 'project',
+        projectId: 'proj_1',
+        scopedKey: 'project:proj_1:custom/lead-summary',
+      });
+
+      mockLevante.skills.installFromZip.mockResolvedValue({
+        success: true,
+        data: projectSkill,
+      });
+
+      await act(async () => {
+        await useSkillsStore.getState().installFromZip('/tmp/lead-summary.zip', {
+          scope: 'project',
+          projectId: 'proj_1',
+        });
+      });
+
+      const state = useSkillsStore.getState();
+      expect(state.installedSkills).toHaveLength(2);
+      expect(state.installedScopedKeys.has('global:global:test/skill-one')).toBe(true);
+      expect(state.installedScopedKeys.has('project:proj_1:custom/lead-summary')).toBe(true);
+    });
+
+    it('selectZipFile returns the chosen path', async () => {
+      mockLevante.skills.selectZipFile.mockResolvedValue({
+        success: true,
+        data: '/tmp/lead-summary.zip',
+      });
+
+      await expect(useSkillsStore.getState().selectZipFile()).resolves.toBe('/tmp/lead-summary.zip');
     });
   });
 });

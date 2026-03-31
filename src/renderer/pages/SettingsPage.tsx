@@ -11,11 +11,14 @@ import {
   MCPSection
 } from '@/components/settings';
 import { usePlatformStore } from '@/stores/platformStore';
+import { usePreference } from '@/hooks/usePreferences';
 
 const SettingsPage = () => {
   const [developerMode, setDeveloperMode] = useState(false);
   const appMode = usePlatformStore((s) => s.appMode);
   const isPlatformMode = appMode === 'platform';
+  const [useOtherProviders] = usePreference('useOtherProviders');
+  const showSecuritySection = !isPlatformMode || useOtherProviders === true;
 
   useEffect(() => {
     const loadMode = async () => {
@@ -42,7 +45,7 @@ const SettingsPage = () => {
       <div className="max-w-4xl mx-auto space-y-6 px-4 mb-10">
         <PersonalizationSection />
         <AppearanceSection />
-        {!isPlatformMode && <SecuritySection />}
+        {showSecuritySection && <SecuritySection />}
         <PrivacySection />
         <AIConfigSection />
         <ReasoningSection />

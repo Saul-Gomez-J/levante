@@ -17,6 +17,7 @@ import {
 } from "./tools/task-output";
 import { createKillTaskTool, KillTaskToolConfig } from "./tools/kill-task";
 import { createListTasksTool, ListTasksToolConfig } from "./tools/list-tasks";
+import { createPresentFilesTool } from "./tools/present-files";
 
 export interface CodingToolsConfig {
   cwd: string;
@@ -127,6 +128,10 @@ export function getCodingTools(config: CodingToolsConfig) {
       cwd: config.cwd,
     });
   }
+
+  tools.present_files = createPresentFilesTool({
+    cwd: config.cwd,
+  });
 
   return tools;
 }

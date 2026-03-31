@@ -266,7 +266,7 @@ export function SidebarSections({
         {activeSection === 'chats' || !showFilesTab ? (
           <ChatListContent {...chatListProps} searchQuery={searchQuery} />
         ) : (
-          <FileBrowserContent searchQuery={searchQuery} cwd={effectiveCwd!} />
+          <FileBrowserContent searchQuery={searchQuery} cwd={effectiveCwd!} projectId={selectedProjectId} />
         )}
       </div>
     </div>

@@ -12,7 +12,10 @@ import { modelService } from '@/services/modelService';
 import { getRendererLogger } from '@/services/logger';
 import { usePreference } from '@/hooks/usePreferences';
 import { usePlatformStore } from '@/stores/platformStore';
+import { loadSelectableModels, resolveStoredModelForCatalog } from '@/lib/selectableModels';
+import { isQualifiedModelRef } from '../../shared/modelRefs';
 import type { Model, GroupedModelsByProvider } from '../../types/models';
+import type { SelectableModelsResult } from '@/lib/selectableModels';
 
 const logger = getRendererLogger();
 
@@ -79,14 +82,18 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
   const [availableModels, setAvailableModels] = useState<Model[]>([]);
   const [groupedModelsByProvider, setGroupedModelsByProvider] = useState<GroupedModelsByProvider | null>(null);
   const [modelsLoading, setModelsLoading] = useState(true);
+  const [catalog, setCatalog] = useState<SelectableModelsResult | null>(null);
 
   // Platform mode state
   const appMode = usePlatformStore(s => s.appMode);
   const platformModels = usePlatformStore(s => s.models);
   const isPlatformMode = appMode === 'platform';
 
-  // Load and save lastUsedModel from preferences
+  // Load preferences
   const [lastUsedModel, setLastUsedModel] = usePreference('lastUsedModel');
+  const [useOtherProviders] = usePreference('useOtherProviders');
+
+  const isHybridMode = isPlatformMode && (useOtherProviders ?? false);
 
   // Get current model info - search in grouped models if available, otherwise availableModels
   const currentModelInfo = useMemo(() => {
@@ -115,30 +122,22 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
     const loadModels = async () => {
       setModelsLoading(true);
       try {
-        if (isPlatformMode) {
-          // Platform mode: use models from platformStore (flat list, no provider grouping)
-          setAvailableModels(platformModels);
-          setGroupedModelsByProvider(null);
+        const result = await loadSelectableModels({
+          appMode,
+          useOtherProviders: useOtherProviders ?? false,
+          platformModels,
+        });
 
-          logger.models.debug('Loaded platform models', {
-            count: platformModels.length,
-          });
-        } else {
-          // Standalone mode: use modelService with multi-provider support
-          await modelService.initialize();
+        setAvailableModels(result.availableModels);
+        setGroupedModelsByProvider(result.groupedModelsByProvider);
+        setCatalog(result);
 
-          const models = await modelService.getAvailableModels();
-          const grouped = await modelService.getAllProvidersWithSelectedModels();
-
-          setAvailableModels(models);
-          setGroupedModelsByProvider(grouped);
-
-          logger.models.debug('Loaded models', {
-            count: models.length,
-            groupedCount: grouped.totalModelCount,
-            providerCount: grouped.providers.length
-          });
-        }
+        logger.models.debug('Loaded models via selectableModels', {
+          count: result.availableModels.length,
+          grouped: result.groupedModelsByProvider?.totalModelCount ?? 0,
+          mode: appMode,
+          hybrid: isHybridMode,
+        });
       } catch (error) {
         logger.models.error('Failed to load models', {
           error: error instanceof Error ? error.message : error
@@ -154,37 +153,25 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
     if (onLoadUserName) {
       onLoadUserName();
     }
-  }, [onLoadUserName, isPlatformMode, platformModels]);
+  }, [onLoadUserName, appMode, platformModels, useOtherProviders, isHybridMode]);
 
   // Auto-select model if only one is available OR use lastUsedModel when no model is selected
   useEffect(() => {
-    if (!modelsLoading && !model && !currentSession) {
-      // Logic:
-      // 1. If groupedModels exists, check total count.
-      // 2. If availableModels exists (legacy/active), check that.
-      // 3. If multiple models available, use lastUsedModel if available
-
+    if (!modelsLoading && !model && !currentSession && catalog) {
       let candidateModel = '';
 
       if (groupedModelsByProvider && groupedModelsByProvider.totalModelCount === 1) {
-        // Only 1 model across all providers
         const provider = groupedModelsByProvider.providers[0];
         if (provider && provider.models.length === 1) {
           candidateModel = provider.models[0].id;
         }
       } else if (availableModels.length === 1) {
-        // Fallback or specific scope
         candidateModel = availableModels[0].id;
       } else if (lastUsedModel) {
-        // Multiple models available - use lastUsedModel if it exists in available models
-        // Check if lastUsedModel exists in availableModels or groupedModelsByProvider
-        const modelExists = availableModels.some(m => m.id === lastUsedModel) ||
-          (groupedModelsByProvider?.providers.some(p =>
-            p.models.some(m => m.id === lastUsedModel)
-          ) ?? false);
-
-        if (modelExists) {
-          candidateModel = lastUsedModel;
+        // Resolve lastUsedModel against catalog (handles qualified + legacy)
+        const resolved = resolveStoredModelForCatalog(lastUsedModel, catalog);
+        if (resolved) {
+          candidateModel = resolved;
           logger.models.info('Using last used model', { model: candidateModel });
         }
       }
@@ -196,18 +183,26 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
         setModel(candidateModel);
       }
     }
-  }, [availableModels, groupedModelsByProvider, modelsLoading, model, currentSession, lastUsedModel]);
+  }, [availableModels, groupedModelsByProvider, modelsLoading, model, currentSession, lastUsedModel, catalog]);
 
   // Sync model with current session when session changes
   useEffect(() => {
-    if (currentSession?.model) {
+    if (currentSession?.model && catalog) {
+      // Resolve stored model (handles qualified + legacy)
+      const resolved = resolveStoredModelForCatalog(currentSession.model, catalog);
+      const modelToSet = resolved ?? currentSession.model;
+
       logger.core.info('Syncing model from session', {
         sessionId: currentSession.id,
-        model: currentSession.model
+        storedModel: currentSession.model,
+        resolvedModel: modelToSet,
       });
+      setModel(modelToSet);
+    } else if (currentSession?.model) {
+      // Catalog not loaded yet, use raw value
       setModel(currentSession.model);
     }
-  }, [currentSession?.id, currentSession?.model]);
+  }, [currentSession?.id, currentSession?.model, catalog]);
 
   // Save model to preferences when it changes (for default selection in new chats)
   useEffect(() => {
@@ -223,8 +218,6 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
 
   // Handle model change with session type validation
   const handleModelChange = useCallback(async (newModelId: string) => {
-    // Keep internal sync with new model logic (async wrapper)
-
     // Find model info across all providers
     let newModelInfo = availableModels.find((m) => m.id === newModelId);
     if (!newModelInfo && groupedModelsByProvider) {
@@ -237,13 +230,13 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
     // If still not found (rare edge case), we can't validate
     if (!newModelInfo) {
       logger.models.warn('Model not found for selection', { newModelId });
-      // If no current session, proceed blindly, otherwise block safe
       if (currentSession) return;
     }
 
     // If no current session, allow any model (it will determine session type on creation)
     if (!currentSession) {
-      // In platform mode, no provider switching needed
+      // In platform mode (pure or hybrid), no provider switching needed
+      // In standalone puro, auto-switch provider
       if (!isPlatformMode) {
         try {
           const newProviderId = await modelService.getProviderForModel(newModelId);
@@ -287,7 +280,6 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
       });
 
       try {
-        // Update session type in database
         const result = await window.levante.db.sessions.update({
           id: currentSession.id,
           session_type: newSessionType
@@ -297,17 +289,15 @@ export function useModelSelection(options: UseModelSelectionOptions): UseModelSe
           logger.core.error('Failed to update session type', {
             error: result.error
           });
-          // Continue anyway - the model change will still work
         }
       } catch (err) {
         logger.core.error('Error updating session type', {
           error: err instanceof Error ? err.message : String(err)
         });
-        // Continue anyway - the model change will still work
       }
     }
 
-    // Valid change - check provider switch (standalone mode only)
+    // Valid change - check provider switch (standalone mode only, not hybrid)
     if (!isPlatformMode) {
       try {
         const newProviderId = await modelService.getProviderForModel(newModelId);

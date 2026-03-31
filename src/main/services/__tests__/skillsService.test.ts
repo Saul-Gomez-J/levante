@@ -28,6 +28,15 @@ vi.mock('../logging', () => ({
   }),
 }));
 
+// Mock extract-zip
+const { mockExtractZip } = vi.hoisted(() => ({
+  mockExtractZip: vi.fn(),
+}));
+
+vi.mock('extract-zip', () => ({
+  default: mockExtractZip,
+}));
+
 // Mock directoryService
 const mockGlobalSkillsDir = path.join(os.tmpdir(), 'levante-test-skills-global');
 vi.mock('../directoryService', () => ({
@@ -81,6 +90,8 @@ describe('SkillsService', () => {
     await fs.mkdir(mockGlobalSkillsDir, { recursive: true });
     tmpProjectCwd = path.join(os.tmpdir(), `levante-test-project-${Date.now()}`);
     await fs.mkdir(tmpProjectCwd, { recursive: true });
+
+    mockExtractZip.mockReset();
 
     // Reset projectService mock
     const { projectService } = await import('../projectService');
@@ -296,6 +307,96 @@ describe('SkillsService', () => {
       expect(result).toHaveLength(2);
       expect(result.some((s) => s.scope === 'project')).toBe(true);
       expect(result.some((s) => s.scope === 'global')).toBe(true);
+    });
+  });
+
+  describe('installFromZip', () => {
+    it('installs a wrapped custom skill zip globally', async () => {
+      const zipPath = path.join(os.tmpdir(), `lead-summary-${Date.now()}.zip`);
+      await fs.writeFile(zipPath, 'dummy zip content', 'utf-8');
+
+      mockExtractZip.mockImplementation(async (_zipPath: string, options: { dir: string }) => {
+        const root = path.join(options.dir, 'lead-summary');
+        await fs.mkdir(path.join(root, 'rules'), { recursive: true });
+        await fs.writeFile(
+          path.join(root, 'SKILL.md'),
+          [
+            '---',
+            'name: lead-summary',
+            'description: Summarize leads',
+            'license: MIT',
+            'metadata:',
+            '  author: OpenAI-demo',
+            '  version: "1.0.0"',
+            '---',
+            '',
+            '# Lead Summary',
+          ].join('\n'),
+          'utf-8'
+        );
+        await fs.writeFile(path.join(root, 'rules', 'format.md'), 'Use bullet points', 'utf-8');
+      });
+
+      const result = await service.installFromZip(zipPath, { scope: 'global' });
+
+      expect(result.id).toBe('custom/lead-summary');
+      expect(result.name).toBe('lead-summary');
+      expect(result.author).toBe('OpenAI-demo');
+      expect(result.version).toBe('1.0.0');
+      expect(result.scope).toBe('global');
+
+      await expect(
+        fs.access(path.join(mockGlobalSkillsDir, 'lead-summary', 'skill.md'))
+      ).resolves.toBeUndefined();
+      await expect(
+        fs.readFile(path.join(mockGlobalSkillsDir, 'lead-summary', 'rules', 'format.md'), 'utf-8')
+      ).resolves.toBe('Use bullet points');
+    });
+
+    it('installs a wrapped custom skill .skill package globally', async () => {
+      const skillPath = path.join(os.tmpdir(), `lead-summary-${Date.now()}.skill`);
+      await fs.writeFile(skillPath, 'dummy skill content', 'utf-8');
+
+      mockExtractZip.mockImplementation(async (_zipPath: string, options: { dir: string }) => {
+        const root = path.join(options.dir, 'lead-summary');
+        await fs.mkdir(path.join(root, 'rules'), { recursive: true });
+        await fs.writeFile(
+          path.join(root, 'SKILL.md'),
+          [
+            '---',
+            'name: lead-summary',
+            'description: Summarize leads',
+            '---',
+            '',
+            '# Lead Summary',
+          ].join('\n'),
+          'utf-8'
+        );
+      });
+
+      const result = await service.installFromZip(skillPath, { scope: 'global' });
+      expect(result.name).toBe('lead-summary');
+      expect(result.scope).toBe('global');
+    });
+
+    it('rejects unsupported file extensions', async () => {
+      await expect(
+        service.installFromZip('/tmp/not-a-skill.txt', { scope: 'global' })
+      ).rejects.toThrow('Only .zip and .skill files are supported');
+    });
+
+    it('fails when the zip does not contain a manifest', async () => {
+      const zipPath = path.join(os.tmpdir(), `invalid-skill-${Date.now()}.zip`);
+      await fs.writeFile(zipPath, 'dummy zip content', 'utf-8');
+
+      mockExtractZip.mockImplementation(async (_zipPath: string, options: { dir: string }) => {
+        await fs.mkdir(path.join(options.dir, 'invalid-skill'), { recursive: true });
+        await fs.writeFile(path.join(options.dir, 'invalid-skill', 'README.md'), '# Missing manifest', 'utf-8');
+      });
+
+      await expect(
+        service.installFromZip(zipPath, { scope: 'global' })
+      ).rejects.toThrow('No SKILL.md or skill.md found');
     });
   });
 });

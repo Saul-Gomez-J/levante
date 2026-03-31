@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { projectService } from '../services/projectService';
 import { CreateProjectInput, UpdateProjectInput } from '../../types/database';
 import { getLogger } from '../services/logging';
@@ -34,6 +34,27 @@ export function setupProjectHandlers(): void {
   ipcMain.removeHandler('levante/projects/sessions');
   ipcMain.handle('levante/projects/sessions', async (_, projectId: string) => {
     return await projectService.getProjectSessions(projectId);
+  });
+
+  ipcMain.removeHandler('levante/projects/addFiles');
+  ipcMain.handle('levante/projects/addFiles', async (event, projectId: string) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+
+    const dialogOptions: Electron.OpenDialogOptions = {
+      title: 'Add files to project',
+      buttonLabel: 'Add',
+      properties: ['openFile', 'multiSelections'],
+    };
+
+    const result = win && !win.isDestroyed()
+      ? await dialog.showOpenDialog(win, dialogOptions)
+      : await dialog.showOpenDialog(dialogOptions);
+
+    if (result.canceled || result.filePaths.length === 0) {
+      return { data: [], success: true };
+    }
+
+    return await projectService.addFilesToProject(projectId, result.filePaths);
   });
 
   logger.ipc.info('Project IPC handlers registered');

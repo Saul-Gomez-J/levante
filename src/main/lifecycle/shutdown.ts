@@ -12,6 +12,7 @@ import { databaseService } from "../services/databaseService";
 import { mcpService } from "../ipc/mcpHandlers";
 import { oauthCallbackServer } from "../services/oauthCallbackServer";
 import { taskManager } from "../services/tasks";
+import { cleanupFileSystemHandlers } from "../ipc/fileSystemHandlers";
 
 const logger = getLogger();
 
@@ -24,6 +25,16 @@ const logger = getLogger();
  */
 export async function gracefulShutdown(): Promise<void> {
   logger.core.info("App is quitting, performing cleanup...");
+
+  // 0a. Clean up file system watchers
+  try {
+    await cleanupFileSystemHandlers();
+    logger.core.info("File system watchers cleaned up");
+  } catch (error) {
+    logger.core.error("Error cleaning file system watchers", {
+      error: error instanceof Error ? error.message : error,
+    });
+  }
 
   // 0. Clear all background tasks
   try {

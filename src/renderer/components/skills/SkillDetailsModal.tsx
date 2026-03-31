@@ -10,9 +10,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip'
 import { Download, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import type { SkillDescriptor, InstallSkillOptions, UninstallSkillOptions } from '../../../types/skills'
+
+const DEFAULT_SKILL_IDS = new Set(['custom/skill-creator', 'custom/pdf'])
 import { useSkillsStore } from '@/stores/skillsStore'
 import { useProjectStore } from '@/stores/projectStore'
 import { SkillInstallScopeModal } from './SkillInstallScopeModal'
@@ -28,6 +32,7 @@ export function SkillDetailsModal({ skill, open, onOpenChange }: SkillDetailsMod
   const [isProcessing, setIsProcessing] = useState(false)
   const [showInstallScope, setShowInstallScope] = useState(false)
   const [showUninstallScope, setShowUninstallScope] = useState(false)
+  const { t } = useTranslation('chat')
 
   const { isInstalledAnywhere, getInstalledBySkillId, installSkill, uninstallSkill } = useSkillsStore()
   const { projects } = useProjectStore()
@@ -37,6 +42,7 @@ export function SkillDetailsModal({ skill, open, onOpenChange }: SkillDetailsMod
   const projectsWithCwd = projects.filter((p) => p.cwd && p.cwd.trim() !== '')
   const installedInstances = getInstalledBySkillId(skill.id)
   const installedAnywhere = isInstalledAnywhere(skill.id)
+  const isDefault = DEFAULT_SKILL_IDS.has(skill.id)
 
   const doInstall = async (options: InstallSkillOptions) => {
     setIsProcessing(true)
@@ -153,14 +159,27 @@ export function SkillDetailsModal({ skill, open, onOpenChange }: SkillDetailsMod
             </Button>
 
             {installedAnywhere && (
-              <Button
-                variant="destructive"
-                onClick={handleUninstall}
-                disabled={isProcessing}
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Remove Skill
-              </Button>
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button
+                        variant="destructive"
+                        onClick={handleUninstall}
+                        disabled={isProcessing || isDefault}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Remove Skill
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {isDefault && (
+                    <TooltipContent side="bottom">
+                      <p>{t('tools_menu.skills.default_skill_tooltip')}</p>
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             )}
           </DialogFooter>
         </DialogContent>

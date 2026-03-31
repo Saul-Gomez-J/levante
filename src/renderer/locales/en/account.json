@@ -4,6 +4,7 @@
   "org_label": "Org: {{orgId}}",
   "manage_plan": "Manage plan",
   "log_out": "Log out",
+  "use_other_providers_link": "Use other providers",
   "models_title": "Available Models",
   "models_description": "{{count}} models included in your plan",
   "refresh_models": "Refresh",
@@ -14,5 +15,10 @@
   "model_pricing": "Pricing",
   "category_other": "Other",
   "logout_confirm_title": "Log out of Levante Platform?",
-  "logout_confirm_description": "You will switch to standalone mode, where you'll need to configure your own API keys (OpenRouter, OpenAI, Anthropic, etc.) to use AI models. You can always log back in later from the Models page."
+  "logout_confirm_description": "You will switch to standalone mode, where you'll need to configure your own API keys (OpenRouter, OpenAI, Anthropic, etc.) to use AI models. You can always log back in later from the Models page.",
+  "other_providers_title": "Other Providers",
+  "other_providers_description": "Enable additional providers alongside Levante Platform.",
+  "other_providers_warning": "External providers use your own credentials and billing.",
+  "other_providers_toggle": "Enable other providers",
+  "other_providers_back": "Back to account"
 }

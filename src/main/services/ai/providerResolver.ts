@@ -11,6 +11,7 @@ import { getOAuthService } from '../oauth';
 import { userProfileService } from '../userProfileService';
 import { platformService } from '../platformService';
 import { envConfig } from '../envConfig';
+import { resolveModelTarget } from './modelTargetResolver';
 
 const logger = getLogger();
 
@@ -22,105 +23,32 @@ const logger = getLogger();
  */
 export async function getModelProvider(modelId: string): Promise<LanguageModel> {
   try {
-    // Platform mode shortcut: always use Levante Platform
-    const profile = await userProfileService.getProfile();
-    if (profile.appMode === 'platform') {
-      const isAuth = await platformService.isAuthenticated();
-      if (isAuth) {
-        logger.aiSdk.info("Platform mode: routing to Levante Platform", { modelId });
-        return await configureLevantePlatformDirect(modelId);
-      }
-      throw new Error("Levante Platform session expired. Please log in again.");
-    }
+    const target = await resolveModelTarget(modelId);
 
-    // Standalone mode: standard multi-provider resolution
-    // Get providers configuration from preferences via IPC
-    const { preferencesService } = await import("../preferencesService");
-
-    let providers: ProviderConfig[];
-    try {
-      providers =
-        (preferencesService.get("providers") as ProviderConfig[]) || [];
-
-      // Debug: Log loaded providers
-      logger.aiSdk.debug("Loaded providers from preferences", {
-        providerCount: providers.length,
-        providers: providers.map(p => ({
-          id: p.id,
-          type: p.type,
-          hasApiKey: !!p.apiKey,
-          apiKeyPrefix: p.apiKey?.substring(0, 10)
-        }))
+    if (target.source === 'platform') {
+      logger.aiSdk.info("Routing to Levante Platform", {
+        modelId: target.rawModelId,
+        storedRef: target.storedModelRef,
       });
-    } catch (error) {
-      logger.aiSdk.warn("No providers found in preferences, using empty array");
-      providers = [];
+      return await configureLevantePlatformDirect(target.rawModelId);
     }
 
-    // If no providers configured, throw error
-    if (providers.length === 0) {
-      logger.aiSdk.error("No providers configured");
-      throw new Error(
-        "No AI providers configured. Please configure at least one provider in the Models page."
-      );
-    }
-
-    // Find which provider this model belongs to
-    // For dynamic providers, check selectedModelIds (since models array is empty in storage)
-    // For user-defined providers, check models array
-    const providerWithModel = providers.find((provider) => {
-      if (provider.modelSource === 'dynamic') {
-        // Dynamic providers save only selectedModelIds
-        return provider.selectedModelIds?.includes(modelId);
-      } else {
-        // User-defined providers have full model data
-        return provider.models.some(
-          (model) => model.id === modelId && model.isSelected !== false
-        );
-      }
-    });
-
-    if (!providerWithModel) {
-      // Log all available providers and their models for debugging
-      logger.aiSdk.error("Model not found in any configured provider", {
-        modelId,
-        totalProviders: providers.length,
-        availableProviders: providers.map(p => ({
-          id: p.id,
-          name: p.name,
-          type: p.type,
-          modelSource: p.modelSource,
-          modelCount: p.models.length,
-          selectedModels: p.modelSource === 'dynamic'
-            ? (p.selectedModelIds || [])
-            : p.models.filter(m => m.isSelected !== false).map(m => m.id)
-        }))
-      });
-
-      throw new Error(
-        `Model "${modelId}" not found in any configured provider. Please select the model in the Models page and ensure it is enabled.`
-      );
-    }
-
-    // Log the provider that will be used
+    // target.source === 'provider'
     logger.aiSdk.info("Using configured provider for model", {
-      modelId,
-      providerType: providerWithModel.type,
-      providerName: providerWithModel.name,
-      providerId: providerWithModel.id,
-      hasApiKey: !!providerWithModel.apiKey,
-      hasBaseUrl: !!providerWithModel.baseUrl,
-      apiKeyPrefix: providerWithModel.apiKey?.substring(0, 10) + '...'
+      modelId: target.rawModelId,
+      providerType: target.providerType,
+      providerName: target.provider.name,
+      providerId: target.providerId,
+      hasApiKey: !!target.provider.apiKey,
+      hasBaseUrl: !!target.provider.baseUrl,
     });
 
-    // Configure provider based on type
-    return await configureProvider(providerWithModel, modelId);
+    return await configureProvider(target.provider, target.rawModelId);
   } catch (error) {
     logger.aiSdk.error("Error getting model provider configuration", {
       error: error instanceof Error ? error.message : error,
       modelId
     });
-    // Re-throw the error instead of using fallback
     throw error;
   }
 }

@@ -97,11 +97,22 @@
       "show_hidden": "Mostrar archivos ocultos",
       "hide_hidden": "Ocultar archivos ocultos",
       "refresh": "Actualizar",
+      "add_files": "Añadir archivos",
       "empty_directory": "Directorio vacío",
       "read_dir_error": "No se pudo leer el directorio",
       "searching": "Buscando...",
       "no_search_results": "No se encontraron archivos"
     }
+  },
+  "project_page": {
+    "new_chat_placeholder": "Nuevo chat en {{name}}",
+    "select_model": "Selecciona un modelo",
+    "chats_tab": "Chats",
+    "loading": "Cargando...",
+    "no_conversations": "No hay conversaciones aún. ¡Empieza una nueva!",
+    "untitled": "Sin título",
+    "today": "Hoy",
+    "yesterday": "Ayer"
   },
   "tools_menu": {
     "button_label": "Configuración",
@@ -149,12 +160,33 @@
       "scope_global": "global",
       "scope_project": "proyecto",
       "requires_cowork": "Las skills solo están disponibles en modo Cowork",
-      "requires_cowork_directory": "Las skills requieren una carpeta de trabajo en modo Cowork"
+      "requires_cowork_directory": "Las skills requieren una carpeta de trabajo en modo Cowork",
+      "default_skill_tooltip": "Esta es una skill integrada y no se puede eliminar. Puedes desactivarla si no la quieres en un chat.",
+      "custom_import": {
+        "button": "Añadir Personalizado",
+        "title": "Importar Skill Personalizado",
+        "description": "Importa una skill desde un archivo .zip o .skill que contiene un manifiesto SKILL.md.",
+        "drop_zone": "Arrastra un archivo .zip o .skill aquí, o haz clic para buscar",
+        "browse": "Buscar Archivo",
+        "scope_label": "Ámbito de instalación",
+        "scope_global_desc": "Disponible en todos los chats",
+        "install_button": "Instalar Skill",
+        "success": "Skill \"{{name}}\" instalada correctamente",
+        "error": "Error al instalar la skill: {{message}}",
+        "invalid_file_type": "Solo se aceptan archivos .zip y .skill",
+        "missing_path": "No se pudo leer la ruta local del archivo arrastrado"
+      }
     },
     "enabled": "Habilitados",
     "no_enabled_servers": "No hay servidores habilitados",
     "disabled_servers_info": "Activa para habilitar",
     "no_disabled_servers": "No hay servidores deshabilitados"
+  },
+  "present_files": {
+    "install_skill": "Copiar a tus habilidades",
+    "open": "Abrir",
+    "show_in_folder": "Mostrar en carpeta",
+    "missing": "El archivo ya no existe"
   },
   "paid_model_chat_warning": {
     "title": "Aviso sobre Modelo de Pago",
