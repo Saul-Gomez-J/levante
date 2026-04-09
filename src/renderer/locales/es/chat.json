@@ -16,6 +16,8 @@
     "no_models_found": "No se encontraron modelos.",
     "required_title": "Selecciona un modelo",
     "required_description": "Elige un modelo antes de enviar tu mensaje",
+    "load_error": "Error al cargar modelos",
+    "retry": "Reintentar",
     "context": "{{count}} contexto",
     "context_k": "{{count}}k contexto",
     "private_badge": "Privado"
@@ -112,7 +114,9 @@
     "no_conversations": "No hay conversaciones aún. ¡Empieza una nueva!",
     "untitled": "Sin título",
     "today": "Hoy",
-    "yesterday": "Ayer"
+    "yesterday": "Ayer",
+    "models_error": "Error al cargar modelos",
+    "retry": "Reintentar"
   },
   "tools_menu": {
     "button_label": "Configuración",

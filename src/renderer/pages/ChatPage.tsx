@@ -250,6 +250,8 @@ const ChatPage = () => {
     filteredAvailableModels,
     groupedModelsByProvider,
     modelsLoading,
+    modelsError,
+    retryModels,
     currentModelInfo,
     modelTaskType,
     handleModelChange,
@@ -1366,6 +1368,8 @@ const ChatPage = () => {
                     availableModels={filteredAvailableModels}
                     groupedModelsByProvider={groupedModelsByProvider || undefined}
                     modelsLoading={modelsLoading}
+                    modelsError={modelsError}
+                    onRetryModels={retryModels ?? undefined}
                     status={isCompacting ? 'submitted' : status}
                     modelTaskType={modelTaskType}
                     currentModelInfo={currentModelInfo}
@@ -1453,6 +1457,8 @@ const ChatPage = () => {
                   availableModels={filteredAvailableModels}
                   groupedModelsByProvider={groupedModelsByProvider || undefined}
                   modelsLoading={modelsLoading}
+                  modelsError={modelsError}
+                  onRetryModels={retryModels ?? undefined}
                   status={isCompacting ? 'submitted' : status}
                   modelTaskType={modelTaskType}
                   currentModelInfo={currentModelInfo}
