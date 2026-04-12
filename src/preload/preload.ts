@@ -1006,7 +1006,10 @@ export interface LevanteAPI {
     }) => Promise<{
       success: boolean;
       summaryMessageId?: string;
+      stage?: number;
       error?: string;
+      errorCategory?: string;
+      exhaustedStages?: boolean;
     }>;
   };
 

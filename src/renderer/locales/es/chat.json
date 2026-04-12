@@ -278,6 +278,8 @@
     "tokens_remaining": "Tokens restantes",
     "context_unknown": "Context window desconocida para este modelo/proveedor",
     "compact_success": "Conversación compactada",
-    "compact_error": "No se pudo compactar"
+    "compact_success_degraded": "Conversación compactada en modo reducido; algunos detalles pueden haberse resumido",
+    "compact_error": "No se pudo compactar",
+    "compact_error_context_too_long": "No se pudo compactar: la conversación sigue excediendo el límite del modelo incluso tras todas las etapas de reducción. Considera iniciar una nueva sesión."
   }
 }

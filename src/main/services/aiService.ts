@@ -2157,9 +2157,16 @@ export class AIService {
         }
       }
 
-      throw new Error(
+      const wrapped = new Error(
         error instanceof Error ? error.message : "Unknown error occurred"
       );
+
+      (wrapped as any).statusCode = (error as any)?.statusCode;
+      (wrapped as any).responseBody = (error as any)?.responseBody;
+      (wrapped as any).data = (error as any)?.data;
+      (wrapped as any).url = (error as any)?.url;
+
+      throw wrapped;
     }
   }
 }
