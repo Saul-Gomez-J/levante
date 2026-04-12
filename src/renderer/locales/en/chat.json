@@ -16,6 +16,8 @@
     "no_models_found": "No models found.",
     "required_title": "Select a model",
     "required_description": "Choose a model before sending your message",
+    "load_error": "Failed to load models",
+    "retry": "Retry",
     "context": "{{count}} context",
     "context_k": "{{count}}k context",
     "private_badge": "Private"
@@ -112,7 +114,9 @@
     "no_conversations": "No conversations yet. Start a new one!",
     "untitled": "Untitled",
     "today": "Today",
-    "yesterday": "Yesterday"
+    "yesterday": "Yesterday",
+    "models_error": "Failed to load models",
+    "retry": "Retry"
   },
   "tools_menu": {
     "button_label": "Settings",
