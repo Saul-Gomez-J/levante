@@ -1,68 +1,68 @@
-import { useTranslation } from 'react-i18next';
-import { ChevronDown, ChevronRight, CheckCircle2, Circle, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { CheckCircle2, Circle } from 'lucide-react';
 import { useTodoStore } from '@/stores/todoStore';
 import { cn } from '@/lib/utils';
+import { useThemeDetector } from '@/hooks/useThemeDetector';
+// @ts-ignore - SVG import
+import logoNegro from '@/assets/icons/logo_negro.svg';
+// @ts-ignore - SVG import
+import logoBlanco from '@/assets/icons/logo_blanco.svg';
 
-export function TodoPanel() {
-  const { t } = useTranslation('chat');
-  const { todos, counts, expanded, setExpanded } = useTodoStore();
+export function InlineTodoList() {
+  const theme = useThemeDetector();
+  const logoSvg = theme === 'dark' ? logoBlanco : logoNegro;
+  const [fadingIds, setFadingIds] = useState<Set<string>>(new Set());
+  const todos = useTodoStore((s) => s.todos);
+  const previousTodos = useTodoStore((s) => s.previousTodos);
 
-  if (counts.total === 0) return null;
+  useEffect(() => {
+    const currentIds = new Set(todos.map((t) => t.id));
+    const removed = previousTodos.filter(
+      (t) => t.status === 'completed' && !currentIds.has(t.id)
+    );
+    if (removed.length === 0) return;
+
+    setFadingIds(new Set(removed.map((t) => t.id)));
+    const timer = setTimeout(() => setFadingIds(new Set()), 500);
+    return () => clearTimeout(timer);
+  }, [todos, previousTodos]);
+
+  const fadingTodos = previousTodos.filter((t) => fadingIds.has(t.id));
+  const visibleTodos = [...todos, ...fadingTodos];
+
+  if (visibleTodos.length === 0) return null;
 
   return (
-    <div className="border-b border-border bg-muted/30">
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-      >
-        {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        <span>{t('todo_panel.title')}</span>
-        <span className="ml-auto flex items-center gap-2 text-xs">
-          {counts.inProgress > 0 && (
-            <span className="flex items-center gap-1 text-blue-500">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              {counts.inProgress}
-            </span>
+    <div className="space-y-1 py-2 pl-4 pr-2 animate-[fade-slide-in_300ms_ease-out]">
+      {visibleTodos.map((todo) => (
+        <div
+          key={todo.id}
+          className={cn(
+            'flex items-center gap-2 text-sm transition-all duration-300',
+            todo.status === 'completed' && 'text-muted-foreground line-through',
+            fadingIds.has(todo.id) && 'opacity-0 -translate-y-1 duration-500'
           )}
-          {counts.pending > 0 && (
-            <span>{t('todo_panel.pending', { count: counts.pending })}</span>
+        >
+          {todo.status === 'completed' && (
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
           )}
-          <span className="text-green-600">
-            {t('todo_panel.completed_ratio', {
-              completed: counts.completed,
-              total: counts.total,
-            })}
+          {todo.status === 'in_progress' && (
+            <img
+              src={logoSvg}
+              alt="Working"
+              className="h-4 w-4 shrink-0 animate-[breathe_2s_ease-in-out_infinite]"
+            />
+          )}
+          {todo.status === 'pending' && (
+            <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
+          <span className="truncate">
+            {todo.status === 'in_progress' && todo.activeForm
+              ? todo.activeForm
+              : todo.subject}
           </span>
-        </span>
-      </button>
-
-      {expanded && (
-        <div className="space-y-1 px-4 pb-3">
-          {todos.map((todo) => (
-            <div
-              key={todo.id}
-              className={cn(
-                'flex items-center gap-2 py-1 text-sm',
-                todo.status === 'completed' && 'text-muted-foreground line-through'
-              )}
-            >
-              {todo.status === 'completed' && (
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
-              )}
-              {todo.status === 'in_progress' && (
-                <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" />
-              )}
-              {todo.status === 'pending' && (
-                <Circle className="h-4 w-4 shrink-0 text-muted-foreground" />
-              )}
-              <span className="truncate">
-                {todo.status === 'in_progress' && todo.activeForm ? todo.activeForm : todo.subject}
-              </span>
-            </div>
-          ))}
         </div>
-      )}
+      ))}
     </div>
   );
 }

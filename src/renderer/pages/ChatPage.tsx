@@ -45,8 +45,9 @@ import type { FileMentionPayload } from '@/components/chat/lexical/FileMentionNo
 import { toast } from 'sonner';
 import { shouldAutoSendAfterApproval } from '@/utils/toolApprovalAutoSend';
 import { ContextUsageIndicator, type ContextUsageData } from '@/components/chat/ContextUsageIndicator';
-import { TodoPanel } from '@/components/chat/TodoPanel';
+import { InlineTodoList } from '@/components/chat/TodoPanel';
 import { useTodoSync } from '@/hooks/useTodoSync';
+import { useTodoStore } from '@/stores/todoStore';
 import type { TokenUsage, ContextBudgetEstimate } from '../../preload/types';
 
 // AI SDK v5 imports
@@ -203,6 +204,7 @@ const ChatPage = () => {
   const recalculateContextBudget = useChatStore((state) => state.recalculateContextBudget);
   const currentSession = useChatStore((state) => state.currentSession);
   useTodoSync(currentSession?.id ?? null);
+  const todosInProgress = useTodoStore((s) => s.todos.some((t) => t.status === 'in_progress'));
   const persistMessage = useChatStore((state) => state.persistMessage);
   const editMessage = useChatStore((state) => state.editMessage); // ← NEW
   const createSession = useChatStore((state) => state.createSession);
@@ -1397,7 +1399,6 @@ const ChatPage = () => {
             // Chat conversation
             (<>
               <Conversation className="flex-1">
-                <TodoPanel />
                 <ConversationContent className="max-w-3xl mx-auto p-0 pl-4 pr-2 py-4">
                   {messages.map((message, index) => (
                     <ChatMessageItem
@@ -1414,8 +1415,11 @@ const ChatPage = () => {
                     />
                   ))}
 
-                  {/* Streaming indicator */}
-                  {(status === 'streaming' || status === 'submitted') && (
+                  {/* Inline todo list */}
+                  <InlineTodoList />
+
+                  {/* Streaming indicator (hidden when todos are in progress) */}
+                  {(status === 'streaming' || status === 'submitted') && !todosInProgress && (
                     <Message from="assistant">
                       <MessageContent>
                         <BreathingLogo />
