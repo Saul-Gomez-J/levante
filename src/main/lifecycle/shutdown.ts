@@ -12,6 +12,7 @@ import { databaseService } from "../services/databaseService";
 import { mcpService } from "../ipc/mcpHandlers";
 import { oauthCallbackServer } from "../services/oauthCallbackServer";
 import { taskManager } from "../services/tasks";
+import { todoPurgeScheduler } from "../services/todoPurgeScheduler";
 import { cleanupFileSystemHandlers } from "../ipc/fileSystemHandlers";
 
 const logger = getLogger();
@@ -42,6 +43,16 @@ export async function gracefulShutdown(): Promise<void> {
     logger.core.info("Background tasks cleared");
   } catch (error) {
     logger.core.error("Error clearing background tasks", {
+      error: error instanceof Error ? error.message : error,
+    });
+  }
+
+  // 0b. Clear pending todo purge timers
+  try {
+    todoPurgeScheduler.cancelAll();
+    logger.core.info("Todo purge timers cleared");
+  } catch (error) {
+    logger.core.error("Error clearing todo purge timers", {
       error: error instanceof Error ? error.message : error,
     });
   }

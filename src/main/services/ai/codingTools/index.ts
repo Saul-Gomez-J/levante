@@ -18,9 +18,14 @@ import {
 import { createKillTaskTool, KillTaskToolConfig } from "./tools/kill-task";
 import { createListTasksTool, ListTasksToolConfig } from "./tools/list-tasks";
 import { createPresentFilesTool } from "./tools/present-files";
+import { createTodoCreateTool } from "./tools/todo-create";
+import { createTodoListTool } from "./tools/todo-list";
+import { createTodoGetTool } from "./tools/todo-get";
+import { createTodoUpdateTool } from "./tools/todo-update";
 
 export interface CodingToolsConfig {
   cwd: string;
+  sessionId?: string;
   enabled?: {
     bash?: boolean;
     read?: boolean;
@@ -32,6 +37,10 @@ export interface CodingToolsConfig {
     taskOutput?: boolean;
     killTask?: boolean;
     listTasks?: boolean;
+    todoCreate?: boolean;
+    todoList?: boolean;
+    todoGet?: boolean;
+    todoUpdate?: boolean;
   };
   // Config específica por herramienta
   bash?: Partial<BashToolConfig>;
@@ -57,6 +66,10 @@ export function getCodingTools(config: CodingToolsConfig) {
     taskOutput: true,
     killTask: true,
     listTasks: true,
+    todoCreate: true,
+    todoList: true,
+    todoGet: true,
+    todoUpdate: true,
     ...config.enabled,
   };
 
@@ -132,6 +145,20 @@ export function getCodingTools(config: CodingToolsConfig) {
   tools.present_files = createPresentFilesTool({
     cwd: config.cwd,
   });
+
+  // Todo tools (only when sessionId is available)
+  if (config.sessionId && enabled.todoCreate) {
+    tools.todo_create = createTodoCreateTool({ sessionId: config.sessionId });
+  }
+  if (config.sessionId && enabled.todoList) {
+    tools.todo_list = createTodoListTool({ sessionId: config.sessionId });
+  }
+  if (config.sessionId && enabled.todoGet) {
+    tools.todo_get = createTodoGetTool({ sessionId: config.sessionId });
+  }
+  if (config.sessionId && enabled.todoUpdate) {
+    tools.todo_update = createTodoUpdateTool({ sessionId: config.sessionId });
+  }
 
   return tools;
 }

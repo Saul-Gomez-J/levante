@@ -45,6 +45,8 @@ import type { FileMentionPayload } from '@/components/chat/lexical/FileMentionNo
 import { toast } from 'sonner';
 import { shouldAutoSendAfterApproval } from '@/utils/toolApprovalAutoSend';
 import { ContextUsageIndicator, type ContextUsageData } from '@/components/chat/ContextUsageIndicator';
+import { TodoPanel } from '@/components/chat/TodoPanel';
+import { useTodoSync } from '@/hooks/useTodoSync';
 import type { TokenUsage, ContextBudgetEstimate } from '../../preload/types';
 
 // AI SDK v5 imports
@@ -200,6 +202,7 @@ const ChatPage = () => {
   const updateLearnedOverhead = useChatStore((state) => state.updateLearnedOverhead);
   const recalculateContextBudget = useChatStore((state) => state.recalculateContextBudget);
   const currentSession = useChatStore((state) => state.currentSession);
+  useTodoSync(currentSession?.id ?? null);
   const persistMessage = useChatStore((state) => state.persistMessage);
   const editMessage = useChatStore((state) => state.editMessage); // ← NEW
   const createSession = useChatStore((state) => state.createSession);
@@ -1394,6 +1397,7 @@ const ChatPage = () => {
             // Chat conversation
             (<>
               <Conversation className="flex-1">
+                <TodoPanel />
                 <ConversationContent className="max-w-3xl mx-auto p-0 pl-4 pr-2 py-4">
                   {messages.map((message, index) => (
                     <ChatMessageItem
