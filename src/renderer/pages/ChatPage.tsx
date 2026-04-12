@@ -40,6 +40,8 @@ import { usePreference } from '@/hooks/usePreferences';
 import { useToolAutoApproval } from '@/hooks/useToolAutoApproval';
 import { SidePanel } from '@/components/chat/SidePanel';
 import { WebPreviewToast } from '@/components/chat/WebPreviewToast';
+import { useSidePanelStore } from '@/stores/sidePanelStore';
+import { getWidgetTabsFromMessage, getWidgetTabIdsFromMessages } from '@/lib/widgetTabs';
 import { useWebPreview } from '@/hooks/useWebPreview';
 import type { FileMentionPayload } from '@/components/chat/lexical/FileMentionNode';
 import { toast } from 'sonner';
@@ -211,6 +213,11 @@ const ChatPage = () => {
   const setPendingPrompt = useChatStore((state) => state.setPendingPrompt);
   const skipNextHistoricalLoad = useChatStore((state) => state.skipNextHistoricalLoad);
   const setSkipNextHistoricalLoad = useChatStore((state) => state.setSkipNextHistoricalLoad);
+
+  // Widget panel store
+  const openWidgetTab = useSidePanelStore((state) => state.openWidgetTab);
+  const clearWidgetTabs = useSidePanelStore((state) => state.clearWidgetTabs);
+  const seenWidgetIdsRef = useRef<Set<string>>(new Set());
 
   // Track previous session ID to detect changes
   const previousSessionIdRef = useRef<string | null>(null);
@@ -395,6 +402,10 @@ const ChatPage = () => {
       return next;
     });
   }, [currentSession?.id]);
+
+  const seedSeenWidgetIds = useCallback((nextMessages: UIMessage[]) => {
+    seenWidgetIdsRef.current = getWidgetTabIdsFromMessages(nextMessages);
+  }, []);
 
   // Web preview hook — activa la suscripción a eventos de detección de puertos
   useWebPreview();
@@ -832,10 +843,12 @@ const ChatPage = () => {
     // Update ref
     previousSessionIdRef.current = currentSessionId;
 
-    // Clear attachments, MCP resources, auto-approvals, and file mentions when changing sessions
+    // Clear attachments, MCP resources, auto-approvals, file mentions, and widget tabs when changing sessions
     clearAttachments();
     clearResources();
     clearAutoApprovals();
+    clearWidgetTabs();
+    seenWidgetIdsRef.current = new Set();
     setFileMentions([]);
     setPendingFirstMentions(null);
     setPendingMessageAfterStopMentions(null);
@@ -865,6 +878,7 @@ const ChatPage = () => {
       loadHistoricalMessages(currentSessionId)
         .then((msgs) => {
           logger.core.info('Loaded historical messages', { count: msgs.length });
+          seedSeenWidgetIds(msgs);
           setMessages(msgs);
           setIsLoadingMessages(false);
         })
@@ -877,9 +891,26 @@ const ChatPage = () => {
       // No session (new chat) - clear messages
       logger.core.info('New chat started, clearing messages');
       setMessages([]);
+      seedSeenWidgetIds([]);
       focusPromptInput();
     }
-  }, [currentSession?.id, skipNextHistoricalLoad, loadHistoricalMessages, setMessages, clearAttachments, clearResources, clearAutoApprovals, focusPromptInput, setSkipNextHistoricalLoad]);
+  }, [currentSession?.id, skipNextHistoricalLoad, loadHistoricalMessages, setMessages, clearAttachments, clearResources, clearAutoApprovals, clearWidgetTabs, seedSeenWidgetIds, focusPromptInput, setSkipNextHistoricalLoad]);
+
+  // Auto-open new widget tabs in the side panel
+  useEffect(() => {
+    if (!currentSession || isLoadingMessages) return;
+    if (!messages.length) return;
+
+    const widgets = messages.flatMap((message) => getWidgetTabsFromMessage(message));
+    const newWidgets = widgets.filter((widget) => !seenWidgetIdsRef.current.has(widget.id));
+
+    if (newWidgets.length === 0) return;
+
+    for (const widget of newWidgets) {
+      seenWidgetIdsRef.current.add(widget.id);
+      openWidgetTab(widget);
+    }
+  }, [messages, currentSession, isLoadingMessages, openWidgetTab]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1482,7 +1513,11 @@ const ChatPage = () => {
         </div>
 
         {/* Panel lateral de preview */}
-        <SidePanel />
+        <SidePanel
+          onPrompt={setInput}
+          onSendMessage={handleSendMessage}
+          chatMessages={messages}
+        />
       </div>
     </>
   );
