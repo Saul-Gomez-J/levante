@@ -6,10 +6,11 @@
  * - File: relative path + copy button
  */
 
-import { Server, FileCode, FileText } from 'lucide-react';
+import { Server, FileCode, FileText, Puzzle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { PanelTab } from '@/stores/sidePanelStore';
 import { useFileBrowserStore } from '@/stores/fileBrowserStore';
+import { getWidgetProtocolLabel } from '@/lib/widgetTabs';
 
 interface PanelContextBarProps {
   tab: PanelTab | undefined;
@@ -86,6 +87,19 @@ export function PanelContextBar({ tab }: PanelContextBarProps) {
         <div className={contextBarClassName}>
           <FileText size={11} className="text-muted-foreground shrink-0" />
           <span className="text-xs font-mono text-muted-foreground truncate flex-1">{tab.fileName}</span>
+        </div>
+      );
+
+    case 'widget':
+      return (
+        <div className="flex items-center gap-2 px-2 py-1 border-b bg-muted/20 shrink-0">
+          <Puzzle size={11} className="text-amber-500 shrink-0" />
+          <span className="text-xs font-mono text-muted-foreground truncate flex-1">
+            {tab.title}
+          </span>
+          <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 shrink-0">
+            {getWidgetProtocolLabel(tab.resource)}
+          </Badge>
         </div>
       );
 
