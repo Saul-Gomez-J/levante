@@ -1296,11 +1296,7 @@ export class AIService {
 
       const modelMessages = await convertToModelMessages(sanitizedMessages);
 
-      const todoToolsEnabled =
-        'todo_create' in tools &&
-        'todo_list' in tools &&
-        'todo_get' in tools &&
-        'todo_update' in tools;
+      const todoToolsEnabled = 'todo_write' in tools;
 
       const result = streamText({
         model: modelProvider,
@@ -2097,11 +2093,7 @@ export class AIService {
       );
 
       const allSingleMsgTools = { ...singleMsgBuiltInTools, ...tools };
-      const singleMsgTodoToolsEnabled =
-        'todo_create' in allSingleMsgTools &&
-        'todo_list' in allSingleMsgTools &&
-        'todo_get' in allSingleMsgTools &&
-        'todo_update' in allSingleMsgTools;
+      const singleMsgTodoToolsEnabled = 'todo_write' in allSingleMsgTools;
 
       const result = await generateText({
         model: modelProvider,

@@ -682,9 +682,9 @@ function App() {
   };
 
   // Handle new chat with navigation
-  const handleNewChat = () => {
+  const handleNewChat = async () => {
     if (selectedProject) {
-      handleNewSessionInProject(selectedProject.id);
+      await handleNewSessionInProject(selectedProject.id);
       return;
     }
     startNewChat();

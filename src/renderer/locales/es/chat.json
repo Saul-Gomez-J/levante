@@ -242,7 +242,8 @@
   "todo_panel": {
     "title": "Tareas",
     "pending": "{{count}} pendientes",
-    "completed_ratio": "{{completed}}/{{total}}"
+    "completed_ratio": "{{completed}}/{{total}}",
+    "in_progress": "{{count}} en progreso"
   },
   "background_tasks": {
     "title": "Tareas en Background",

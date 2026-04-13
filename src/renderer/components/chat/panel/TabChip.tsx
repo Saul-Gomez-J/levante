@@ -80,10 +80,10 @@ export function TabChip({ tab, isActive, onSelect, onClose }: TabChipProps) {
       type="button"
       onClick={onSelect}
       className={cn(
-        'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors shrink-0 group',
+        'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-colors shrink-0 group border border-transparent',
         isActive
-          ? 'bg-primary text-primary-foreground'
-          : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+          ? 'bg-background text-foreground border-[hsl(var(--panel-border))]'
+          : 'text-muted-foreground hover:bg-background/60 hover:text-foreground'
       )}
       title={title}
     >

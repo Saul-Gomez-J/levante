@@ -4,17 +4,14 @@
  * value to the user. Add or remove tool names as needed.
  */
 export const HIDDEN_TOOLS: ReadonlySet<string> = new Set([
-  'todo_update',
-  'todo_create',
-  'todo_list',
-  'todo_get',
+  'todo_write',
   'present_files',
 ]);
 
 /**
  * Returns true if a tool should not be rendered in the chat UI.
- * Accepts either a bare tool name ("todo_get") or the part type
- * format ("tool-todo_get").
+ * Accepts either a bare tool name ("todo_write") or the part type
+ * format ("tool-todo_write").
  */
 export function isToolHidden(toolNameOrPartType: string): boolean {
   const name = toolNameOrPartType.startsWith('tool-')

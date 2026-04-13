@@ -242,7 +242,8 @@
   "todo_panel": {
     "title": "Tasks",
     "pending": "{{count}} pending",
-    "completed_ratio": "{{completed}}/{{total}}"
+    "completed_ratio": "{{completed}}/{{total}}",
+    "in_progress": "{{count}} in progress"
   },
   "background_tasks": {
     "title": "Background Tasks",

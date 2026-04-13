@@ -97,11 +97,11 @@ export function SidePanel() {
   return (
     <div ref={containerRef} className="flex shrink-0 h-full" style={{ width }}>
       <div
-        className="w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors shrink-0 h-full"
+        className="h-full w-1.5 shrink-0 cursor-col-resize bg-transparent transition-colors hover:bg-[hsl(var(--panel-resize-handle))] active:bg-[hsl(var(--panel-border))]"
         onMouseDown={handleMouseDown}
       />
 
-      <div className="flex-1 min-h-0 min-w-0 flex flex-col border-l bg-background overflow-hidden">
+      <div className="flex-1 min-h-0 min-w-0 flex flex-col overflow-hidden border-l border-[hsl(var(--panel-border))] bg-[hsl(var(--panel-background))] text-[hsl(var(--panel-foreground))] shadow-[-12px_0_28px_-24px_rgba(0,0,0,0.65)]">
         <PanelTabBar
           tabs={tabs}
           activeTabId={activeTabId}

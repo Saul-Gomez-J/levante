@@ -13,7 +13,6 @@ import {
   PaginatedResult
 } from '../../types/database';
 import { getLogger } from './logging';
-import { todoService } from './todoService';
 import { escapeLikePattern } from '../utils/sqlSanitizer';
 
 export class ChatService {
@@ -222,7 +221,6 @@ export class ChatService {
 
   async deleteSession(id: string): Promise<DatabaseResult<boolean>> {
     try {
-      await todoService.deleteBySession(id);
       await databaseService.execute(
         'DELETE FROM chat_sessions WHERE id = ?',
         [id as InValue]

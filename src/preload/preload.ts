@@ -73,7 +73,6 @@ import { filesystemApi } from "./api/filesystem";
 import { compactionApi } from "./api/compaction";
 import { contextBudgetApi } from "./api/contextBudget";
 import { shellApi } from "./api/shell";
-import { todosApi } from "./api/todos";
 
 // Re-export types for backwards compatibility
 export type {
@@ -874,12 +873,6 @@ export interface LevanteAPI {
     ) => () => void;
   };
 
-  // Todos API (agent task tracking)
-  todos: {
-    list: (sessionId: string) => Promise<{ success: boolean; data?: import('../types/todos').TodoListResult; error?: string }>;
-    onUpdated: (callback: (data: { sessionId: string }) => void) => () => void;
-  };
-
   // Projects API
   projects: {
     create: (input: CreateProjectInput) => Promise<DatabaseResult<Project>>;
@@ -1124,9 +1117,6 @@ const api: LevanteAPI = {
 
   // Tasks API
   tasks: tasksApi,
-
-  // Todos API
-  todos: todosApi,
 
   // Projects API
   projects: projectsApi,

@@ -419,28 +419,10 @@ export class DatabaseService {
         ]
       },
       {
-        version: 11,
-        name: 'Add agent todos table',
+        version: 12,
+        name: 'Drop agent_todos table (moved to transcript-derived)',
         queries: [
-          `CREATE TABLE IF NOT EXISTS agent_todos (
-            id TEXT PRIMARY KEY,
-            session_id TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            description TEXT NOT NULL DEFAULT '',
-            active_form TEXT,
-            status TEXT NOT NULL DEFAULT 'pending'
-              CHECK(status IN ('pending', 'in_progress', 'completed')),
-            sort_order INTEGER NOT NULL DEFAULT 0,
-            metadata TEXT,
-            created_at INTEGER NOT NULL,
-            updated_at INTEGER NOT NULL,
-            completed_at INTEGER,
-            FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
-          )`,
-          `CREATE INDEX IF NOT EXISTS idx_agent_todos_session_sort
-            ON agent_todos(session_id, sort_order, created_at)`,
-          `CREATE INDEX IF NOT EXISTS idx_agent_todos_status
-            ON agent_todos(status)`
+          `DROP TABLE IF EXISTS agent_todos`
         ]
       }
     ];

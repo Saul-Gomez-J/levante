@@ -32,7 +32,6 @@ import { setupWidgetHandlers } from "../ipc/widgetHandlers";
 import { setupAnnouncementHandlers } from "../ipc/announcementHandlers";
 import { setupCoworkHandlers } from "../ipc/coworkHandlers";
 import { setupTaskHandlers } from "../ipc/taskHandlers";
-import { setupTodoHandlers } from "../ipc/todoHandlers";
 import { setupProjectHandlers } from "../ipc/projectHandlers";
 import { setupSkillsHandlers } from "../ipc/skillsHandlers";
 import { setupPlatformHandlers } from "../ipc/platformHandlers";
@@ -162,7 +161,6 @@ export async function registerIPCHandlers(getMainWindow: () => BrowserWindow | n
   setupAnnouncementHandlers();
   setupCoworkHandlers();
   setupTaskHandlers(getMainWindow);
-  setupTodoHandlers(getMainWindow);
   setupProjectHandlers();
   setupSkillsHandlers();
   setupPlatformHandlers();

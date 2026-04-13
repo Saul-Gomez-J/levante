@@ -227,12 +227,8 @@ Click the button above to add it. Once configured, I'll be able to help you with
     systemPrompt += `
 
 TASK TRACKING:
-You have access to todo management tools (todo_create, todo_list, todo_get, todo_update).
-
-Use them for multi-step work in Cowork mode.
-- Create tasks before starting complex work.
-- Mark one task as in_progress when you start it.
-- Mark tasks as completed immediately when finished.
+When tracking multi-step work, call \`todo_write\` with the full task list every time you need to add tasks, start one (\`in_progress\`), finish one (\`completed\`), or rename/reorder. Reuse the same \`id\` for a task across turns. Pass an empty array when all work is done.
+- Use it for multi-step work in Cowork mode.
 - Keep task subjects short and imperative.
 - Do not create todos for trivial one-step actions.
 `;
