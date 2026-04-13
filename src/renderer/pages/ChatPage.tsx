@@ -687,13 +687,21 @@ const ChatPage = () => {
       });
 
       if (!result.success) {
-        throw new Error(result.error || 'Compaction failed');
+        if (result.errorCategory === 'context_too_long' && result.exhaustedStages) {
+          throw new Error(t('context_usage.compact_error_context_too_long'));
+        }
+
+        throw new Error(result.error || t('context_usage.compact_error'));
       }
 
       const historical = await loadHistoricalMessages(currentSession.id);
       setMessages(historical);
 
-      toast.success(t('context_usage.compact_success'));
+      if (result.stage && result.stage > 1) {
+        toast.success(t('context_usage.compact_success_degraded'));
+      } else {
+        toast.success(t('context_usage.compact_success'));
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : t('context_usage.compact_error'));
     } finally {
