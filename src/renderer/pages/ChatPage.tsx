@@ -47,6 +47,9 @@ import type { FileMentionPayload } from '@/components/chat/lexical/FileMentionNo
 import { toast } from 'sonner';
 import { shouldAutoSendAfterApproval } from '@/utils/toolApprovalAutoSend';
 import { ContextUsageIndicator, type ContextUsageData } from '@/components/chat/ContextUsageIndicator';
+import { InlineTodoList } from '@/components/chat/TodoPanel';
+import { useTodoDerivation } from '@/hooks/useTodoDerivation';
+import { useTodoStore } from '@/stores/todoStore';
 import type { TokenUsage, ContextBudgetEstimate } from '../../preload/types';
 
 // AI SDK v5 imports
@@ -202,6 +205,7 @@ const ChatPage = () => {
   const updateLearnedOverhead = useChatStore((state) => state.updateLearnedOverhead);
   const recalculateContextBudget = useChatStore((state) => state.recalculateContextBudget);
   const currentSession = useChatStore((state) => state.currentSession);
+  const todosInProgress = useTodoStore((s) => s.todos.some((t) => t.status === 'in_progress'));
   const persistMessage = useChatStore((state) => state.persistMessage);
   const editMessage = useChatStore((state) => state.editMessage); // ← NEW
   const createSession = useChatStore((state) => state.createSession);
@@ -654,6 +658,8 @@ const ChatPage = () => {
     },
   });
 
+  useTodoDerivation(messages);
+
   // Context usage calculation (includes overhead from system prompt + tools + skills)
   const contextUsage = useMemo(() => {
     const contextLength = currentModelInfo?.contextLength || 0;
@@ -819,10 +825,10 @@ const ChatPage = () => {
   // Listen for session load events from mini-chat
   useEffect(() => {
     const unsubscribe = window.levante.onSessionLoad?.((data: { sessionId: string }) => {
-      logger.core.info('Loading session from mini-chat', { sessionId: data.sessionId });
-
-      // Load the session transferred from mini-chat
-      loadSession(data.sessionId);
+      void (async () => {
+        logger.core.info('Loading session from mini-chat', { sessionId: data.sessionId });
+        await loadSession(data.sessionId);
+      })();
     });
 
     return () => {
@@ -1441,8 +1447,11 @@ const ChatPage = () => {
                     />
                   ))}
 
-                  {/* Streaming indicator */}
-                  {(status === 'streaming' || status === 'submitted') && (
+                  {/* Inline todo list */}
+                  <InlineTodoList />
+
+                  {/* Streaming indicator (hidden when todos are in progress) */}
+                  {(status === 'streaming' || status === 'submitted') && !todosInProgress && (
                     <Message from="assistant">
                       <MessageContent>
                         <BreathingLogo />

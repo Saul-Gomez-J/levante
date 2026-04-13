@@ -25,6 +25,7 @@ import {
 import { ToolCall } from '@/components/ai-elements/tool-call';
 import { ToolApprovalInline } from '@/components/ai-elements/tool-approval';
 import { DiffViewer } from '@/components/ai-elements/diff-viewer';
+import { isToolHidden } from '@/constants/hiddenTools';
 import { PresentedFilesCard } from './PresentedFilesCard';
 import { WidgetPlaceholder } from './WidgetPlaceholder';
 import { MessageAttachments } from '@/components/chat/MessageAttachments';
@@ -347,6 +348,9 @@ export function ChatMessageItem({
 
                   // Tool calls (MCP)
                   if (part?.type?.startsWith('tool-')) {
+                    // Hide internal housekeeping tools from the UI
+                    if (isToolHidden(part.type)) return null;
+
                     // Si está esperando aprobación, mostrar UI de aprobación
                     if (part.state === 'approval-requested' && addToolApprovalResponse) {
                       const toolName = part.toolName || part.type.replace(/^tool-/, '');

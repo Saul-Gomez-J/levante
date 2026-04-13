@@ -239,6 +239,12 @@
     "drop_to_reference": "Suelta el archivo para referenciarlo",
     "max_mentions_reached": "Maximo {{count}} menciones de archivo por mensaje"
   },
+  "todo_panel": {
+    "title": "Tareas",
+    "pending": "{{count}} pendientes",
+    "completed_ratio": "{{completed}}/{{total}}",
+    "in_progress": "{{count}} en progreso"
+  },
   "background_tasks": {
     "title": "Tareas en Background",
     "running_count": "{{count}} ejecutándose",
